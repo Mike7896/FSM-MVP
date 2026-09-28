@@ -9,7 +9,7 @@ import type { EmailLetterhead } from "./templates/document-email";
  * email's body, and the same page as a PDF to attach — built once, from one
  * reading, so the two cannot disagree.
  *
- * **Never the reason a send fails.** A document that can't be drawn goes out
+ * **Never the reason a send fails:** a document that can't be drawn goes out
  * with the plain summary card; a PDF that can't be rendered goes out without
  * an attachment. Either is logged. The link in the email is what the customer
  * needs, and it always works.
