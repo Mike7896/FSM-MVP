@@ -7,7 +7,9 @@ import { PackSwitch } from "@/components/office/pack-switch";
 import { Badge } from "@/components/ui/badge";
 import { requireActiveOrganization } from "@/lib/dal";
 import { formatMoney } from "@/lib/quote";
-import { getSubscription } from "@/lib/queries/billing";
+import { getAccess } from "@/lib/membership/access";
+import { getBillSummary } from "@/lib/membership/bill";
+import { getReleases } from "@/lib/membership/releases";
 import { listPacks } from "@/lib/queries/office";
 import { cn } from "@/lib/utils";
 
@@ -33,42 +35,45 @@ export const metadata: Metadata = { title: "Trade packs" };
 export default async function PacksPage() {
   const org = await requireActiveOrganization();
 
-  const [packs, subscription] = await Promise.all([
+  const [packs, summary, releases, access] = await Promise.all([
     listPacks(org.id),
-    getSubscription(org.id),
+    getBillSummary(org.id),
+    getReleases(),
+    getAccess(org.id),
   ]);
 
-  const planCents = subscription?.price?.unitAmount ?? null;
-  const packCents = packs
-    .filter((state) => state.entitled && state.priceCents !== null)
-    .reduce((sum, state) => sum + (state.priceCents ?? 0), 0);
-
   return (
-    <div className="flex flex-col gap-8">
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 sm:gap-10">
       <PageHeader
         title="Trade packs"
-        description={billLine(planCents, packCents, subscription?.product?.name)}
+        description={
+          summary
+            ? `You pay ${summary}, core and packs together, plus applicable tax.`
+            : "What your trade adds to the quote editor you already use."
+        }
       />
 
       <div className="flex flex-col gap-3">
         {packs.map(({ pack, entitled, enabled, priceCents }) => {
-          const coming = pack.status === "coming";
+          // Sold only once released (Billing §14.2) — the switch, not the copy, decides.
+          const coming =
+            pack.id === "electrical" ? !releases.pack_electrical : pack.status === "coming";
 
           return (
             <div
               key={pack.id}
               className={cn(
-                "rounded-xl border p-4",
+                "rounded-2xl border bg-card p-6",
                 enabled && "border-primary/60 bg-primary/[0.03]",
-                coming && "opacity-70"
+                coming && "bg-muted/30"
               )}
             >
               <div className="flex flex-wrap items-baseline justify-between gap-3">
                 <h2 className="text-lg font-semibold">{pack.name}</h2>
                 <div className="flex flex-wrap items-center gap-3">
-                  {priceCents !== null ? (
+                  {priceCents !== null && !coming ? (
                     <span className="text-muted-foreground text-sm tabular-nums">
-                      {formatMoney(priceCents)}/mo
+                      {formatMoney(priceCents)}{access.interval === "year" ? "/yr" : "/mo"}
                     </span>
                   ) : null}
                   {entitled ? (
@@ -113,7 +118,7 @@ export default async function PacksPage() {
       </div>
 
       {/* The line that costs a sale, and is what makes the rest credible. */}
-      <p className="text-muted-foreground rounded-xl border p-4 text-sm">
+      <p className="text-muted-foreground rounded-2xl border bg-card p-6 text-sm">
         <strong className="text-foreground font-medium">
           You don&apos;t need a pack to run the business.
         </strong>{" "}
@@ -122,27 +127,4 @@ export default async function PacksPage() {
       </p>
     </div>
   );
-}
-
-/**
- * What the business is paying, said as arithmetic they can check.
- *
- * With no subscription behind it there is no bill to describe, and saying so is
- * better than rendering "$0/mo" — which reads as a claim about their plan
- * rather than an absence of one.
- */
-function billLine(
-  planCents: number | null,
-  packCents: number,
-  planName?: string | null
-): string {
-  if (planCents === null) {
-    return "What your trade adds to the quote editor you already use.";
-  }
-
-  const total = planCents + packCents;
-  const parts = [`${planName ?? "Plan"} ${formatMoney(planCents)}`];
-  if (packCents > 0) parts.push(`packs ${formatMoney(packCents)}`);
-
-  return `You pay ${formatMoney(total)}/mo — ${parts.join(" + ")}.`;
 }

@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  boolean,
   check,
   index,
   integer,
@@ -56,6 +57,8 @@ export const supportRequests = pgTable(
     /** When the support inbox was emailed. Empty says to go and look. */
     emailedAt: timestamp("emailed_at", { withTimezone: true }),
     status: supportStatusEnum("status").notNull().default("open"),
+    /** Sent from a Pro shop — the prioritized queue (Billing §2.2). Stamped at send. */
+    priority: boolean("priority").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

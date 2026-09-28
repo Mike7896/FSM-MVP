@@ -40,14 +40,16 @@ import { stripe } from "./server";
  * judgment of the work would be money transmission, a state-licensed activity,
  * and no feature in this product is worth acquiring fifty licences for.
  *
- * ## Account configuration
+ * ## Account configuration — Billing §8.1
  *
- * `express` dashboard, `losses.payments = 'stripe'`. Stripe carries
- * unrecoverable negative balances and collects KYC; we keep the option to take
- * that liability later, because `stripe_dashboard.type` is the one property
- * Stripe cannot change on an existing account and `full` is incompatible with
- * platform-held losses. Creating accounts the default way would foreclose
- * Issuing and Treasury permanently, for every account, from day one.
+ * `full` Stripe Dashboard, `losses.payments = 'stripe'`, `fees.payer =
+ * 'account'`: Stripe's generally available SaaS-platform setup, with Stripe
+ * responsible for connected-account balances that can't be recovered and
+ * charging the contractor its own processing rate. Express combined with
+ * Stripe-held losses is a public preview that needs a preview API version, so
+ * launch does not depend on it. The trade-off, recorded here because the
+ * dashboard type is immutable per account: with Stripe holding losses,
+ * Stripe Issuing and Treasury are unavailable to these accounts.
  */
 
 /** Stripe's fee splits at the moment money moves — no invoicing, no collection. */
@@ -77,6 +79,20 @@ export async function getConnectedAccount(
     .limit(1);
 
   return row ?? null;
+}
+
+/**
+ * Which rails the contractor's account can take right now — Billing §8.3:
+ * check before offering a way to pay, rather than letting it fail after.
+ */
+export async function railsFor(
+  stripeAccountId: string
+): Promise<{ card: boolean; ach: boolean }> {
+  const account = await stripe().accounts.retrieve(stripeAccountId);
+  return {
+    card: account.capabilities?.card_payments === "active",
+    ach: account.capabilities?.us_bank_account_ach_payments === "active",
+  };
 }
 
 /** Whether a pay button may appear at all. */
@@ -111,13 +127,13 @@ export async function getOrCreateConnectedAccount(
     // a preset over them and says less about what was chosen.
     controller: {
       // Stripe covers unrecoverable negative balances on this account and its
-      // risk team manages it. Changing this later is a business decision, and
-      // an Express dashboard is what keeps it available to make.
+      // risk team manages it (§8.1).
       losses: { payments: "stripe" },
       // Stripe collects KYC and handles verification correspondence.
       requirement_collection: "stripe",
       // Immutable for the life of the account — see the module comment.
-      stripe_dashboard: { type: "express" },
+      stripe_dashboard: { type: "full" },
+      // The contractor pays Stripe's processing directly, at their own rate.
       fees: { payer: "account" },
     },
     country: "US",
@@ -186,16 +202,20 @@ export async function createOnboardingLink(
 }
 
 /**
- * A link into the Express dashboard, for a contractor who is already set up.
+ * Where a set-up contractor manages his own Stripe account — bank account,
+ * payouts, balance, refunds. We do not rebuild any of that.
  *
- * Where he changes his bank account, reads his payout schedule and sees his
- * balance. We do not rebuild any of that.
+ * A full-Dashboard account signs in to Stripe directly; only an Express
+ * account (created before Billing §8.1) gets a one-time login link.
  */
 export async function createDashboardLink(
   account: ConnectedAccount
 ): Promise<string> {
-  const link = await stripe().accounts.createLoginLink(account.stripeAccountId);
-  return link.url;
+  if (account.dashboardType === "express") {
+    const link = await stripe().accounts.createLoginLink(account.stripeAccountId);
+    return link.url;
+  }
+  return "https://dashboard.stripe.com/";
 }
 
 /**
@@ -265,6 +285,9 @@ function project(organizationId: string, account: Stripe.Account) {
     businessName: account.business_profile?.name ?? null,
     defaultCurrency: account.default_currency ?? "usd",
     onboardedAt: account.details_submitted ? new Date() : null,
+    // What Stripe says the account actually is, not what we asked for (§8.1).
+    dashboardType: account.controller?.stripe_dashboard?.type ?? "full",
+    lossesPayments: account.controller?.losses?.payments ?? "stripe",
   } satisfies typeof connectedAccounts.$inferInsert;
 }
 

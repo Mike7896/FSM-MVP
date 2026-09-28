@@ -1,121 +1,16 @@
 import "server-only";
 
-import { cache } from "react";
-import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 import { db } from "@/lib/db";
-import {
-  packEntitlements,
-  prices,
-  products,
-  stripeCustomers,
-  subscriptions,
-} from "@/lib/db/schema";
-import { PACKS } from "@/lib/packs/catalog";
+import { stripeCustomers } from "@/lib/db/schema";
 import { stripe } from "@/lib/stripe/server";
 
-/** Statuses that should unlock paid features. */
-const ENTITLED = ["trialing", "active"] as const;
-
 /**
- * The organization's current subscription, if any.
- *
- * `organizationId` must come from the DAL - this function trusts it, because
- * Drizzle's connection bypasses RLS.
+ * What the shop has been charged and the card it's charged to — read from
+ * Stripe directly. Plan state lives in `lib/membership`, which derives it
+ * from the reconciled subscription (Billing §11.2).
  */
-export async function getSubscription(organizationId: string) {
-  const [row] = await db
-    .select({
-      subscription: subscriptions,
-      price: prices,
-      product: products,
-    })
-    .from(subscriptions)
-    .leftJoin(prices, eq(subscriptions.priceId, prices.id))
-    .leftJoin(products, eq(prices.productId, products.id))
-    .where(
-      and(
-        eq(subscriptions.organizationId, organizationId),
-        inArray(subscriptions.status, [...ENTITLED, "past_due"])
-      )
-    )
-    .orderBy(desc(subscriptions.createdAt))
-    .limit(1);
-
-  return row ?? null;
-}
-
-/**
- * What the business pays us each month, plan plus every entitled pack.
- *
- * **One membership, priced additively** — the core subscription plus a monthly
- * amount per pack is a single charge with a visible breakdown, not separate
- * subscriptions (Object Model §5.1). This is the number the account menu shows
- * on its Account row, because a menu row that carries the answer saves the trip
- * the row exists to offer (wireframe 94 · 56c).
- *
- * Returns cents, or null when there is nothing to bill. Null is not zero: a
- * business on no paid plan has no monthly total, and "$0/mo" would read as a
- * claim about their plan rather than the absence of one.
- *
- * Written as one query rather than reusing `listPacks`, which fans out to three
- * and pulls the whole catalogue — this runs on every authenticated page render,
- * so it reads only the prices it is going to add up.
- */
-export const getMonthlyTotalCents = cache(
-  async (organizationId: string): Promise<number | null> => {
-    const subscription = await getSubscription(organizationId);
-    const planCents = subscription?.price?.unitAmount ?? null;
-    if (planCents === null) return null;
-
-    // Entitlement rows carry the pack slug; the catalogue maps a slug to the
-    // Stripe price that charges for it. Going through the catalogue rather than
-    // storing a price id on the entitlement is what lets a pack be repriced
-    // without rewriting every shop's row.
-    const entitled = await db
-      .select({ packId: packEntitlements.packId })
-      .from(packEntitlements)
-      .where(
-        and(
-          eq(packEntitlements.organizationId, organizationId),
-          isNull(packEntitlements.revokedAt)
-        )
-      );
-
-    const lookupKeys = entitled
-      .map(
-        (row) => PACKS.find((pack) => pack.id === row.packId)?.stripePriceLookupKey
-      )
-      .filter((key): key is string => Boolean(key));
-
-    if (lookupKeys.length === 0) return planCents;
-
-    const [row] = await db
-      .select({ total: sql<string>`coalesce(sum(${prices.unitAmount}), 0)` })
-      .from(prices)
-      .where(and(eq(prices.active, true), inArray(prices.id, lookupKeys)));
-
-    return planCents + Number(row?.total ?? 0);
-  }
-);
-
-/** True when the organization may use paid features. */
-export async function hasActiveSubscription(organizationId: string) {
-  const row = await getSubscription(organizationId);
-  return row
-    ? (ENTITLED as readonly string[]).includes(row.subscription.status)
-    : false;
-}
-
-/** The plan catalogue for a pricing table, cheapest first. */
-export async function getActivePlans() {
-  return db
-    .select({ price: prices, product: products })
-    .from(prices)
-    .innerJoin(products, eq(prices.productId, products.id))
-    .where(and(eq(prices.active, true), eq(products.active, true)))
-    .orderBy(asc(prices.unitAmount));
-}
 
 /**
  * What the shop has actually been charged.
@@ -213,7 +108,18 @@ export async function getDefaultPaymentMethod(
 
     if (record.deleted) return null;
 
-    const method = record.invoice_settings?.default_payment_method;
+    // Checkout saves the card on the subscription rather than the customer,
+    // so the membership's own card is what a renewal is charged to.
+    let method = record.invoice_settings?.default_payment_method;
+    if (!method) {
+      const subscriptions = await stripe().subscriptions.list({
+        customer: customer.stripeCustomerId,
+        status: "all",
+        limit: 1,
+        expand: ["data.default_payment_method"],
+      });
+      method = subscriptions.data[0]?.default_payment_method ?? null;
+    }
     if (!method || typeof method === "string") return null;
 
     return {

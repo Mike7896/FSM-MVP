@@ -47,6 +47,7 @@ const STATUS_VARIANT: Record<
   issued: "secondary",
   sent: "secondary",
   viewed: "secondary",
+  processing: "secondary",
   paid: "default",
   overdue: "destructive",
   void: "outline",

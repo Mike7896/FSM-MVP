@@ -280,9 +280,11 @@ function Sheet({ paper }: { paper: PaperDocument }) {
         <Column style={{ fontSize: 11, lineHeight: "16px", color: SOFT, paddingTop: 10, borderTop: `1px solid ${RULE}` }}>
           {paper.footer}
         </Column>
-        <Column align="right" style={{ fontSize: 11, lineHeight: "16px", color: SOFT, paddingTop: 10, borderTop: `1px solid ${RULE}`, whiteSpace: "nowrap" }}>
-          Made with ServiceClerk
-        </Column>
+        {paper.promoFooter ? (
+          <Column align="right" style={{ fontSize: 11, lineHeight: "16px", color: SOFT, paddingTop: 10, borderTop: `1px solid ${RULE}`, whiteSpace: "nowrap" }}>
+            Made with ServiceClerk
+          </Column>
+        ) : null}
       </Row>
     </Section>
   );

@@ -51,10 +51,10 @@ export function InfoRequestReply({ token, request }: { token: string; request: I
       {request.photoPrompt && <div className="grid gap-2"><Label htmlFor={`photos-${request.id}`}>{request.photoPrompt}</Label>
         <input id={`photos-${request.id}`} type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" multiple onChange={event => {
           const chosen = Array.from(event.target.files ?? []);
-          if (chosen.length > 3 || chosen.some(f => f.size > MAX_ATTACHMENT_BYTES || !ATTACHMENT_TYPES.includes(f.type) || !f.type.startsWith("image/"))) { setError("Choose up to 3 photos, no larger than 10 MB each."); event.target.value = ""; return; }
+          if (chosen.length > 3 || chosen.some(f => f.size > MAX_ATTACHMENT_BYTES || !ATTACHMENT_TYPES.includes(f.type) || !f.type.startsWith("image/"))) { setError("Choose up to 3 photos, no larger than 20 MB each."); event.target.value = ""; return; }
           setFiles(chosen); setError("");
         }} />
-        <p className="text-muted-foreground text-xs">Up to 3 photos, 10 MB each.</p>
+        <p className="text-muted-foreground text-xs">Up to 3 photos, 20 MB each.</p>
         {files.map((file, i) => <p className="text-xs" key={i}>{file.name}</p>)}
       </div>}
       <Button type="submit" className="w-full">{busy ? "Sending…" : "Send my reply"}</Button>

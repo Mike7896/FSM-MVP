@@ -1,5 +1,7 @@
 "use client";
 
+import { reportFreeLimit } from "@/lib/membership/limit-event";
+
 import {
   useEffect,
   useRef,
@@ -808,6 +810,7 @@ async function api<T>(path: string, method: string, body: unknown): Promise<T> {
   } | null;
 
   if (!response?.ok) {
+    reportFreeLimit(json?.error);
     throw new Error(
       json?.error?.message ?? "Couldn't reach the server. Try again."
     );

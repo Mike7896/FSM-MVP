@@ -36,24 +36,19 @@ import { organizations } from "./office";
  *
  * ## The two settings that are fixed here, and why
  *
- * **`controller.stripe_dashboard.type = 'express'`.** Stripe states this cannot
- * be changed on an existing account — changing it means creating a new
- * `Account` object — and `full` is documented as incompatible with
- * `controller.losses.payments = 'application'`. So an account created with
- * Stripe's default full-dashboard configuration is *permanently* ineligible for
- * platform-held loss liability, and therefore for Stripe Issuing and Stripe
- * Treasury, for the life of that account. Express costs nothing today and keeps
- * both liability configurations reachable.
+ * **`controller.stripe_dashboard.type = 'full'`** (Billing §8.1). Stripe's
+ * generally available configuration for a SaaS platform whose connected
+ * accounts carry Stripe-held loss liability. Express with Stripe-held losses is
+ * a public preview needing a preview API version, and launch does not depend
+ * on a preview. The dashboard type cannot be changed on an existing account.
  *
  * **`controller.losses.payments = 'stripe'`.** Stripe carries unrecoverable
  * connected-account negative balances, holds no reserve against our platform
  * balance, collects KYC, and its risk team manages connected-account risk with
- * Managed Risk available. The alternative — us absorbing those losses — buys
- * pausing payouts, direct balance debits, Issuing and Treasury, and none of
- * those are launch features. Because the dashboard is Express, that door stays
- * open. Both values are recorded on the row rather than assumed, because one of
- * them is immutable and a future migration has to be able to tell which
- * accounts were created under which rules.
+ * Managed Risk available. The cost: no pausing payouts, no direct balance
+ * debits, and no Stripe Issuing or Treasury — none of them launch features.
+ * Both values are projected from Stripe onto the row rather than assumed, so a
+ * future migration can tell which accounts were created under which rules.
  *
  * ## Merchant of record
  *
@@ -129,7 +124,7 @@ export const connectedAccounts = pgTable(
      * What the account was created with. Immutable in Stripe's case, so a
      * later migration has to be able to tell the generations apart.
      */
-    dashboardType: text("dashboard_type").notNull().default("express"),
+    dashboardType: text("dashboard_type").notNull().default("full"),
     lossesPayments: text("losses_payments").notNull().default("stripe"),
 
     /** When the hosted form came back complete. Null while still onboarding. */

@@ -21,7 +21,7 @@ export function ReceiptForm({ jobId }: { jobId: string }) {
   function choose(next?: File) {
     if (!next) return;
     if (next.size > MAX_ATTACHMENT_BYTES || !ATTACHMENT_TYPES.includes(next.type)) {
-      setError("Choose a photo or PDF no larger than 10 MB."); return;
+      setError("Choose a photo or PDF no larger than 20 MB."); return;
     }
     setFile(next); setError("");
   }

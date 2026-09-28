@@ -357,4 +357,19 @@
   @page {
     margin: 0.75in;
   }
+
+  /* A draft copy printed past the Free job limit (Billing §3.1): marked on
+     every page so it can't pass for the real thing. */
+  body[data-print-draft="true"]::after {
+    content: "DRAFT — NOT FOR SENDING";
+    position: fixed;
+    inset: 40% 0 auto 0;
+    text-align: center;
+    font-size: 48px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: rgb(0 0 0 / 0.12);
+    transform: rotate(-24deg);
+    pointer-events: none;
+  }
 }

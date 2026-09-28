@@ -1,17 +1,16 @@
 import type Stripe from "stripe";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { NextResponse, type NextRequest } from "next/server";
 
 import { db } from "@/lib/db";
 import { stripeEvents } from "@/lib/db/schema";
 import { serverEnv } from "@/lib/env";
 import { stripe } from "@/lib/stripe/server";
+import { upsertPrice, upsertProduct } from "@/lib/stripe/sync";
 import {
-  deleteSubscription,
-  upsertPrice,
-  upsertProduct,
-  upsertSubscription,
-} from "@/lib/stripe/sync";
+  MEMBERSHIP_EVENTS,
+  handleMembershipEvent,
+} from "@/lib/membership/webhook";
 
 /**
  * Stripe webhook receiver.
@@ -27,17 +26,18 @@ import {
  *    or out of order. The insert into `stripe_events` is the dedupe gate.
  */
 
-const RELEVANT_EVENTS = new Set<Stripe.Event.Type>([
+const CATALOG_EVENTS = new Set<Stripe.Event.Type>([
   "product.created",
   "product.updated",
   "product.deleted",
   "price.created",
   "price.updated",
   "price.deleted",
-  "checkout.session.completed",
-  "customer.subscription.created",
-  "customer.subscription.updated",
-  "customer.subscription.deleted",
+]);
+
+const RELEVANT_EVENTS = new Set<Stripe.Event.Type>([
+  ...CATALOG_EVENTS,
+  ...MEMBERSHIP_EVENTS,
 ]);
 
 export async function POST(request: NextRequest) {
@@ -72,34 +72,23 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ received: true, ignored: event.type });
   }
 
-  // Claim the event. If the row already exists this is a redelivery and the
-  // work has been done, so acknowledge without repeating it.
-  const claimed = await db
-    .insert(stripeEvents)
-    .values({ id: event.id, type: event.type })
-    .onConflictDoNothing()
-    .returning({ id: stripeEvents.id });
-
-  if (claimed.length === 0) {
-    return NextResponse.json({ received: true, duplicate: true });
-  }
-
   try {
-    await handleEvent(event);
+    const duplicate = await db.transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${event.id}::text, 23))`);
+      const [done] = await tx.select({ id: stripeEvents.id }).from(stripeEvents)
+        .where(eq(stripeEvents.id, event.id)).limit(1);
+      if (done) return true;
+      // Side effects have natural idempotency keys. A process failure rolls
+      // back this receipt so redelivery retries any unfinished effects.
+      await handleEvent(event);
+      await tx.insert(stripeEvents).values({ id: event.id, type: event.type });
+      return false;
+    });
+    return NextResponse.json({ received: true, ...(duplicate ? { duplicate: true } : {}) });
   } catch (error) {
-    // Release the claim so Stripe's retry gets a real second attempt.
-    await db
-      .delete(stripeEvents)
-      .where(eq(stripeEvents.id, event.id))
-      .catch(() => {});
-
-    const message = error instanceof Error ? error.message : "Unknown error";
     console.error(`[stripe] Failed handling ${event.type} (${event.id}):`, error);
-    // 500 tells Stripe to retry with backoff.
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: "Event processing failed" }, { status: 500 });
   }
-
-  return NextResponse.json({ received: true });
 }
 
 async function handleEvent(event: Stripe.Event) {
@@ -107,45 +96,25 @@ async function handleEvent(event: Stripe.Event) {
     case "product.created":
     case "product.updated":
       await upsertProduct(event.data.object);
-      break;
+      return;
 
     case "price.created":
     case "price.updated":
       await upsertPrice(event.data.object);
-      break;
+      return;
 
     case "product.deleted":
       await upsertProduct({ ...event.data.object, active: false });
-      break;
+      return;
 
     case "price.deleted":
       await upsertPrice({ ...event.data.object, active: false });
-      break;
+      return;
+  }
 
-    case "customer.subscription.created":
-    case "customer.subscription.updated":
-      await upsertSubscription(event.data.object);
-      break;
-
-    case "customer.subscription.deleted":
-      await deleteSubscription(event.data.object.id);
-      break;
-
-    case "checkout.session.completed": {
-      const session = event.data.object;
-      // Subscription checkouts also fire customer.subscription.created, but
-      // ordering is not guaranteed - sync here too so the UI is correct as
-      // soon as the user is redirected back.
-      if (session.mode === "subscription" && session.subscription) {
-        const subscriptionId =
-          typeof session.subscription === "string"
-            ? session.subscription
-            : session.subscription.id;
-        const subscription =
-          await stripe().subscriptions.retrieve(subscriptionId);
-        await upsertSubscription(subscription);
-      }
-      break;
-    }
+  // Everything else is the membership: subscriptions, schedules, invoices and
+  // checkouts, each reconciled from a fresh read of Stripe (Billing §11.2).
+  if (MEMBERSHIP_EVENTS.has(event.type)) {
+    await handleMembershipEvent(event);
   }
 }

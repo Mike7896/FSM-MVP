@@ -1,5 +1,7 @@
 "use client";
 
+import { reportFreeLimit } from "@/lib/membership/limit-event";
+
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Link2, Loader2, Mail, Send } from "lucide-react";
@@ -76,6 +78,8 @@ export function SendContractButton({
     } | null;
 
     if (!response?.ok || !body?.data) {
+      // At the Free job limit the upgrade sheet opens over the draft (§3.1).
+      reportFreeLimit(body?.error);
       // The sheet keeps what he typed, with one line saying what happened.
       setError(
         body?.error?.message ??

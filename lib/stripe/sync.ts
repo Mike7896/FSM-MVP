@@ -111,6 +111,7 @@ export async function upsertPrice(price: Stripe.Price) {
       id: price.id,
       productId,
       active: price.active,
+      lookupKey: price.lookup_key ?? null,
       currency: price.currency,
       unitAmount: price.unit_amount,
       interval: toInterval(price.recurring?.interval),
@@ -123,6 +124,7 @@ export async function upsertPrice(price: Stripe.Price) {
       set: {
         productId,
         active: price.active,
+        lookupKey: price.lookup_key ?? null,
         currency: price.currency,
         unitAmount: price.unit_amount,
         interval: toInterval(price.recurring?.interval),
@@ -178,7 +180,11 @@ export async function upsertSubscription(subscription: Stripe.Subscription) {
   // As of API version 2026-07-29.dahlia the billing period lives on the
   // subscription *item*, not the subscription. Reading
   // `subscription.current_period_end` here would silently produce null.
-  const item = subscription.items.data[0];
+  // A membership is a core plan plus packs on one subscription; the mirror's
+  // single price column names the core line.
+  const item =
+    subscription.items.data.find((row) => row.price.metadata?.role === "core") ??
+    subscription.items.data[0];
   const price = item?.price;
 
   if (price) {
@@ -207,6 +213,30 @@ export async function upsertSubscription(subscription: Stripe.Subscription) {
     .insert(subscriptions)
     .values(values)
     .onConflictDoUpdate({ target: subscriptions.id, set: values });
+}
+
+/**
+ * Mirrors every product and price in the Stripe account.
+ *
+ * The webhook keeps the mirror current as things change; this is for the
+ * moments it was not listening — right after `npm run stripe:seed`, or a new
+ * environment. A lookup key moved to a newer price (`transfer_lookup_key`)
+ * leaves the old price with no key, and the upsert records that too.
+ */
+export async function syncCatalog(): Promise<{ products: number; prices: number }> {
+  let productCount = 0;
+  let priceCount = 0;
+
+  for await (const product of stripe().products.list({ limit: 100 })) {
+    await upsertProduct(product);
+    productCount += 1;
+  }
+  for await (const price of stripe().prices.list({ limit: 100 })) {
+    await upsertPrice(price);
+    priceCount += 1;
+  }
+
+  return { products: productCount, prices: priceCount };
 }
 
 export async function deleteSubscription(subscriptionId: string) {

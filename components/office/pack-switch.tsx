@@ -41,18 +41,23 @@ export function PackSwitch({
         body: JSON.stringify({ enabled: next }),
       });
 
+      const body = (await response.json().catch(() => null)) as {
+        data?: { notice?: string };
+        error?: { message?: string };
+      } | null;
+
       if (!response.ok) {
-        const body = (await response.json().catch(() => null)) as {
-          error?: { message?: string };
-        } | null;
         toast.error(body?.error?.message ?? "Couldn't change that.");
         return;
       }
 
+      // The server's words: hiding a paid pack says, in the same breath, that
+      // the subscription carries on (Billing §4.1).
       toast.success(
-        next
-          ? `${packName} is on. New quotes use its templates.`
-          : `${packName} is off. Quotes already written with it are untouched.`
+        body?.data?.notice ??
+          (next
+            ? `${packName} is on. New quotes use its templates.`
+            : `${packName} is off. Quotes already written with it are untouched.`)
       );
       router.refresh();
     });
@@ -66,7 +71,7 @@ export function PackSwitch({
         onCheckedChange={toggle}
         aria-label={`${packName} pack`}
       />
-      {enabled ? "On" : "Off"}
+      {enabled ? "Shown" : "Hidden"}
     </Label>
   );
 }

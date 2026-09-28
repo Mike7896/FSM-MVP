@@ -6,7 +6,8 @@ export const receiptSchema = z.object({
   storagePath: z.string().max(500).nullable(),
 });
 export const attachmentUploadSchema = z.object({ fileName: z.string().trim().min(1).max(180) });
-export const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+/** Per file — Billing §2.2. */
+export const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;
 export const ATTACHMENT_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif", "application/pdf"];
 export function isAttachmentPath(path: string, prefix: string) {
   return path.startsWith(`${prefix}/`) && !path.slice(prefix.length + 1).includes("/") &&

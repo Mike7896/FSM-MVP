@@ -100,6 +100,12 @@ export type HeaderSnapshot = {
   customerAddress?: string;
   jobAddress?: string;
   jobNumber?: number;
+  /**
+   * "Made with ServiceClerk" at the foot — decided by the plan the shop was on
+   * when the document went out, and kept for good (Billing §2.2, §5.3).
+   * Absent on documents issued before plans existed, which carried it.
+   */
+  promoFooter?: boolean;
   /** When the snapshot was taken, so a reader can tell how old it is. */
   capturedAt?: string;
 };

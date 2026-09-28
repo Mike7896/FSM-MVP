@@ -49,11 +49,13 @@ export function BrandingForm({
   preset,
   identity,
   logoUrl,
+  canSave = true,
 }: {
   preset: string | null;
   /** What the header actually carries today — business name, license, phone. */
   identity: OfficeIdentity;
   logoUrl: string | null;
+  canSave?: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -67,6 +69,7 @@ export function BrandingForm({
 
   function save(event: React.FormEvent) {
     event.preventDefault();
+    if (!canSave) return;
     startTransition(async () => {
       const body: UpdateOfficeBrandingInput = { documentPreset: selected };
       const response = await fetch("/api/v1/office/branding", {
@@ -150,7 +153,7 @@ export function BrandingForm({
           .
         </p>
 
-        <SaveBar
+        {canSave ? <SaveBar
           dirty={dirty}
           pending={pending}
           label={`Use ${selectedName}`}
@@ -159,7 +162,7 @@ export function BrandingForm({
               ? "Applies to documents from here on. Anything already sent keeps the look it went out with."
               : undefined
           }
-        />
+        /> : <p className="text-muted-foreground text-sm">Pro is required to save document branding.</p>}
       </div>
 
       <div className="flex min-w-0 flex-col gap-2 @3xl/office:sticky @3xl/office:top-22 @3xl/office:self-start">

@@ -85,6 +85,8 @@ export type PaperDocument = {
   blocks: PaperBlock[];
   /** What the foot of every page says — "Q-0009 · Reyes Electric". */
   footer: string;
+  /** "Made with ServiceClerk" beside it — Free-plan documents only (Billing §2.2). */
+  promoFooter: boolean;
   /** "Quote Q-0009 - Reyes Electric.pdf" */
   filename: string;
 };
@@ -259,6 +261,7 @@ function draftPaper({
     demo,
     blocks,
     ...naming(label, draft.number, office.businessName),
+    promoFooter: office.promoFooter ?? true,
   };
 }
 
@@ -320,6 +323,7 @@ export function changeOrderPaper(shared: SharedChangeOrder): PaperDocument {
     demo: shared.demo,
     blocks,
     ...naming("Change order", shared.number, shared.office.businessName),
+    promoFooter: shared.office.promoFooter ?? true,
   };
 }
 
@@ -392,6 +396,7 @@ export function invoicePaper(shared: SharedInvoice): PaperDocument {
     demo: shared.demo,
     blocks,
     ...naming(label, shared.number, shared.office.businessName),
+    promoFooter: shared.office.promoFooter ?? true,
   };
 }
 

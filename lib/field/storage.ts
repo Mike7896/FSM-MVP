@@ -20,7 +20,7 @@ export async function verifyAttachment(path: string, prefix: string, photosOnly 
   const mime = data.contentType ?? metadata?.mimetype ?? "";
   const size = data.size ?? metadata?.size;
   if (!size || size > MAX_ATTACHMENT_BYTES || !ATTACHMENT_TYPES.includes(mime) || (photosOnly && !mime.startsWith("image/"))) {
-    throw new DomainError("Use a photo or PDF no larger than 10 MB.", "invalid");
+    throw new DomainError("Use a photo or PDF no larger than 20 MB.", "invalid");
   }
 }
 export async function attachmentUrl(path: string, prefix: string) {

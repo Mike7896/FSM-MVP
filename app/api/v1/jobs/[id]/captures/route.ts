@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
 
 import { requireCaller, requireOrg } from "@/lib/api/auth";
+import { assertStoredFileWithinLimit } from "@/lib/membership/storage";
 import { handlerWithParams, readJson } from "@/lib/api/handler";
 import { ApiError, created, ok } from "@/lib/api/response";
 import { db } from "@/lib/db";
@@ -55,6 +56,14 @@ export const POST = handlerWithParams<{ id: string }>(
     await requireJob(id, organizationId);
 
     const body = await readJson(request, createCaptureSchema);
+
+    if (body.storagePath) {
+      // The path has to be this job's, and the file within the per-file limit.
+      if (!body.storagePath.startsWith(`${organizationId}/${id}/`)) {
+        throw new ApiError("invalid_request", "That file doesn't belong to this job.");
+      }
+      await assertStoredFileWithinLimit(body.storagePath);
+    }
 
     const [row] = await db
       .insert(captureArtifacts)

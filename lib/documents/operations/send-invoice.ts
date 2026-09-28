@@ -26,6 +26,7 @@ import { DocumentError } from "../errors";
 import { captureHeader, headerCaptured } from "../header";
 import { ensureShareLink } from "../share-links";
 import { checkSendAllowance } from "@/lib/admin/limits";
+import { withDocumentActivation } from "@/lib/membership/activation";
 
 /**
  * `sendInvoice` — the bill goes out.
@@ -48,7 +49,26 @@ export type SendInvoiceResult = {
   to: string | null;
 };
 
-export async function sendInvoice({
+/**
+ * The send, with its Free-plan activation around it (Billing §3.1): the job's
+ * slot is reserved before anything goes out, committed once it has, and
+ * released if the send fails. A job already activated costs nothing.
+ */
+export async function sendInvoice(
+  args: Parameters<typeof sendInvoiceNow>[0]
+): Promise<SendInvoiceResult> {
+  return withDocumentActivation(
+    {
+      organizationId: args.organizationId,
+      documentId: args.invoiceId,
+      action: "invoice_sent",
+      actorUserId: args.sender.userId,
+    },
+    () => sendInvoiceNow(args)
+  );
+}
+
+async function sendInvoiceNow({
   organizationId,
   invoiceId,
   sender,

@@ -53,6 +53,8 @@ export const prices = pgTable(
       onDelete: "cascade",
     }),
     active: boolean("active").notNull().default(true),
+    /** Stripe's `lookup_key` — how the app names a price across environments. */
+    lookupKey: text("lookup_key"),
     currency: text("currency").notNull(),
     unitAmount: integer("unit_amount"),
     interval: pricingIntervalEnum("interval"),
@@ -60,7 +62,10 @@ export const prices = pgTable(
     trialPeriodDays: integer("trial_period_days"),
     metadata: jsonb("metadata").$type<Record<string, string>>(),
   },
-  (t) => [index("prices_product_id_idx").on(t.productId)]
+  (t) => [
+    index("prices_product_id_idx").on(t.productId),
+    index("prices_lookup_key_idx").on(t.lookupKey),
+  ]
 );
 
 export const subscriptions = pgTable(

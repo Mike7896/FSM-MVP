@@ -22,6 +22,7 @@ import { changeOrderEmail } from "@/lib/email/change-order-email";
 import { enclose } from "@/lib/email/enclosure";
 import { letterheadFor } from "@/lib/email/letterhead";
 import { emailConfigured, sendEmail } from "@/lib/email/send";
+import { withDocumentActivation } from "@/lib/membership/activation";
 import { createInvoice } from "@/lib/documents/operations/create-invoice";
 
 export async function readChangeOrder(id: string, organizationId: string, on: Executor = db) {
@@ -86,7 +87,12 @@ export async function saveChangeOrder(organizationId: string, userId: string | n
   });
 }
 
+/** Sending a change order activates its job on the Free plan — once (Billing §3.1). */
 export async function sendChangeOrder(organizationId: string, id: string, input: z.infer<typeof changeOrderSendSchema>, attribution: { ip: string | null; userAgent: string | null; signerEmail?: string }) {
+  return withDocumentActivation({ organizationId, documentId: id, action: "change_order_sent" }, () => sendChangeOrderNow(organizationId, id, input, attribution));
+}
+
+async function sendChangeOrderNow(organizationId: string, id: string, input: z.infer<typeof changeOrderSendSchema>, attribution: { ip: string | null; userAgent: string | null; signerEmail?: string }) {
   const result = await db.transaction(async tx => {
     const initial = await readChangeOrder(id, organizationId, tx);
     const job = await lockJob(tx, initial.doc.jobId, organizationId);

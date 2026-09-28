@@ -1,5 +1,7 @@
 import "server-only";
 
+import { readAccess } from "@/lib/membership/access";
+
 import { and, count, desc, eq, gte } from "drizzle-orm";
 
 import { db } from "@/lib/db";
@@ -31,9 +33,15 @@ export async function createSupportRequest(input: {
   userAgent: string | null;
   request: CreateSupportRequestInput;
 }): Promise<SupportRequestView & { emailed: boolean }> {
+  // Pro's prioritized queue (Billing §2.2) — stamped when sent, not re-derived later.
+  const priority = input.organizationId
+    ? (await readAccess(input.organizationId)).features.prioritySupport
+    : false;
+
   const [row] = await db
     .insert(supportRequests)
     .values({
+      priority,
       organizationId: input.organizationId,
       userId: input.userId,
       kind: input.request.kind,
@@ -154,7 +162,7 @@ async function emailSupport(requestId: string): Promise<boolean> {
 
   await sendEmail({
     to,
-    subject: `[${kind.short} #${request.number}] ${request.subject}${row.business ? ` — ${row.business}` : ""}`,
+    subject: `${request.priority ? "[Pro priority] " : ""}[${kind.short} #${request.number}] ${request.subject}${row.business ? ` — ${row.business}` : ""}`,
     text,
     html,
     replyTo: request.replyTo,

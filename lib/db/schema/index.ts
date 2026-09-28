@@ -32,6 +32,8 @@ export * from "./info-requests";
 
 // Stripe read-model — us charging the contractor.
 export * from "./billing";
+// The membership policy engine — what that payment buys, and what a shop has used.
+export * from "./membership";
 
 // The outside world — what this product may read and write elsewhere, and the
 // queue that carries it there.

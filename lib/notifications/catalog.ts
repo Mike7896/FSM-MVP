@@ -96,6 +96,14 @@ export const NOTIFICATION_KINDS = [
     email: true,
     sms: false,
   },
+  {
+    kind: "billing.notice",
+    label: "My ServiceClerk membership needs attention",
+    action: "Open billing",
+    push: true,
+    email: true,
+    sms: false,
+  },
 ] as const;
 
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number]["kind"];

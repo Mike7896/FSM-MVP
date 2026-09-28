@@ -1,5 +1,5 @@
 import type Stripe from "stripe";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { NextResponse, type NextRequest } from "next/server";
 
 import { db } from "@/lib/db";
@@ -15,6 +15,11 @@ import {
   onDisputeCreated,
   onPayoutPaid,
 } from "@/lib/stripe/connect-events";
+import {
+  onAttemptRefunded,
+  onAttemptReversed,
+  onPaymentIntentEvent,
+} from "@/lib/stripe/collect";
 
 /**
  * The Connect webhook — contractors charging homeowners.
@@ -43,6 +48,12 @@ const RELEVANT_EVENTS = new Set<Stripe.Event.Type>([
   "charge.dispute.created",
   "charge.dispute.closed",
   "payout.paid",
+
+  // Where each online attempt has got to — processing is not paid (Billing §8.3).
+  "payment_intent.processing",
+  "payment_intent.succeeded",
+  "payment_intent.payment_failed",
+  "payment_intent.canceled",
 ]);
 
 export async function POST(request: NextRequest) {
@@ -78,36 +89,23 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ received: true, ignored: event.type });
   }
 
-  // Same claim table as the subscription webhook — Stripe event ids are unique
-  // across both streams, so one table is correct rather than convenient.
-  const claimed = await db
-    .insert(stripeEvents)
-    .values({ id: event.id, type: event.type })
-    .onConflictDoNothing()
-    .returning({ id: stripeEvents.id });
-
-  if (claimed.length === 0) {
-    return NextResponse.json({ received: true, duplicate: true });
-  }
-
   try {
-    await handleEvent(event);
+    const duplicate = await db.transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${event.id}::text, 23))`);
+      const [done] = await tx.select({ id: stripeEvents.id }).from(stripeEvents)
+        .where(eq(stripeEvents.id, event.id)).limit(1);
+      if (done) return true;
+      // Side effects have natural idempotency keys. A process failure rolls
+      // back this receipt so redelivery retries any unfinished effects.
+      await handleEvent(event);
+      await tx.insert(stripeEvents).values({ id: event.id, type: event.type });
+      return false;
+    });
+    return NextResponse.json({ received: true, ...(duplicate ? { duplicate: true } : {}) });
   } catch (error) {
-    // Release the claim so Stripe's retry gets a real second attempt.
-    await db
-      .delete(stripeEvents)
-      .where(eq(stripeEvents.id, event.id))
-      .catch(() => {});
-
-    const message = error instanceof Error ? error.message : "Unknown error";
-    console.error(
-      `[connect] Failed handling ${event.type} (${event.id}):`,
-      error
-    );
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error(`[stripe] Failed handling ${event.type} (${event.id}):`, error);
+    return NextResponse.json({ error: "Event processing failed" }, { status: 500 });
   }
-
-  return NextResponse.json({ received: true });
 }
 
 async function handleEvent(event: Stripe.Event) {
@@ -135,14 +133,34 @@ async function handleEvent(event: Stripe.Event) {
 
     case "charge.refunded":
       await onChargeRefunded(event.data.object, context);
+      // ServiceClerk's share of an ACH fee goes back with the money.
+      await onAttemptRefunded(event.data.object, context);
       break;
 
     case "charge.dispute.created":
       await onDisputeCreated(event.data.object, context);
       break;
 
-    case "charge.dispute.closed":
+    case "charge.dispute.closed": {
       await onDisputeClosed(event.data.object, context);
+      // A dispute or ACH return lost: ServiceClerk's fee on it comes back too.
+      const dispute = event.data.object;
+      if (dispute.status === "lost") {
+        const chargeId = typeof dispute.charge === "string" ? dispute.charge : dispute.charge.id;
+        const charge = await stripe().charges.retrieve(chargeId, {}, { stripeAccount: context.stripeAccountId });
+        await onAttemptReversed(charge, context);
+      }
+      break;
+    }
+
+    case "payment_intent.processing":
+    case "payment_intent.succeeded":
+    case "payment_intent.canceled":
+      await onPaymentIntentEvent(event.data.object, context);
+      break;
+
+    case "payment_intent.payment_failed":
+      await onPaymentIntentEvent(event.data.object, context);
       break;
 
     case "payout.paid":

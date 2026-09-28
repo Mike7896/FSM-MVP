@@ -1,5 +1,7 @@
 import "server-only";
 
+import { readAccess } from "@/lib/membership/access";
+
 import { and, desc, eq, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
@@ -70,6 +72,18 @@ export type NotificationEvent = EventBase &
         /** The person given it — the only one told. */
         userId: string;
       }
+    | {
+        /**
+         * About the shop's own ServiceClerk membership — a failed renewal, a
+         * trial ending (Billing §3.2, §5.3). Composed by `lib/membership`, which
+         * owns the words; `noticeKey` is what keeps each one to once.
+         */
+        kind: "billing.notice";
+        noticeKey: string;
+        title: string;
+        body: string;
+        href: string;
+      }
   );
 
 export type ComposedNotification = {
@@ -121,6 +135,14 @@ export async function compose(
       return visitBooked(event, on);
     case "task.assigned":
       return taskAssigned(event, on);
+    case "billing.notice":
+      return {
+        title: event.title,
+        body: event.body,
+        href: event.href,
+        dedupeKey: `billing.notice:${event.noticeKey}`,
+        alsoTo: [],
+      };
   }
 }
 
@@ -369,6 +391,8 @@ async function quoteViewed(
   if (!quote || quote.status === "draft" || quote.status === "sent") {
     return null;
   }
+  // View notifications are a Pro feature (Billing §2.2).
+  if (!(await readAccess(organizationId, new Date(), on)).features.viewTracking) return null;
 
   return {
     title: `${quote.customerName} opened ${quoteName(quote)}`,

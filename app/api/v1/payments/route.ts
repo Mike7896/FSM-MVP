@@ -12,6 +12,8 @@ import {
   reverseEntry,
   unattributedEntries,
 } from "@/lib/ledger";
+import { formatMoney } from "@/lib/quote/money";
+import { processingAttempts } from "@/lib/stripe/collect";
 
 /**
  * Money the contractor took off-platform — Object Model §5.3.
@@ -98,7 +100,15 @@ export const POST = handler(async (request) => {
       throw new ApiError("conflict", "That payment was not recorded. Try again.");
     }
 
-    return created(entry, `/api/v1/payments/${entry.id}`);
+    // A bank payment still clearing on the same invoice isn't cancelled or
+    // replaced — both are real money until one fails — but the contractor is
+    // told now, so a double collection is caught before it clears (Billing §8.3).
+    const clearing = target.invoiceId ? await processingAttempts(target.invoiceId) : [];
+    const warning = clearing.length
+      ? `A bank payment of ${formatMoney(clearing.reduce((sum, row) => sum + row.amountCents, 0))} is still clearing on this invoice. If both go through, one of them will need refunding.`
+      : null;
+
+    return created({ ...entry, warning }, `/api/v1/payments/${entry.id}`);
   } catch (error) {
     if (error instanceof LedgerError) {
       throw new ApiError("invalid_request", error.message);

@@ -1,233 +1,185 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 
-import { ManageBillingButton } from "@/components/billing/manage-billing-button";
+import { BillCard, dateOf } from "@/components/billing/bill-card";
+import { MembershipAction } from "@/components/billing/membership-action";
+import { UsageCard } from "@/components/billing/usage-card";
 import { PageHeader } from "@/components/page-header";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyTitle,
-} from "@/components/ui/empty";
-import { Separator } from "@/components/ui/separator";
-import { eq } from "drizzle-orm";
-
-import { requireActiveOrganization, requireSession } from "@/lib/dal";
-import { db } from "@/lib/db";
-import { accountPolicies } from "@/lib/db/schema";
-import { formatMoney } from "@/lib/quote";
-import {
-  getDefaultPaymentMethod,
-  getSubscription,
-  listReceipts,
-} from "@/lib/queries/billing";
-import { listPacks } from "@/lib/queries/office";
+import { requireActiveOrganization } from "@/lib/dal";
+import { PACK_LABEL, POLICY } from "@/lib/membership/catalog";
+import { getBillingOverview } from "@/lib/membership/overview";
+import { reconcileCheckoutSession } from "@/lib/membership/reconcile";
+import { safeNextPath } from "@/lib/safe-next";
+import { formatMoney } from "@/lib/quote/money";
 
 export const metadata: Metadata = { title: "Billing" };
 
 /**
- * Screen 33 · billing · Flow 12, job PS4.
+ * Screen 33 · billing · Flow 12, job PS4 · Billing §5.
  *
- * The correct emotion here is **indifference**. Everywhere else in the product
- * money moves from a homeowner to the contractor and the app is the
- * contractor's advocate; this is the one surface where it moves from the
- * contractor to us, and it must not stop being their advocate the moment it
- * starts charging them.
+ * The correct emotion here is **indifference**. Everywhere else money moves
+ * from a homeowner to the contractor and the app is the contractor's
+ * advocate; this is the one surface where it moves to us, and it must not stop
+ * being their advocate the moment it starts charging them. No retention dark
+ * patterns, cancel is easy to find, a lapsed card gets its grace period in
+ * plain words, and the 14-day refund is a button, not a request.
  *
- * That means: no retention dark patterns, cancel is easy to find, and a lapsed
- * card gets a grace period with plain language rather than features silently
- * vanishing.
- *
- * **Everything on this page is what Stripe says.** The plan and its price come
- * from the read-model the webhook maintains; the receipts and the card come
- * from Stripe directly, because a mirrored last-four that has gone stale tells
- * a contractor a charge will land on a card they replaced.
+ * **Coming back from Checkout unlocks nothing by itself.** The page asks
+ * Stripe what the session produced and reconciles that (§11.2); until the
+ * payment is confirmed it says so.
  */
-export default async function BillingPage() {
-  const [org, session] = await Promise.all([requireActiveOrganization(), requireSession()]);
-  // Set from the admin panel for testers and friends: treated as paying.
-  const [policy] = await db
-    .select({ compPlan: accountPolicies.compPlan, kind: accountPolicies.kind, accessUntil: accountPolicies.accessUntil })
-    .from(accountPolicies)
-    .where(eq(accountPolicies.userId, session.userId))
-    .limit(1);
+export default async function BillingPage({ searchParams }: PageProps<"/account/billing">) {
+  const org = await requireActiveOrganization();
+  const params = await searchParams;
+  const sessionId = typeof params.session_id === "string" ? params.session_id : null;
+  const next = typeof params.next === "string" ? safeNextPath(params.next, "") : "";
 
-  const [subscription, packs, receipts, card] = await Promise.all([
-    getSubscription(org.id),
-    listPacks(org.id),
-    listReceipts(org.id),
-    getDefaultPaymentMethod(org.id),
-  ]);
+  if (params.checkout === "success" && sessionId) {
+    await reconcileCheckoutSession(sessionId, org.id).catch((error) =>
+      console.error("[billing] couldn't reconcile the checkout session:", error)
+    );
+    // Render again from the reconciled state — the whole page, the app
+    // shell's bill included, reads it fresh — and drop the session id.
+    redirect(`/account/billing?checkout=confirmed${next ? `&next=${encodeURIComponent(next)}` : ""}`);
+  }
+  const returning = params.checkout === "confirmed";
 
-  const ownedPacks = packs.filter((state) => state.entitled);
-  const planCents = subscription?.price?.unitAmount ?? null;
-  const packCents = ownedPacks.reduce(
-    (sum, state) => sum + (state.priceCents ?? 0),
-    0
-  );
-  const totalCents = planCents === null ? null : planCents + packCents;
-
-  const status = subscription?.subscription.status;
-  const periodEnd = subscription?.subscription.currentPeriodEnd ?? null;
-  const cancelling = subscription?.subscription.cancelAtPeriodEnd ?? false;
+  const overview = await getBillingOverview(org.id);
+  const { access, receipts } = overview;
+  const electrical = access.packs.electrical;
 
   return (
-    <div className="flex flex-col gap-8">
-      <PageHeader
-        title="Billing"
-        description="What you're paying, and why."
-        actions={<ManageBillingButton organizationId={org.id} />}
-      />
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 sm:gap-10">
+      <PageHeader title="Billing" description="What you're paying ServiceClerk, and why." />
 
-      {policy?.compPlan ? (
-        <Alert>
-          <AlertTitle>Your account is complimentary</AlertTitle>
-          <AlertDescription>
-            You won&apos;t be charged for ServiceClerk
-            {policy.kind === "tester" && policy.accessUntil
-              ? ` while you're trying it out — through ${new Date(`${policy.accessUntil}T12:00:00`).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`
-              : ""}
-            .
-          </AlertDescription>
-        </Alert>
-      ) : null}
-
-      {/* A lapsed card is stated plainly, with the grace period named, rather
-          than features quietly switching off. */}
-      {status === "past_due" ? (
-        <Alert variant="destructive">
-          <AlertTitle>Your last payment didn&apos;t go through</AlertTitle>
-          <AlertDescription>
-            Everything keeps working while we retry. Update the card and it
-            settles itself — nothing you&apos;ve sent is affected either way.
-          </AlertDescription>
-        </Alert>
-      ) : null}
-
-      {cancelling && periodEnd ? (
-        <Alert>
-          <AlertTitle>Your subscription ends {formatDate(periodEnd)}</AlertTitle>
-          <AlertDescription>
-            Until then nothing changes. After it, your data stays exportable and
-            every share link you&apos;ve sent stays live — your customers&apos;
-            experience doesn&apos;t break because of a change to your plan.
-          </AlertDescription>
-        </Alert>
-      ) : null}
-
-      {subscription ? (
-        <div className="rounded-xl border p-5">
-          <div className="flex flex-wrap items-baseline justify-between gap-3">
-            <div className="flex items-baseline gap-2">
-              <h2 className="font-medium">
-                {subscription.product?.name ?? "Your plan"}
-              </h2>
-              {status === "trialing" ? (
-                <Badge variant="secondary">Trial</Badge>
+      {returning ? (
+        access.standing === "paid" ? (
+          <Alert>
+            <AlertTitle>You&apos;re all set</AlertTitle>
+            <AlertDescription>
+              Your payment went through and your plan is active.
+              {next ? (
+                <>
+                  {" "}
+                  <Link href={next} className="underline underline-offset-4">Back to where you were</Link>
+                </>
               ) : null}
-            </div>
-            <Link
-              href="/account/billing/plan"
-              className="text-primary-ink text-sm underline underline-offset-4"
-            >
-              Change plan
-            </Link>
-          </div>
+            </AlertDescription>
+          </Alert>
+        ) : (
+          <Alert>
+            <AlertTitle>Confirming your payment</AlertTitle>
+            <AlertDescription>
+              Stripe hasn&apos;t confirmed it yet. Your plan starts the moment it does — refresh in a few seconds.
+            </AlertDescription>
+          </Alert>
+        )
+      ) : null}
 
-          <div className="mt-4 flex flex-col gap-1.5 text-sm">
-            {planCents !== null ? (
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">
-                  {subscription.product?.name ?? "Plan"}
-                </span>
-                <span className="tabular-nums">
-                  {formatMoney(planCents)}/mo
-                </span>
-              </div>
-            ) : null}
-            {ownedPacks.map((state) => (
-              <div key={state.pack.id} className="flex justify-between">
-                <span className="text-muted-foreground">
-                  {state.pack.name} pack
-                  {state.enabled ? "" : " · switched off"}
-                </span>
-                <span className="tabular-nums">
-                  {state.priceCents === null
-                    ? "—"
-                    : `${formatMoney(state.priceCents)}/mo`}
-                </span>
-              </div>
-            ))}
-          </div>
+      {access.standing === "grace" && access.graceEndsAt ? (
+        <Alert variant="destructive">
+          <AlertTitle>Your renewal didn&apos;t go through</AlertTitle>
+          <AlertDescription>
+            Everything keeps working until {dateOf(access.graceEndsAt)} while we retry. Update your card to settle it —
+            nothing you&apos;ve sent is affected either way. New purchases wait until it&apos;s paid.
+          </AlertDescription>
+        </Alert>
+      ) : null}
 
-          <Separator className="my-4" />
+      {access.standing === "restricted" ? (
+        <Alert variant="destructive">
+          <AlertTitle>Paid features are paused</AlertTitle>
+          <AlertDescription>
+            Your renewal is still unpaid, so Free rules apply for now. Your jobs, documents and customer payments are all
+            here. Update your card and everything comes straight back.
+          </AlertDescription>
+        </Alert>
+      ) : null}
 
-          <div className="flex items-baseline justify-between">
-            <span className="font-label text-[11px] uppercase">
-              {cancelling ? "Ends" : "Next charge"}
-            </span>
-            <span className="text-2xl font-semibold tabular-nums">
-              {totalCents === null ? "—" : formatMoney(totalCents)}
-              <span className="text-muted-foreground text-sm font-normal">
-                /mo
-              </span>
-            </span>
-          </div>
-          <p className="text-muted-foreground mt-1 text-sm">
-            {[
-              periodEnd ? formatDate(periodEnd) : null,
-              card?.last4
-                ? `${card.brand ? titleCase(card.brand) : "Card"} ending ${card.last4}`
-                : null,
-            ]
-              .filter(Boolean)
-              .join(" · ") || "Managed in the billing portal."}
+      {access.pending ? (
+        <Alert>
+          <AlertTitle>A change is waiting for its payment</AlertTitle>
+          <AlertDescription>
+            Nothing changed yet — you keep your current plan until the payment goes through. Finish it from{" "}
+            <em>Card and invoices</em>, or let it lapse.
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
+      <section className="flex flex-col gap-3">
+        <h2 className="font-label text-[11px] uppercase">Your plan</h2>
+        <BillCard overview={overview} organizationId={org.id} />
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <h2 className="font-label text-[11px] uppercase">This month</h2>
+        <UsageCard usage={overview.usage} storage={overview.storage} />
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <h2 className="font-label text-[11px] uppercase">Trade packs</h2>
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border bg-card p-6 sm:p-8 text-sm">
+          <p>
+            <strong className="font-medium">{PACK_LABEL.electrical}</strong>{" "}
+            {electrical.purchased
+              ? electrical.endsAt
+                ? `— on your plan until ${dateOf(electrical.endsAt)}.`
+                : `— on your plan${electrical.enabled ? "" : ", hidden from your workspace"}.`
+              : electrical.evaluation?.active
+                ? `— evaluating until ${dateOf(electrical.evaluation.expiresAt)}. No card, no automatic charge.`
+                : electrical.evaluationUsed
+                  ? "— evaluation used."
+                  : "— not on your plan."}
           </p>
+          <Button asChild variant="outline" size="sm">
+            <Link href="/office/packs/electrical">Manage</Link>
+          </Button>
         </div>
-      ) : (
-        <Empty className="rounded-xl border">
-          <EmptyHeader>
-            <EmptyTitle>You&apos;re not on a paid plan</EmptyTitle>
-            <EmptyDescription>
-              Quotes, deposits, draws, invoices and collections all work without
-              one. A plan lifts the send limit and adds your trade&apos;s pack.
-            </EmptyDescription>
-          </EmptyHeader>
-          <EmptyContent>
-            <Button asChild>
-              <Link href="/account/billing/plan">See the plans</Link>
-            </Button>
-          </EmptyContent>
-        </Empty>
-      )}
+      </section>
+
+      {access.refund.eligible && access.refund.until && overview.bill ? (
+        <section className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border bg-card p-6 sm:p-8">
+          <div>
+            <p className="font-medium">Changed your mind?</p>
+            <p className="text-muted-foreground mt-1 text-sm">
+              Until {dateOf(access.refund.until)} you can have your first payment back and return to Free. Once per
+              business.
+            </p>
+          </div>
+          <MembershipAction
+            endpoint="/api/v1/membership/refund"
+            label="Refund and return to Free"
+            success="Refunded. You're back on Free, and everything you built is still here."
+            confirm={{
+              title: "Refund your first payment?",
+              lines: [
+                `Every membership payment from your first ${POLICY.refundWindowDays} days is refunded to your card — Stripe usually shows it within 5–10 days.`,
+                "Your plan and any packs end now, and you're back on Free straight away.",
+                "Your jobs, documents and customer payments are untouched. Customer payments are never part of this refund.",
+                ...(access.founding.price ? ["Founding-member pricing ends and doesn't come back."] : []),
+                "This refund is once per business.",
+              ],
+              action: "Refund and return to Free",
+              destructive: true,
+            }}
+          />
+        </section>
+      ) : null}
 
       {receipts.length ? (
-        <section className="rounded-xl border p-5">
-          <p className="text-muted-foreground font-label text-[11px] uppercase">
-            Receipts
-          </p>
+        <section className="rounded-2xl border bg-card p-6 sm:p-8">
+          <p className="text-muted-foreground font-label text-[11px] uppercase">Receipts</p>
           <div className="mt-3 flex flex-col">
             {receipts.map((receipt, index) => (
-              <div
-                key={receipt.id}
-                className={`flex items-center justify-between py-2.5 text-sm ${index ? "border-t" : ""}`}
-              >
-                <span>{formatDate(new Date(receipt.created * 1000))}</span>
+              <div key={receipt.id} className={`flex items-center justify-between py-2.5 text-sm ${index ? "border-t" : ""}`}>
+                <span>{dateOf(new Date(receipt.created * 1000))}</span>
                 <div className="flex items-center gap-4">
-                  <span className="text-muted-foreground tabular-nums">
-                    {formatMoney(receipt.amountPaidCents)}
-                  </span>
+                  <span className="text-muted-foreground tabular-nums">{formatMoney(receipt.amountPaidCents, { forceCents: true })}</span>
                   {receipt.pdfUrl ? (
-                    <a
-                      href={receipt.pdfUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-primary-ink underline underline-offset-4"
-                    >
+                    <a href={receipt.pdfUrl} target="_blank" rel="noreferrer" className="text-primary-ink underline underline-offset-4">
                       PDF
                     </a>
                   ) : null}
@@ -239,27 +191,13 @@ export default async function BillingPage() {
       ) : null}
 
       <div className="flex flex-wrap items-center justify-between gap-4 border-t pt-5">
-        <p className="text-muted-foreground text-sm">
-          Leaving? Export everything first — it stays available either way.
-        </p>
-        {subscription && !cancelling ? (
+        <p className="text-muted-foreground text-sm">Leaving? Export everything first — it stays available either way.</p>
+        {overview.bill && !access.cancelAtPeriodEnd ? (
           <Button asChild variant="outline" size="sm">
-            <Link href="/account/billing/cancel">Cancel subscription</Link>
+            <Link href="/account/billing/cancel">Cancel membership</Link>
           </Button>
         ) : null}
       </div>
     </div>
   );
-}
-
-function formatDate(date: Date) {
-  return date.toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
-function titleCase(value: string) {
-  return value.charAt(0).toUpperCase() + value.slice(1);
 }

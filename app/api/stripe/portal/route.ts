@@ -4,6 +4,7 @@ import { requireCaller, requireOrg } from "@/lib/api/auth";
 import { handler, readJson } from "@/lib/api/handler";
 import { ApiError, ok } from "@/lib/api/response";
 import { absoluteUrl } from "@/lib/env";
+import { membershipPortalConfiguration } from "@/lib/membership/stripe-context";
 import { stripe } from "@/lib/stripe/server";
 import { getOrCreateStripeCustomer } from "@/lib/stripe/sync";
 
@@ -49,8 +50,15 @@ export const POST = handler(async (request) => {
       caller.email
     );
 
+    // The seeded configuration: card, invoices and whole-membership
+    // cancellation only — plan and pack changes go through the app, which
+    // never lets a pack outlive its core (Billing §11.2).
+    const configuration = await membershipPortalConfiguration();
+    if (!configuration) throw new Error("The restricted membership portal has not been configured.");
+
     const portal = await stripe().billingPortal.sessions.create({
       customer: customerId,
+      configuration,
       return_url: absoluteUrl("/account/billing"),
       ...(body.cancelSubscriptionId
         ? {

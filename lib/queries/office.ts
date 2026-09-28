@@ -1,7 +1,7 @@
 import "server-only";
 
 import { cache } from "react";
-import { and, asc, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNotNull, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import {
@@ -9,11 +9,11 @@ import {
   licenses,
   officeDefaults,
   organizations,
-  packEnablement,
-  packEntitlements,
-  prices,
   type HeaderSnapshot,
 } from "@/lib/db/schema";
+import { getAccess, type PackAccess } from "@/lib/membership/access";
+import { PACK_IDS as MEMBERSHIP_PACKS, packLookupKey, type PackId } from "@/lib/membership/catalog";
+import { getPriceBook } from "@/lib/membership/prices";
 import { PACKS, type Pack } from "@/lib/packs/catalog";
 import type { OfficeSignature } from "@/lib/signing/lines";
 
@@ -47,6 +47,8 @@ export type OfficeIdentity = {
   phone: string | null;
   /** A public image URL. Null until one is uploaded. */
   logoUrl?: string | null;
+  /** The document carries "Made with ServiceClerk" (Billing §2.2). */
+  promoFooter?: boolean;
   /**
    * The adopted signature, on the screens that draw signature lines. Left
    * out everywhere else — see `getOfficeSignature`.
@@ -100,6 +102,8 @@ export function officeFromHeader(header: HeaderSnapshot): OfficeIdentity {
     license: header.licenseNumber ?? null,
     phone: header.businessPhone ?? null,
     logoUrl: header.logoUrl ?? null,
+    // Documents from before plans existed carried the footer, and still do.
+    promoFooter: header.promoFooter ?? true,
   };
 }
 
@@ -111,6 +115,7 @@ export async function officeAsItStands(
   organizationId: string,
   licenseId: string | null
 ): Promise<OfficeIdentity> {
+  const { features } = await getAccess(organizationId);
   const [org] = await db
     .select({
       name: organizations.name,
@@ -133,7 +138,10 @@ export async function officeAsItStands(
     businessName: org?.name?.trim() || null,
     license: license?.number ?? null,
     phone: org?.phone ?? null,
-    logoUrl: org?.logoUrl ?? null,
+    // A draft shows what sending it would: the logo only on a plan with
+    // branding, the footer on Free.
+    logoUrl: features.branding ? (org?.logoUrl ?? null) : null,
+    promoFooter: features.promoFooter,
   };
 }
 
@@ -350,65 +358,45 @@ export type OfficeDefaultsRow = Awaited<
 
 export type PackState = {
   pack: Pack;
-  /** Paid for. */
+  /** Entitled — paid for, or in its evaluation (Billing §4.1). */
   entitled: boolean;
-  /** Switched on. Owning a pack and running one are different states. */
+  /** Switched on. Owning a pack and showing one are different states. */
   enabled: boolean;
-  /** What Stripe charges for it, in cents. Null when it is not sellable yet. */
+  /** What Stripe charges for it on this shop's interval, in cents. Null when not on sale. */
   priceCents: number | null;
+  /** The full derived state, for surfaces that explain it. */
+  access: PackAccess | null;
 };
 
 /**
  * The catalogue, with this Office's entitlement and enablement folded in.
  *
- * **Entitlement and enablement are separate axes**, so owned-but-off is a
- * visible state that explains itself rather than a mystery that invites a
- * second purchase. A revoked entitlement is not an entitlement — the column is
- * a timestamp rather than a boolean so a lapse keeps its date.
- *
- * The price comes from the Stripe read-model by lookup key. A pack with no
- * matching active price comes back with `priceCents: null`, and the surface
- * says the price is not set rather than showing a number we invented.
+ * Entitlement is **derived** — from the reconciled subscription and any
+ * recorded evaluation — never read from a flag a client could have set.
+ * Enablement defaults to on: paying for a trade and then having to switch it
+ * on is a step nobody wants.
  */
 export const listPacks = cache(
   async (organizationId: string): Promise<PackState[]> => {
-    const [entitlements, enablement, priceRows] = await Promise.all([
-      db
-        .select({ packId: packEntitlements.packId })
-        .from(packEntitlements)
-        .where(
-          and(
-            eq(packEntitlements.organizationId, organizationId),
-            isNull(packEntitlements.revokedAt)
-          )
-        ),
-      db
-        .select({
-          packId: packEnablement.packId,
-          enabled: packEnablement.enabled,
-        })
-        .from(packEnablement)
-        .where(eq(packEnablement.organizationId, organizationId)),
-      db
-        .select({ id: prices.id, unitAmount: prices.unitAmount })
-        .from(prices)
-        .where(eq(prices.active, true)),
+    const [access, book] = await Promise.all([
+      getAccess(organizationId),
+      getPriceBook(),
     ]);
+    const interval = access.interval ?? "month";
 
-    const entitled = new Set(entitlements.map((row) => row.packId));
-    const enabled = new Map(enablement.map((row) => [row.packId, row.enabled]));
-    const priceFor = new Map(priceRows.map((row) => [row.id, row.unitAmount]));
-
-    return PACKS.map((pack) => ({
-      pack,
-      entitled: entitled.has(pack.id),
-      // Enablement defaults to on for an entitled pack with no row yet: paying
-      // for a trade and then having to switch it on is a step nobody wants.
-      enabled: entitled.has(pack.id) && (enabled.get(pack.id) ?? true),
-      priceCents: pack.stripePriceLookupKey
-        ? (priceFor.get(pack.stripePriceLookupKey) ?? null)
-        : null,
-    }));
+    return PACKS.map((pack) => {
+      const state = (access.packs as Record<string, PackAccess | undefined>)[pack.id] ?? null;
+      const key = MEMBERSHIP_PACKS.includes(pack.id as PackId)
+        ? packLookupKey(pack.id as PackId, interval)
+        : null;
+      return {
+        pack,
+        entitled: state?.entitled ?? false,
+        enabled: state ? state.usable : false,
+        priceCents: key ? (book.get(key)?.unitAmount ?? null) : null,
+        access: state,
+      };
+    });
   }
 );
 

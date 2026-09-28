@@ -1,6 +1,7 @@
 import { requireCaller, requireOrg } from "@/lib/api/auth";
 import { handler, readJson } from "@/lib/api/handler";
-import { ok } from "@/lib/api/response";
+import { readAccess } from "@/lib/membership/access";
+import { ApiError, ok } from "@/lib/api/response";
 import { BILLING_ROLES } from "@/lib/dal";
 import { db } from "@/lib/db";
 import { officeDefaults } from "@/lib/db/schema";
@@ -27,6 +28,9 @@ export const PATCH = handler(async (request) => {
     roles: BILLING_ROLES,
   });
   const body = await readJson(request, updateOfficeBrandingSchema);
+  if (!(await readAccess(organizationId)).features.branding) {
+    throw new ApiError("forbidden", "Document branding requires Pro.");
+  }
 
   const [row] = await db
     .insert(officeDefaults)

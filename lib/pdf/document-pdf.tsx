@@ -184,7 +184,8 @@ export function DocumentPdf({
               footer in this version of react-pdf, so no page numbers — the
               number and the business on every page carry a loose sheet. */}
           <Text>{paper.footer}</Text>
-          <Text>Made with ServiceClerk</Text>
+          {/* Free-plan documents only, frozen at sending (Billing §2.2). */}
+          {paper.promoFooter ? <Text>Made with ServiceClerk</Text> : null}
         </View>
       </Page>
     </Document>

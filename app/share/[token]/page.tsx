@@ -149,6 +149,7 @@ export default async function SharePage({ params }: PageProps<"/share/[token]">)
                 <DocumentFooter
                   businessName={shared.office.businessName}
                   number={shared.draft.number}
+                  promo={shared.office.promoFooter ?? true}
                 />
               }
             >
@@ -180,6 +181,7 @@ export default async function SharePage({ params }: PageProps<"/share/[token]">)
                 <DocumentFooter
                   businessName={shared.office.businessName}
                   number={shared.number}
+                  promo={shared.office.promoFooter ?? true}
                 />
               }
             >

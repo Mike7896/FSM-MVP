@@ -9,6 +9,7 @@ import {
 } from "@/components/documents/document-sheet";
 import { DocumentModeSwitch, StandingLink } from "@/components/documents/mode-switch";
 import { PrintButton } from "@/components/documents/print-button";
+import { getAccess } from "@/lib/membership/access";
 import { QuoteProjection } from "@/components/quote/projection";
 import { Button } from "@/components/ui/button";
 import { requireActiveOrganization } from "@/lib/dal";
@@ -41,10 +42,11 @@ export default async function QuoteDocumentPage({
   const org = await requireActiveOrganization();
   const { id } = await params;
 
-  const [record, office, stored] = await Promise.all([
+  const [record, office, stored, { features }] = await Promise.all([
     getQuote(id, org.id),
     getOfficeIdentity(org.id),
     getOfficeSignature(org.id),
+    getAccess(org.id),
   ]);
   if (!record) notFound();
 
@@ -78,7 +80,7 @@ export default async function QuoteDocumentPage({
             viewHref={`/quotes/${record.id}/view`}
             editHref={`/quotes/${record.id}`}
           />
-          <PrintButton />
+          <PrintButton jobId={record.jobId} />
           <Button asChild variant="ghost" size="sm">
             <Link href="/quotes">All quotes</Link>
           </Button>
@@ -91,6 +93,7 @@ export default async function QuoteDocumentPage({
             <DocumentFooter
               businessName={office.businessName}
               number={record.number}
+              promo={features.promoFooter}
             />
           }
         >
@@ -99,7 +102,7 @@ export default async function QuoteDocumentPage({
             businessName={office.businessName}
             license={office.license}
             phone={office.phone}
-            logoUrl={office.logoUrl}
+            logoUrl={features.branding ? office.logoUrl : null}
             action={null}
             documentLabel="Quote"
             signatures={signatures}

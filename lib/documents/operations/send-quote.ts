@@ -30,6 +30,7 @@ import { captureHeader } from "../header";
 import { readQuoteRecord } from "../quote-record";
 import { ensureShareLink } from "../share-links";
 import { checkSendAllowance } from "@/lib/admin/limits";
+import { withDocumentActivation } from "@/lib/membership/activation";
 
 /**
  * `sendQuote` — the quote goes out.
@@ -62,7 +63,26 @@ export type SendQuoteResult = {
   to: string | null;
 };
 
-export async function sendQuote({
+/**
+ * The send, with its Free-plan activation around it (Billing §3.1): the job's
+ * slot is reserved before anything goes out, committed once it has, and
+ * released if the send fails. A job already activated costs nothing.
+ */
+export async function sendQuote(
+  args: Parameters<typeof sendQuoteNow>[0]
+): Promise<SendQuoteResult> {
+  return withDocumentActivation(
+    {
+      organizationId: args.organizationId,
+      documentId: args.quoteId,
+      action: "quote_sent",
+      actorUserId: args.sender.userId,
+    },
+    () => sendQuoteNow(args)
+  );
+}
+
+async function sendQuoteNow({
   organizationId,
   quoteId,
   sender,

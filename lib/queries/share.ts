@@ -14,10 +14,12 @@ import {
   invoiceDetails,
   jobs,
   organizations,
+  paymentAttempts,
   quoteDetails,
   shareLinks,
   type HeaderSnapshot,
 } from "@/lib/db/schema";
+import { getConnectedAccount, railsFor } from "@/lib/stripe/connect";
 import {
   headerCaptured,
   liveShareLink,
@@ -149,6 +151,10 @@ export type SharedInvoice = SharedBase & {
   paidCents: number;
   /** The ledger fold, never the face amount — see `resolvePayableInvoice`. */
   outstandingCents: number;
+  /** A bank payment still clearing — covers the balance, isn't paid (Billing §8.3). */
+  processingCents: number;
+  /** The ways she can pay online right now. Both false: no online payment. */
+  rails: { card: boolean; ach: boolean };
   /** The agreement it bills, when that has a link of its own. */
   contract: { url: string; number: string } | null;
   /**
@@ -617,6 +623,8 @@ async function sharedInvoice(
     outstandingCents: voided
       ? 0
       : Math.max(invoice.amountDueCents - paidCents, 0),
+    processingCents: await processingCentsOf(base.documentId),
+    rails: await onlineRails(base.organizationId),
     office: letterhead
       ? officeFromHeader(letterhead)
       : await officeAsItStands(base.organizationId, null),
@@ -759,4 +767,25 @@ export async function resolvePayableInvoice(
     outstandingCents,
     currency: "usd",
   };
+}
+
+/** Money on its way for an invoice — reserved, not paid (Billing §8.3). */
+async function processingCentsOf(invoiceId: string): Promise<number> {
+  const [row] = await db
+    .select({ cents: sql<number>`coalesce(sum(${paymentAttempts.amountCents}), 0)::int` })
+    .from(paymentAttempts)
+    .where(and(eq(paymentAttempts.invoiceId, invoiceId), eq(paymentAttempts.status, "processing")));
+  return row?.cents ?? 0;
+}
+
+/** Card and bank, as the contractor's Stripe account can take them now. */
+async function onlineRails(organizationId: string): Promise<{ card: boolean; ach: boolean }> {
+  const account = await getConnectedAccount(organizationId);
+  if (!account?.chargesEnabled) return { card: false, ach: false };
+  try {
+    return await railsFor(account.stripeAccountId);
+  } catch (error) {
+    console.error("[share] couldn't read payment capabilities:", error);
+    return { card: true, ach: false };
+  }
 }

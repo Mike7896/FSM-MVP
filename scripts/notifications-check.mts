@@ -150,6 +150,18 @@ try {
 
       console.log("\nA QUOTE IS OPENED");
       {
+        // Quote-view notifications are Pro-only (Billing §2.2).
+        const unseen = await newDocument("quote", "viewed");
+        check(
+          "on Free, an opened quote tells nobody",
+          (await say({ kind: "quote.viewed", organizationId, documentId: unseen.id })) === null
+        );
+        await tx.execute(
+          sql`insert into billing_accounts
+                (organization_id, subscription_id, subscription_status, tier, interval)
+              values (${org.id}, ${`sub_notifications_check_${org.id}`}, 'active', 'pro', 'month')`
+        );
+
         const quote = await newDocument("quote", "viewed");
         await priced(quote.id, 180000);
 

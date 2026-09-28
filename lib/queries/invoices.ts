@@ -37,6 +37,15 @@ const DOCUMENT_ID = sql.raw('"documents"."id"');
 /** The ledger fold, narrowed to this invoice. Refunds are negative rows. */
 const PAID_CENTS = sql<string>`${collectedForInvoice(DOCUMENT_ID)}::text`;
 
+/**
+ * Money on its way — a bank payment Stripe is still clearing (Billing §8.3).
+ * Reserved against the balance, never counted as paid.
+ */
+const PROCESSING_CENTS = sql<string>`(
+  select coalesce(sum(pa.amount_cents), 0) from payment_attempts pa
+  where pa.invoice_id = ${DOCUMENT_ID} and pa.status = 'processing'
+)::text`;
+
 /** When the latest money against it landed — the ledger's moment. */
 const LAST_PAID_AT = sql<string | null>`(
   select max(le.occurred_at) from ledger_entries le
@@ -55,7 +64,7 @@ export type InvoiceStatus = "draft" | "issued" | "sent" | "viewed" | "paid" | "v
  * run every night and flip it, and the first night that failed the list would be
  * quietly wrong about who owes money.
  */
-export type EffectiveInvoiceStatus = InvoiceStatus | "overdue";
+export type EffectiveInvoiceStatus = InvoiceStatus | "overdue" | "processing";
 
 export type InvoiceListItem = {
   id: string;
@@ -71,6 +80,8 @@ export type InvoiceListItem = {
   amountDueCents: number;
   paidCents: number;
   outstandingCents: number;
+  /** A bank payment still clearing. Not paid until Stripe says it succeeded. */
+  processingCents: number;
   /** Zero unless it is genuinely late. */
   daysPastDue: number;
   issuedAt: Date | null;
@@ -122,6 +133,7 @@ export async function listInvoices(
       sentAt: documents.sentAt,
       voidedAt: invoiceDetails.voidedAt,
       paidCents: PAID_CENTS,
+      processingCents: PROCESSING_CENTS,
       lastPaidAt: LAST_PAID_AT,
     })
     .from(documents)
@@ -196,6 +208,7 @@ export async function getInvoice(
       sourceDocumentId: documents.sourceDocumentId,
       gateMetAt: invoiceDetails.gateMetAt,
       paidCents: PAID_CENTS,
+      processingCents: PROCESSING_CENTS,
       lastPaidAt: LAST_PAID_AT,
     })
     .from(documents)
@@ -310,11 +323,13 @@ type Row = {
   sentAt: Date | null;
   voidedAt: Date | null;
   paidCents: string;
+  processingCents: string;
   lastPaidAt: string | Date | null;
 };
 
 function decorate(row: Row, today: string): InvoiceListItem {
   const paidCents = Number(row.paidCents);
+  const processingCents = Number(row.processingCents ?? 0);
   const status = row.status as InvoiceStatus;
 
   const voided = row.voidedAt !== null || status === "void";
@@ -346,14 +361,19 @@ function decorate(row: Row, today: string): InvoiceListItem {
     sentAt: row.sentAt,
     paidCents,
     outstandingCents,
+    processingCents,
     paidAt: settled && row.lastPaidAt ? new Date(row.lastPaidAt) : null,
+    // "Processing" is not "paid" (Billing §8.3): a bank payment still clearing
+    // covers the balance but has not settled it.
     effectiveStatus: voided
       ? "void"
       : settled
         ? "paid"
-        : late
-          ? "overdue"
-          : status,
+        : processingCents >= outstandingCents && processingCents > 0
+          ? "processing"
+          : late
+            ? "overdue"
+            : status,
     daysPastDue: late ? daysBetween(row.dueOn!, today) : 0,
   };
 }

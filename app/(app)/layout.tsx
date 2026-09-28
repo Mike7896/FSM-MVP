@@ -7,9 +7,9 @@ import { NotificationsProvider } from "@/components/notifications/notifications-
 import { TourProvider } from "@/components/tours/tour-provider";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { getCurrentUser, getUserOrganizations, requireSession } from "@/lib/dal";
-import { getMonthlyTotalCents } from "@/lib/queries/billing";
+import { FreeLimitSheet } from "@/components/billing/free-limit-sheet";
+import { getBillSummary } from "@/lib/membership/bill";
 import { listTourProgress } from "@/lib/queries/tours";
-import { formatMoney } from "@/lib/quote";
 
 /**
  * The contractor's desk shell — surface class B, sidebar navigation, which
@@ -44,9 +44,9 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
   // The chrome carries two names a few pixels apart — the business's in the
   // header, the person's on the account menu — because that adjacency is the
   // whose-thing-is-it split made visible (wireframe 94 · 56c).
-  const [profile, monthlyCents, tours] = await Promise.all([
+  const [profile, billSummary, tours] = await Promise.all([
     getCurrentUser(),
-    getMonthlyTotalCents(organizations[0].id),
+    getBillSummary(organizations[0].id),
     // Seeded here so the tour system knows what this person has finished on
     // the first render — nothing opens and then snaps shut.
     listTourProgress(session.userId),
@@ -58,14 +58,14 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
       <NotificationsProvider>
       {/* "Someone has the app open" for the admin dashboard — area only. */}
       <PresenceBeacon />
+      {/* The upgrade prompt, over whatever draft hit the Free job limit. */}
+      <FreeLimitSheet />
       <SidebarProvider>
         <AppSidebar
           businessName={organizations[0].name}
           personName={profile?.fullName ?? null}
           userEmail={session.email}
-          monthlyTotal={
-            monthlyCents === null ? null : `${formatMoney(monthlyCents)}/mo`
-          }
+          monthlyTotal={billSummary}
         />
         {/* `min-w-0`: a wide board scrolls inside its page instead of
             stretching the page past the window. */}

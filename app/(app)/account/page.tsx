@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { BillingSummary } from "@/components/account/billing-summary";
+import { BillCard } from "@/components/billing/bill-card";
 import { PasswordForm } from "@/components/account/password-form";
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { PageHeader } from "@/components/page-header";
@@ -10,12 +10,7 @@ import {
   requireActiveOrganization,
   requireSession,
 } from "@/lib/dal";
-import {
-  getDefaultPaymentMethod,
-  getSubscription,
-  listReceipts,
-} from "@/lib/queries/billing";
-import { listPacks } from "@/lib/queries/office";
+import { getBillingOverview } from "@/lib/membership/overview";
 
 export const metadata: Metadata = { title: "Account" };
 
@@ -37,12 +32,9 @@ export default async function AccountPage() {
   const session = await requireSession();
   const org = await requireActiveOrganization();
 
-  const [methods, subscription, packs, receipts, card] = await Promise.all([
+  const [methods, overview] = await Promise.all([
     getSignInMethods(),
-    getSubscription(org.id),
-    listPacks(org.id),
-    listReceipts(org.id),
-    getDefaultPaymentMethod(org.id),
+    getBillingOverview(org.id),
   ]);
 
   const hasPassword = methods.some((method) => method.provider === "email");
@@ -51,12 +43,6 @@ export default async function AccountPage() {
     .map((method) => providerName(method.provider))
     .join(" and ");
 
-  const ownedPacks = packs.filter((state) => state.entitled);
-  const planCents = subscription?.price?.unitAmount ?? null;
-  const packCents = ownedPacks.reduce(
-    (sum, state) => sum + (state.priceCents ?? 0),
-    0
-  );
 
   return (
     <div className="flex flex-col gap-8">
@@ -153,16 +139,7 @@ export default async function AccountPage() {
           </p>
         </div>
 
-        <BillingSummary
-          planName={subscription?.product?.name ?? null}
-          planCents={planCents}
-          packs={ownedPacks}
-          totalCents={planCents === null ? null : planCents + packCents}
-          nextChargeOn={subscription?.subscription.currentPeriodEnd ?? null}
-          card={card}
-          receiptCount={receipts.length}
-          cancelling={subscription?.subscription.cancelAtPeriodEnd ?? false}
-        />
+        <BillCard overview={overview} organizationId={org.id} />
 
         <p className="text-muted-foreground text-sm">
           What your{" "}

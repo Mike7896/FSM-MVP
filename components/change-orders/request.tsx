@@ -35,7 +35,7 @@ export function RequestChange({ token, businessName }: { token: string; business
     id.current ||= crypto.randomUUID();
     try {
       if (files.length > 3 || files.some((f) => f.size > MAX_ATTACHMENT_BYTES || !f.type.startsWith("image/"))) {
-        throw new Error("Choose up to three photos, each no larger than 10 MB.");
+        throw new Error("Choose up to three photos, each no larger than 20 MB.");
       }
       const photoPaths: string[] = [];
       for (const file of files) {

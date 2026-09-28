@@ -35,7 +35,7 @@ export function InvoiceSheet({
   return (
     <DocumentSheet
       footer={
-        <DocumentFooter businessName={shared.office.businessName} number={shared.number} />
+        <DocumentFooter businessName={shared.office.businessName} number={shared.number} promo={shared.office.promoFooter ?? true} />
       }
     >
       <PaperView
@@ -120,9 +120,30 @@ export function InvoiceResponse({
     );
   }
 
+  // A bank payment already on its way covers what it covers (Billing §8.3).
+  const payable = shared.outstandingCents - shared.processingCents;
+
+  if (shared.processingCents > 0 && payable <= 0) {
+    return (
+      <ResponsePanel
+        title="Your payment is on its way"
+        description={`A bank payment of ${formatMoney(shared.processingCents)} is clearing — that takes a few business days. Nothing more is due while it does.`}
+      />
+    );
+  }
+
+  if (!shared.rails.card && !shared.rails.ach) {
+    return (
+      <ResponsePanel
+        title={`${formatMoney(payable)} left to pay`}
+        description={`${Business} can't take online payments yet. Ask them how they'd like to be paid.`}
+      />
+    );
+  }
+
   return (
     <ResponsePanel
-      title={`Pay ${formatMoney(shared.outstandingCents)}`}
+      title={`Pay ${formatMoney(payable)}`}
       description={
         shared.dueOn
           ? `Due ${dayOf(shared.dueOn)}. No account needed.`
@@ -131,7 +152,8 @@ export function InvoiceResponse({
     >
       <InvoicePayment
         token={token}
-        amountLabel={formatMoney(shared.outstandingCents)}
+        amountLabel={formatMoney(payable)}
+        rails={shared.rails}
         businessName={shared.office.businessName}
         paidMessage={
           deposit

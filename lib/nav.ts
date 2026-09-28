@@ -21,6 +21,7 @@ import {
   Sparkles,
   Sun,
   Users,
+  ChartColumn,
 } from "lucide-react";
 
 import { PACKS } from "@/lib/packs/catalog";
@@ -65,6 +66,8 @@ export const primaryNav: NavItem[] = [
   { title: "Tasks", href: "/tasks", icon: ListTodo },
   { title: "Customers", href: "/customers", icon: Users },
   { title: "Invoices", href: "/invoices", icon: ReceiptText },
+  // Pro's business analytics (Billing §2.2) — the page explains itself below Pro.
+  { title: "Analytics", href: "/analytics", icon: ChartColumn },
   { title: "Price Book", href: "/price-book", icon: BookOpen, reserved: true },
   { title: "Office", href: "/office", icon: Building2 },
 ];

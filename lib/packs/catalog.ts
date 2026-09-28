@@ -28,10 +28,10 @@
  * refuses everywhere else. Counts come back with the templates they count, and
  * a pack stays `coming` until there is something behind it to turn on.
  *
- * **Prices are not here.** What a pack costs is a Stripe Price, looked up by
- * the `stripePriceLookupKey` below, because the money has to come from the
- * system that will actually charge for it. A pack with no matching Stripe price
- * is shown without one rather than with a number we made up.
+ * **Prices and selling are not here.** What a pack costs is a Stripe Price
+ * named in `lib/membership/catalog.ts`, and whether it is sold at all is a
+ * release switch (Billing §11.1, §14.2) — the money has to come from the
+ * system that will actually charge for it.
  */
 
 export type PackStatus =
@@ -57,12 +57,6 @@ export type Pack = {
   /** One line, in the trade's own words. */
   summary: string;
   status: PackStatus;
-  /**
-   * The Stripe Price this pack bills through. Resolved against the `prices`
-   * read-model at render time; absent from that table means the pack is not
-   * sellable yet, and the surface says so rather than inventing a figure.
-   */
-  stripePriceLookupKey: string | null;
   contents: PackContent[];
 };
 
@@ -76,7 +70,6 @@ export const PACKS: Pack[] = [
     // app reads a pack yet, so an `available` electrical pack would be sold on
     // contents that are not there.
     status: "coming",
-    stripePriceLookupKey: "pack_electrical",
     contents: [
       {
         count: null,
@@ -114,7 +107,6 @@ export const PACKS: Pack[] = [
     summary:
       "Water heaters, repipes, sewer and fixture work, priced by the fixture and the run.",
     status: "coming",
-    stripePriceLookupKey: null,
     contents: [
       {
         count: null,
@@ -146,7 +138,6 @@ export const PACKS: Pack[] = [
     summary:
       "Changeouts, ductwork and maintenance plans, with the tiering that trade actually sells in.",
     status: "coming",
-    stripePriceLookupKey: null,
     contents: [
       {
         count: null,

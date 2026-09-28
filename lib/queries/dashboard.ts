@@ -1,5 +1,7 @@
 import "server-only";
 
+import { getAccess } from "@/lib/membership/access";
+
 import {
   and,
   asc,
@@ -188,14 +190,20 @@ async function waitingOnCustomer(
     .orderBy(asc(documents.sentAt))
     .limit(6);
 
+  // Whether she opened it is quote-view tracking — Pro only (Billing §2.2).
+  // Without it the row says only what is known: no answer yet.
+  const { features } = await getAccess(organizationId);
+
   return rows.map((row) => {
     const work = row.title ?? `quote ${row.number}`;
     const opened = row.status === "viewed" && row.viewedAt;
 
     return {
-      sentence: opened
-        ? `**${row.customerName}** opened the ${lower(work)} quote, then went quiet.`
-        : `**${row.customerName}** hasn't opened the ${lower(work)} quote yet.`,
+      sentence: !features.viewTracking
+        ? `**${row.customerName}** hasn't answered the ${lower(work)} quote yet.`
+        : opened
+          ? `**${row.customerName}** opened the ${lower(work)} quote, then went quiet.`
+          : `**${row.customerName}** hasn't opened the ${lower(work)} quote yet.`,
       detail: [
         row.sentAt ? `Sent ${when(row.sentAt)}` : "Not sent",
         money(Number(row.totalCents)),

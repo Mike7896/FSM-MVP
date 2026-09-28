@@ -246,6 +246,41 @@
       "when": 1790620000000,
       "tag": "0034_account_management",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1790700000000,
+      "tag": "0035_membership",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1790710000000,
+      "tag": "0036_application_fee_returns",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1790720000000,
+      "tag": "0037_connect_full_dashboard",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1790730000000,
+      "tag": "0038_backfill_job_activations",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1790740000000,
+      "tag": "0039_notifications_realtime",
+      "breakpoints": true
     }
   ]
 }

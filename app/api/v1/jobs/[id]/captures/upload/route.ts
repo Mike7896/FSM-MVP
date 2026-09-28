@@ -5,6 +5,7 @@ import { handlerWithParams, readJson } from "@/lib/api/handler";
 import { ApiError, ok } from "@/lib/api/response";
 import { db } from "@/lib/db";
 import { jobs } from "@/lib/db/schema";
+import { assertCanStoreAttachment } from "@/lib/membership/storage";
 import { captureUploadSchema } from "@/lib/schemas";
 import {
   BUCKETS,
@@ -45,6 +46,9 @@ export const POST = handlerWithParams<{ id: string }>(
     if (!job) throw new ApiError("not_found", "That job doesn't exist.");
 
     const { fileName } = await readJson(request, captureUploadSchema);
+
+    // A full attachment allowance stops new files and nothing else (Billing §2.2).
+    await assertCanStoreAttachment(organizationId);
 
     const path = jobAttachmentPath(organizationId, id, fileName);
     const signed = await createSignedUploadUrl(BUCKETS.jobAttachments, path);

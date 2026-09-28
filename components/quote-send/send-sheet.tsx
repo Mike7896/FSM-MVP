@@ -1,5 +1,7 @@
 "use client";
 
+import { reportFreeLimit } from "@/lib/membership/limit-event";
+
 import { useEffect, useRef, useState } from "react";
 import { Link2, Loader2, Mail } from "lucide-react";
 import { toast } from "sonner";
@@ -119,6 +121,8 @@ export function QuoteSendSheet({
     } | null;
 
     if (!response?.ok || !body?.data) {
+      // At the Free job limit the upgrade sheet opens over the draft (§3.1).
+      reportFreeLimit(body?.error);
       // The sheet stays exactly as he left it — the address, the subject, the
       // message — with one line saying what happened.
       setError(

@@ -5,6 +5,7 @@ import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { licenses, organizations, type HeaderSnapshot } from "@/lib/db/schema";
 import { headerCaptured } from "@/lib/documents/header";
+import { readAccess } from "@/lib/membership/access";
 
 import type { EmailLetterhead } from "./templates/document-email";
 
@@ -30,7 +31,8 @@ export async function letterheadFor(
     };
   }
 
-  const [[office], [license]] = await Promise.all([
+  const [access, [office], [license]] = await Promise.all([
+    readAccess(organizationId),
     db
       .select({
         name: organizations.name,
@@ -55,7 +57,8 @@ export async function letterheadFor(
 
   return {
     name: office?.name?.trim() || null,
-    logoUrl: office?.logoUrl ?? null,
+    // The logo is a Pro branding feature (Billing §2.2).
+    logoUrl: access.features.branding ? (office?.logoUrl ?? null) : null,
     license: license?.number ?? null,
     phone: office?.phone ?? null,
   };

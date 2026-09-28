@@ -108,7 +108,7 @@ export default async function ContractDocumentPage({
             </Button>
           ) : null}
           <ContractModeSwitch mode="document" jobId={id} />
-          <PrintButton />
+          <PrintButton jobId={id} />
         </div>
       </div>
 
@@ -122,6 +122,7 @@ export default async function ContractDocumentPage({
               <DocumentFooter
                 businessName={paper.office.businessName}
                 number={paper.draft.number}
+                promo={paper.office.promoFooter ?? true}
               />
             }
           >

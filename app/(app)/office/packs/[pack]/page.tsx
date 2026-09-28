@@ -2,30 +2,31 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 
-import { CheckoutButton } from "@/components/billing/checkout-button";
+import { dateOf } from "@/components/billing/bill-card";
+import { ChangeButton } from "@/components/billing/change-button";
+import { MembershipAction } from "@/components/billing/membership-action";
 import { PageHeader } from "@/components/page-header";
 import { PackSwitch } from "@/components/office/pack-switch";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
 import { requireActiveOrganization } from "@/lib/dal";
+import { getAccess, type Access } from "@/lib/membership/access";
+import { pickerPricing } from "@/lib/membership/bill";
+import { PACK_IDS, POLICY, type PackId } from "@/lib/membership/catalog";
+import { nextConfig } from "@/lib/membership/changes";
 import { findPack } from "@/lib/packs/catalog";
-import { formatMoney } from "@/lib/quote";
-import { getSubscription } from "@/lib/queries/billing";
-import { listPacks } from "@/lib/queries/office";
+import { formatMoney } from "@/lib/quote/money";
 
 export const metadata: Metadata = { title: "Trade pack" };
 
 /**
- * Screen 37 · pack detail · Flow 13, job TP2.
+ * Screen 37 · pack detail · Flow 13, job TP2 · Billing §3.2, §4.
  *
- * The decision this page serves is about **a monthly total the contractor
- * recognises**, not a list price — so the arithmetic runs against their own
- * bill, current → next, using the real subscription. Where there is no price in
- * Stripe for the pack, the page says the price is not set rather than
- * inventing one and then disagreeing with the checkout.
- *
- * The exit is stated beside the buy, because reversibility is part of the
- * pitch.
+ * Three separate things, said separately (§4.1): **buying** the pack (a line
+ * on the bill, prorated and paid before it's granted), **evaluating** it (14
+ * days, no card, once per business), and **showing** it (a visibility switch
+ * that never buys or cancels anything). Removing it waits for the renewal, and
+ * the page says when. A pack that isn't released isn't sold, whatever this
+ * page says it will contain.
  */
 export default async function PackDetailPage({
   params,
@@ -36,27 +37,11 @@ export default async function PackDetailPage({
   if (!pack) notFound();
 
   const org = await requireActiveOrganization();
-  const [packs, subscription] = await Promise.all([
-    listPacks(org.id),
-    getSubscription(org.id),
-  ]);
-
-  const state = packs.find((row) => row.pack.id === packId)!;
-
-  const planCents = subscription?.price?.unitAmount ?? null;
-  const ownedPackCents = packs
-    .filter((row) => row.entitled && row.priceCents !== null)
-    .reduce((sum, row) => sum + (row.priceCents ?? 0), 0);
-
-  const currentCents =
-    planCents === null ? null : planCents + ownedPackCents;
-  const nextCents =
-    currentCents === null || state.priceCents === null
-      ? null
-      : currentCents + state.priceCents;
+  const [access, pricing] = await Promise.all([getAccess(org.id), pickerPricing(org.id)]);
+  const sold = PACK_IDS.includes(pack.id as PackId);
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="mx-auto flex w-full max-w-4xl flex-col gap-8">
       <PageHeader
         title={`${pack.name} pack`}
         description={
@@ -68,14 +53,12 @@ export default async function PackDetailPage({
 
       {/* Counted contents, never adjectives. This block is the answer to "is
           this real, or an upsell?" and it is the only thing that answers it. */}
-      <div className="rounded-xl border">
+      <div className="rounded-2xl border bg-card">
         {pack.contents.map((row, index) => (
           <div
             key={row.title}
             className={`flex gap-4 px-5 py-4 ${index ? "border-t" : ""}`}
           >
-            {/* The number column appears only where there is a number. A dash
-                standing in for a count reads as a count nobody filled in. */}
             {row.count === null ? null : (
               <span className="w-8 shrink-0 text-lg font-semibold tabular-nums">
                 {row.count}
@@ -88,128 +71,179 @@ export default async function PackDetailPage({
         ))}
       </div>
 
-      {state.entitled ? (
-        <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border p-5">
-          <div>
-            <p className="font-medium">
-              {state.enabled ? "This pack is on" : "You own this pack"}
-            </p>
-            <p className="text-muted-foreground mt-1 text-sm">
-              {state.priceCents !== null
-                ? `Billed at ${formatMoney(state.priceCents)}/mo`
-                : "On your subscription"}
-              {state.enabled
-                ? ". New quotes use its templates."
-                : ". It's switched off, so new quotes don't use its templates."}
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <PackSwitch
-              packId={pack.id}
-              packName={pack.name}
-              enabled={state.enabled}
-            />
-            {state.enabled ? (
-              <Button asChild variant="outline">
-                <Link href={`/office/packs/${pack.id}/configure`}>
-                  Tune its defaults
-                </Link>
-              </Button>
-            ) : null}
-          </div>
-        </div>
-      ) : pack.status === "coming" ? (
-        <div className="rounded-xl border border-dashed p-5">
+      {sold ? (
+        <PackMembership
+          packId={pack.id as PackId}
+          name={pack.name}
+          access={access}
+          priceMonth={pricing.packs[pack.id as PackId].month}
+          priceYear={pricing.packs[pack.id as PackId].year}
+          released={pricing.electricalAvailable}
+        />
+      ) : (
+        <div className="rounded-2xl border border-dashed bg-muted/30 p-6">
           <p className="font-medium">Not out yet</p>
           <p className="text-muted-foreground mt-1 text-sm">
-            This pack is being built. Everything above is what it will ship
-            with — nothing is sold until it does.
+            This pack is being built. Nothing is sold until it ships.
           </p>
         </div>
-      ) : (
-        <>
-          <div className="rounded-xl border p-5">
-            <p className="text-muted-foreground font-label text-[10px] uppercase">
-              Your bill
+      )}
+    </div>
+  );
+}
+
+function PackMembership({
+  packId,
+  name,
+  access,
+  priceMonth,
+  priceYear,
+  released,
+}: {
+  packId: PackId;
+  name: string;
+  access: Access;
+  priceMonth: number | null;
+  priceYear: number | null;
+  released: boolean;
+}) {
+  const state = access.packs[packId];
+  const next = nextConfig(access);
+  const paying = access.standing === "paid" || access.standing === "grace";
+  const price = access.interval === "year" ? priceYear : priceMonth;
+  const per = access.interval === "year" ? "/yr" : "/mo";
+
+  // On the plan: show or hide it, and remove it at the renewal.
+  if (state.purchased) {
+    const leaving = state.endsAt;
+    return (
+      <div className="flex flex-col gap-4 rounded-2xl border bg-card p-6 sm:p-8">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="font-medium">
+              On your plan{price !== null ? ` · ${formatMoney(price)}${per}` : ""}
             </p>
-
-            {currentCents === null || nextCents === null ? (
-              // Honest rather than approximate. Showing a made-up "before and
-              // after" on a page whose whole job is a total he recognises would
-              // undo the page.
-              <p className="text-muted-foreground mt-3 text-sm">
-                We don&apos;t have a price for this pack yet, so there&apos;s no
-                total to show you. Nothing here can be charged until there is.
-              </p>
+            <p className="text-muted-foreground mt-1 text-sm">
+              {leaving
+                ? `Ends ${dateOf(leaving)} with your renewal. You keep it until then.`
+                : `Renews with your plan${access.currentPeriodEnd ? ` on ${dateOf(access.currentPeriodEnd)}` : ""}.`}
+            </p>
+          </div>
+          <PackSwitch packId={packId} packName={name} enabled={state.enabled} />
+        </div>
+        <p className="text-muted-foreground text-xs">
+          Switching it off only hides it from your workspace — your subscription and your bill don&apos;t change.
+        </p>
+        {state.usable ? (
+          <div>
+            <Button asChild variant="outline" size="sm">
+              <Link href={`/office/packs/${packId}/configure`}>Tune its defaults</Link>
+            </Button>
+          </div>
+        ) : null}
+        {next && access.canChangePlan && !access.cancelAtPeriodEnd ? (
+          <div>
+            {leaving ? (
+              <ChangeButton
+                target={{ ...next, packs: [...new Set([...next.packs, packId])] }}
+                label={`Keep ${name}`}
+                variant="outline"
+                size="sm"
+              />
             ) : (
-              <>
-                <div className="mt-3 flex flex-col gap-1.5 text-sm">
-                  {planCents !== null ? (
-                    <div className="flex flex-wrap justify-between gap-x-4 gap-y-1">
-                      <span>{subscription?.product?.name ?? "Plan"}</span>
-                      <span className="tabular-nums">
-                        {formatMoney(planCents)}
-                      </span>
-                    </div>
-                  ) : null}
-                  {packs
-                    .filter((row) => row.entitled && row.priceCents !== null)
-                    .map((row) => (
-                      <div key={row.pack.id} className="flex flex-wrap justify-between gap-x-4 gap-y-1">
-                        <span>{row.pack.name} pack</span>
-                        <span className="tabular-nums">
-                          {formatMoney(row.priceCents!)}
-                        </span>
-                      </div>
-                    ))}
-                  <div className="text-primary-ink flex flex-wrap justify-between gap-x-4 gap-y-1">
-                    <span>{pack.name} pack</span>
-                    <span className="tabular-nums">
-                      +{formatMoney(state.priceCents!)}
-                    </span>
-                  </div>
-                </div>
-
-                <Separator className="my-3" />
-
-                <div className="flex flex-wrap items-baseline gap-3 text-2xl font-semibold">
-                  <span className="text-muted-foreground tabular-nums">
-                    {formatMoney(currentCents)}
-                  </span>
-                  <span className="text-muted-foreground text-base font-normal">
-                    →
-                  </span>
-                  <span className="tabular-nums">
-                    {formatMoney(nextCents)}
-                    <span className="text-muted-foreground text-sm font-normal">
-                      /mo
-                    </span>
-                  </span>
-                </div>
-
-                <p className="text-muted-foreground mt-2 text-xs">
-                  One bill, one card. Turn it off any time and it goes back to{" "}
-                  {formatMoney(currentCents)} at the end of the month.
-                </p>
-              </>
+              <ChangeButton
+                target={{ ...next, packs: next.packs.filter((pack) => pack !== packId) }}
+                label={`Remove ${name} at renewal`}
+                variant="outline"
+                size="sm"
+              />
             )}
           </div>
+        ) : null}
+      </div>
+    );
+  }
 
-          {pack.stripePriceLookupKey && state.priceCents !== null ? (
-            <CheckoutButton
-              organizationId={org.id}
-              priceId={pack.stripePriceLookupKey}
-            >
-              Add to my subscription
-            </CheckoutButton>
-          ) : null}
+  if (!released) {
+    return (
+      <div className="rounded-2xl border border-dashed bg-muted/30 p-6">
+        <p className="font-medium">Not out yet</p>
+        <p className="text-muted-foreground mt-1 text-sm">
+          This pack is being built. Everything above is what it will ship with — nothing is sold, and no evaluation
+          starts, until it does.
+        </p>
+      </div>
+    );
+  }
 
-          <p className="text-muted-foreground text-xs">
-            Two packs on means new quotes will ask which trade — defaulted to
-            whichever you use most.
-          </p>
-        </>
-      )}
+  const evaluation = state.evaluation;
+
+  return (
+    <div className="flex flex-col gap-4 rounded-2xl border bg-card p-6 sm:p-8">
+      <div>
+        <p className="font-medium">
+          {price !== null ? `${formatMoney(price)}${per}` : "Price not set"}
+          <span className="text-muted-foreground font-normal"> · requires Starter or Pro</span>
+        </p>
+        <p className="text-muted-foreground mt-1 text-sm">
+          {paying
+            ? "Added straight away, prorated to your renewal date. You'll see the exact amount before you confirm."
+            : "It's a line on a Starter or Pro membership, renewing on the same date. The next screen shows the total."}
+        </p>
+      </div>
+
+      {evaluation?.active ? (
+        <div className="bg-muted/50 flex flex-wrap items-center justify-between gap-3 rounded-lg p-3 text-sm">
+          <span>
+            Evaluating until {dateOf(evaluation.expiresAt)} — no card, no automatic charge. Buying now ends the free
+            days and starts the paid pack.
+          </span>
+          <PackSwitch packId={packId} packName={name} enabled={state.enabled} />
+        </div>
+      ) : null}
+
+      <div className="flex flex-wrap items-center gap-3">
+        {paying && next ? (
+          access.canChangePlan ? (
+            <ChangeButton
+              target={{ ...next, packs: [...new Set([...next.packs, packId])] }}
+              label={`Add ${name} to my plan`}
+            />
+          ) : (
+            <p className="text-muted-foreground text-sm">
+              Settle your renewal first — nothing new can be added until it&apos;s paid.
+            </p>
+          )
+        ) : (
+          <Button asChild>
+            <Link href={`/upgrade/checkout?plan=starter&interval=month&pack=${packId}`}>
+              Choose a plan with {name}
+            </Link>
+          </Button>
+        )}
+
+        {!state.evaluationUsed ? (
+          <MembershipAction
+            endpoint={`/api/v1/packs/${packId}/evaluation`}
+            label={`Try it free for ${POLICY.evaluationDays} days`}
+            success={`${name} is on for ${POLICY.evaluationDays} days. Nothing is charged when it ends.`}
+            confirm={{
+              title: `Try ${name} for ${POLICY.evaluationDays} days?`,
+              lines: [
+                `It starts now and ends on its own after ${POLICY.evaluationDays} days. No card, and nothing is charged.`,
+                "It unlocks the pack's content only — your plan and its limits stay as they are.",
+                "Each business gets one evaluation, so start it when you have work to try it on.",
+                "Anything you write with it stays exactly as it is after it ends.",
+              ],
+              action: "Start the evaluation",
+            }}
+          />
+        ) : !evaluation?.active ? (
+          <span className="text-muted-foreground text-sm">
+            Your {POLICY.evaluationDays}-day evaluation has been used.
+          </span>
+        ) : null}
+      </div>
     </div>
   );
 }

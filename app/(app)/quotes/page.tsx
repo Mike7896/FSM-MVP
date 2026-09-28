@@ -3,6 +3,8 @@ import { listTags, tagsForRecords } from "@/lib/queries/tags";
 import { parseTagFilter } from "@/lib/tags";
 import Link from "next/link";
 import type { Metadata } from "next";
+
+import { getAccess } from "@/lib/membership/access";
 import { LayoutGrid, List, Search } from "lucide-react";
 
 import { DemoChip } from "@/components/demo-chip";
@@ -112,10 +114,17 @@ export default async function QuotesPage({
   const search = typeof q === "string" && q.trim() ? q.trim() : undefined;
   const asList = view === "list";
 
-  const [quotes, office] = await Promise.all([
+  const [listed, office, { features }] = await Promise.all([
     listQuotes(org.id, { ...filters, q: search, limit: 50, offset: 0 }),
     getOfficeIdentity(org.id),
+    getAccess(org.id),
   ]);
+
+  // "Viewed" is quote-view tracking, a Pro feature (Billing §2.2): below Pro
+  // a viewed quote reads as what the contractor did — sent.
+  const quotes = features.viewTracking
+    ? listed
+    : listed.map((quote) => (quote.status === "viewed" ? { ...quote, status: "sent" as const } : quote));
 
   // Only the shelf needs the page contents, so the table view never pays for
   // them.

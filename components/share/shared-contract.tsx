@@ -31,6 +31,7 @@ export function ContractSheet({ shared }: { shared: SharedContract }) {
         <DocumentFooter
           businessName={shared.office.businessName}
           number={shared.number}
+          promo={shared.office.promoFooter ?? true}
         />
       }
     >

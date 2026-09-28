@@ -3,6 +3,10 @@ import type { Metadata } from "next";
 import { ArrowRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { pickerPricing } from "@/lib/membership/bill";
+import { getReleases } from "@/lib/membership/releases";
+import { POLICY } from "@/lib/membership/catalog";
+import { formatMoney } from "@/lib/quote/money";
 
 /**
  * Screen 49 · the per-trade front door · class B·W, Flow 17.
@@ -57,6 +61,9 @@ export default async function TradePage({ params }: PageProps<"/for/[trade]">) {
     jobs: [],
   };
 
+  const releases = await getReleases();
+  const released = trade === "electricians" && releases.pack_electrical;
+
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6 sm:py-24">
       <div className="max-w-2xl">
@@ -64,10 +71,10 @@ export default async function TradePage({ params }: PageProps<"/for/[trade]">) {
           ServiceClerk for {config.name}
         </p>
         <h1 className="mt-4 text-4xl leading-[1.1] font-semibold tracking-tight sm:text-5xl">
-          {config.headline}
+          {released ? config.headline : `From first quote to final payment, for ${config.name.toLowerCase()}.`}
         </h1>
         <p className="text-muted-foreground mt-5 text-lg leading-relaxed">
-          {config.hook}
+          {released ? config.hook : "Keep quotes, contracts, invoices and customer payments together. Start free with the core tools, while specialized trade packs are in development."}
         </p>
         <div className="mt-8 flex flex-wrap gap-3">
           <Button asChild size="lg">
@@ -89,16 +96,18 @@ export default async function TradePage({ params }: PageProps<"/for/[trade]">) {
           </h2>
           <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {config.jobs.map((job) => (
-              <div key={job} className="rounded-lg border p-5">
+              <div key={job} className="rounded-2xl border bg-card p-6 sm:p-8">
                 <p className="font-medium">{job}</p>
                 <p className="text-muted-foreground mt-1.5 text-sm">
-                  Templated, with the scope language already written.
+                  {released ? "Templated, with the scope language already written." : "Quote this work today with your own line items and scope."}
                 </p>
               </div>
             ))}
           </div>
         </section>
       ) : null}
+
+      {trade === "electricians" ? <ElectricianPricing /> : null}
 
       <section className="mt-16 border-t pt-12">
         <h2 className="text-2xl font-semibold tracking-tight">
@@ -107,9 +116,75 @@ export default async function TradePage({ params }: PageProps<"/for/[trade]">) {
         <p className="text-muted-foreground mt-2 max-w-2xl">
           The core runs the money workflow for every trade — quote, deposit,
           change orders, progress billing, final invoice. The {config.name}{" "}
-          pack makes all of it speak your trade.
+          pack {released ? "adds specialist templates and language." : "is in development and is not included in a paid plan yet."}
         </p>
       </section>
     </div>
+  );
+}
+
+/**
+ * What an electrician actually pays — Billing §12: **the total first**, core
+ * and pack together, with the arithmetic under it. Until the Electrical pack
+ * is released it isn't sold, so the page quotes the core and says the pack is
+ * coming rather than advertising a price nobody can pay.
+ */
+async function ElectricianPricing() {
+  const pricing = await pickerPricing(null);
+  const pack = pricing.packs.electrical;
+  const core = pricing.core;
+  const offers: { title: string; body: string }[] = [];
+
+  if (pricing.electricalAvailable && core.starter.month !== null && pack.month !== null) {
+    offers.push({
+      title: `Starter for electricians — ${formatMoney(core.starter.month + pack.month)}/month plus applicable tax`,
+      body: `Includes the ${formatMoney(core.starter.month)} ServiceClerk core and the ${formatMoney(pack.month)} Electrical pack. Unlimited jobs, quotes, contracts, deposits, progress invoices and payment collection. Payment processing fees apply separately.`,
+    });
+    if (pricing.proAvailable && core.pro.month !== null) {
+      offers.push({
+        title: `Pro for electricians — ${formatMoney(core.pro.month + pack.month)}/month plus applicable tax`,
+        body: "Everything in Starter for electricians, plus your logo, quote-view tracking and business analytics.",
+      });
+    }
+    if (core.starter.year !== null && pack.year !== null) {
+      const year = core.starter.year + pack.year;
+      offers.push({
+        title: `Annual Starter for electricians — ${formatMoney(year)} billed annually`,
+        body: `Equivalent to ${formatMoney(Math.round(year / 12), { forceCents: true })}/month; save ${formatMoney((core.starter.month + pack.month) * 12 - year)} compared with 12 monthly payments.`,
+      });
+    }
+    offers.push({
+      title: "Free — activate three jobs each month",
+      body: `Finish and collect payment on those jobs without using another slot. Try Electrical for ${POLICY.evaluationDays} days, with no card and no automatic charge.`,
+    });
+  } else if (core.starter.month !== null) {
+    offers.push({
+      title: `ServiceClerk Starter — ${formatMoney(core.starter.month)}/month plus applicable tax`,
+      body: "Unlimited jobs, quotes, contracts, deposits, progress invoices and payment collection, for any trade. The Electrical pack is on its way and isn't sold yet.",
+    });
+    offers.push({
+      title: "Free — activate three jobs each month",
+      body: "Finish and collect payment on those jobs without using another slot.",
+    });
+  }
+
+  if (!offers.length) return null;
+
+  return (
+    <section className="mt-16 border-t pt-12">
+      <h2 className="text-2xl font-semibold tracking-tight">What it costs</h2>
+      <div className="mt-8 grid gap-4 md:grid-cols-2">
+        {offers.map((offer) => (
+          <div key={offer.title} className="rounded-2xl border bg-card p-6 sm:p-8">
+            <p className="font-medium">{offer.title}</p>
+            <p className="text-muted-foreground mt-1.5 text-sm leading-relaxed">{offer.body}</p>
+          </div>
+        ))}
+      </div>
+      <p className="text-muted-foreground mt-4 text-xs">
+        {pricing.electricalAvailable ? "The Electrical pack requires Starter or Pro. " : ""}
+        <Link href="/pricing" className="underline underline-offset-4">Core-only pricing and payment fees</Link>
+      </p>
+    </section>
   );
 }

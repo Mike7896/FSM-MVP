@@ -24,6 +24,7 @@ import type { SendContractInput } from "@/lib/schemas";
 import { DocumentError } from "../errors";
 import { ensureShareLink } from "../share-links";
 import { checkSendAllowance } from "@/lib/admin/limits";
+import { withDocumentActivation } from "@/lib/membership/activation";
 
 /**
  * `sendContract` — the contract goes to the customer again.
@@ -52,7 +53,26 @@ export type SendContractResult = {
   to: string | null;
 };
 
-export async function sendContract({
+/**
+ * The send, with its Free-plan activation around it (Billing §3.1): the job's
+ * slot is reserved before anything goes out, committed once it has, and
+ * released if the send fails. A job already activated costs nothing.
+ */
+export async function sendContract(
+  args: Parameters<typeof sendContractNow>[0]
+): Promise<SendContractResult> {
+  return withDocumentActivation(
+    {
+      organizationId: args.organizationId,
+      documentId: args.contractId,
+      action: "contract_sent",
+      actorUserId: args.sender.userId,
+    },
+    () => sendContractNow(args)
+  );
+}
+
+async function sendContractNow({
   organizationId,
   contractId,
   sender,

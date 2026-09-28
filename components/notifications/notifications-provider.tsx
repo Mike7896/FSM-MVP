@@ -10,28 +10,35 @@ import {
   type ReactNode,
 } from "react";
 import { useRouter } from "next/navigation";
+import type { RealtimeChannel } from "@supabase/supabase-js";
 import { toast } from "sonner";
 
 import type { InboxItem } from "@/lib/notifications/catalog";
+import { createClient } from "@/lib/supabase/client";
 
 /**
- * The app's side of notifications — one poll, two faces.
+ * The app's side of notifications — one read, two faces.
  *
  * **The bell** lists them; **the pop-ups** announce the ones that arrive while
  * someone is working. Both read this one state, so a pop-up opened and a bell
  * row opened are the same notification marked read once.
  *
- * **Polled, not pushed.** Every half-minute while the tab is visible, and the
- * moment it becomes visible again. A realtime socket would be quicker by a few
- * seconds and would put a second, stateful connection behind every signed-in
- * tab; for news like "the Patels opened the quote", thirty seconds is on time.
+ * **Pushed, not polled.** Supabase Realtime tells this tab the moment a row is
+ * written to, or marked read in, this person's own notifications — RLS decides
+ * who hears what, the same as a select. The push only says *something
+ * changed*; the list itself is re-read from the API, so there is one shape and
+ * one set of rules for what shows. A slow check stays underneath as a safety
+ * net: every five minutes while the socket is up, every half-minute while it
+ * isn't, and whenever the tab comes back into view.
  *
  * **The first read never pops anything up.** What was already waiting shows
  * as the bell's count; a pop-up is only for what arrives while they're here —
  * opening the app to eleven toasts would be the product shouting.
  */
 
-const POLL_MS = 30_000;
+/** Safety-net checks: slow while Realtime is connected, quicker while it isn't. */
+const LIVE_CHECK_MS = 5 * 60_000;
+const FALLBACK_CHECK_MS = 30_000;
 /** More than this at once is one pop-up pointing at the bell, not a stack. */
 const MAX_POPUPS = 3;
 
@@ -130,6 +137,41 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
     }
   }, [open]);
 
+  // Realtime: the database says when this person's notifications change.
+  const [live, setLive] = useState(false);
+
+  useEffect(() => {
+    const supabase = createClient();
+    let channel: RealtimeChannel | null = null;
+    let cancelled = false;
+
+    void (async () => {
+      const { data } = await supabase.auth.getSession();
+      const userId = data.session?.user.id;
+      if (cancelled || !userId) return;
+      await supabase.realtime.setAuth(data.session!.access_token);
+
+      channel = supabase
+        .channel(`notifications:${userId}`)
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "notifications", filter: `user_id=eq.${userId}` },
+          () => {
+            if (document.visibilityState === "visible") void poll();
+          }
+        )
+        .subscribe((state) => {
+          if (state === "SUBSCRIBED") setLive(true);
+          else if (state === "CHANNEL_ERROR" || state === "TIMED_OUT" || state === "CLOSED") setLive(false);
+        });
+    })();
+
+    return () => {
+      cancelled = true;
+      if (channel) void supabase.removeChannel(channel);
+    };
+  }, [poll]);
+
   useEffect(() => {
     const now = () => {
       if (document.visibilityState === "visible") void poll();
@@ -138,7 +180,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
     // Deferred a tick, so the first read lands after the page has painted
     // rather than competing with it.
     const first = setTimeout(now, 0);
-    const timer = setInterval(now, POLL_MS);
+    const timer = setInterval(now, live ? LIVE_CHECK_MS : FALLBACK_CHECK_MS);
     document.addEventListener("visibilitychange", now);
 
     return () => {
@@ -146,7 +188,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
       clearInterval(timer);
       document.removeEventListener("visibilitychange", now);
     };
-  }, [poll]);
+  }, [poll, live]);
 
   return (
     <Context.Provider

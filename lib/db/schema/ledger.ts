@@ -234,9 +234,10 @@ export const ledgerEntries = pgTable(
         or (${t.entryType} in (
               'payment_received', 'chargeback_reversed'
             ) and ${t.amountCents} > 0)
+        or ${t.entryType} = 'application_fee'
         or (${t.entryType} in (
               'refund_issued', 'chargeback_opened',
-              'processing_fee', 'application_fee', 'payout'
+              'processing_fee', 'payout'
             ) and ${t.amountCents} < 0)`
     ),
   ]

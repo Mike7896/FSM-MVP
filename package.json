@@ -12,7 +12,11 @@
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
-    "stripe:listen": "stripe listen --forward-to localhost:3000/api/stripe/webhook",
+    "stripe:listen": "stripe listen --forward-to localhost:3000/api/stripe/webhook --forward-connect-to localhost:3000/api/stripe/connect/webhook",
+    "stripe:fixtures": "tsx scripts/stripe-fixtures.mts",
+    "stripe:seed": "tsx --env-file=.env.local scripts/stripe-seed.mts",
+    "stripe:sync": "tsx --env-file=.env.local --conditions=react-server scripts/stripe-sync-catalog.mts",
+    "stripe:check": "tsx --env-file=.env.local --conditions=react-server scripts/stripe-check.mts",
     "api:smoke": "node scripts/verify-api.mjs",
     "field:check": "node --experimental-strip-types scripts/field-validation-check.mjs",
     "field:integration-check": "node scripts/field-workflows-check.mjs",
@@ -35,7 +39,9 @@
     "change-orders:check": "tsx --env-file=.env.local --conditions=react-server scripts/change-orders-check.mts",
     "contract-send:check": "tsx --env-file=.env.local --conditions=react-server scripts/contract-send-check.mts",
     "import:check": "tsx --env-file=.env.local --conditions=react-server scripts/import-check.mts",
-    "change-orders:http-check": "tsx --env-file=.env.local --conditions=react-server scripts/change-orders-http-check.mts"
+    "change-orders:http-check": "tsx --env-file=.env.local --conditions=react-server scripts/change-orders-http-check.mts",
+    "membership:check": "tsx --env-file=.env.local --conditions=react-server scripts/membership-check.mts",
+    "membership:scenarios": "tsx --env-file=.env.local --conditions=react-server scripts/membership-scenarios.mts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

@@ -63,7 +63,9 @@ const SIGN: Record<LedgerEntryType, 1 | -1 | null> = {
   refund_issued: -1,
   chargeback_opened: -1,
   processing_fee: -1,
-  application_fee: -1,
+  // Our cut, and — positive — the part of it handed back when a homeowner
+  // payment is refunded or returned (Billing §8.3).
+  application_fee: null,
   payout: -1,
   adjustment: null,
 };

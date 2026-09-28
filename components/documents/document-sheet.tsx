@@ -128,11 +128,17 @@ export function DocumentDesk({
 export function DocumentFooter({
   businessName,
   number,
+  promo = true,
   className,
 }: {
   businessName: string | null;
   /** `Q-0007` — what this document is called, where it has a name. */
   number?: string | null;
+  /**
+   * The mark itself — Free-plan documents only, decided by the plan the
+   * document went out on (Billing §2.2).
+   */
+  promo?: boolean;
   className?: string;
 }) {
   const left = [number, businessName].filter(Boolean).join(" · ");
@@ -147,9 +153,11 @@ export function DocumentFooter({
       )}
     >
       <span className="min-w-0 truncate">{left}</span>
-      <span className="flex shrink-0 items-center gap-1.5">
-        Made with <Lockup size={13} />
-      </span>
+      {promo ? (
+        <span className="flex shrink-0 items-center gap-1.5">
+          Made with <Lockup size={13} />
+        </span>
+      ) : null}
     </footer>
   );
 }

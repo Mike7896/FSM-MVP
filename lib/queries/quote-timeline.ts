@@ -1,5 +1,7 @@
 import "server-only";
 
+import { getAccess } from "@/lib/membership/access";
+
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
@@ -56,6 +58,8 @@ export type QuoteTimeline = {
   url: string | null;
   /** Every open, newest first. */
   opens: string[];
+  /** Opens are shown on Pro only (Billing §2.2); they are recorded regardless. */
+  viewTracking: boolean;
   contract: {
     contractorSignedAt: string | null;
     customerSignedAt: string | null;
@@ -153,6 +157,7 @@ export async function getQuoteTimeline(
 
   const draft = draftFromRecord(record);
   const sums = totals(draft);
+  const { viewTracking } = (await getAccess(organizationId)).features;
 
   return {
     quote: {
@@ -175,7 +180,10 @@ export async function getQuoteTimeline(
       phone: meta?.phone ?? null,
     },
     url: link ? shareUrl(link.token) : null,
-    opens: opens.map((open) => open.viewedAt.toISOString()),
+    // Quote-view tracking is a Pro feature (Billing §2.2). The opens are
+    // still recorded, so they appear the day a shop upgrades.
+    opens: viewTracking ? opens.map((open) => open.viewedAt.toISOString()) : [],
+    viewTracking,
     contract: contract
       ? {
           contractorSignedAt: signedAt("contractor"),

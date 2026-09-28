@@ -1,67 +1,69 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 
-import { PlanGrid } from "@/components/billing/plan-grid";
+import { PlanChooser } from "@/components/billing/plan-chooser";
+import { LocalTime } from "@/components/local-time";
 import { PageHeader } from "@/components/page-header";
 import { requireActiveOrganization } from "@/lib/dal";
-import { getActivePlans, getSubscription } from "@/lib/queries/billing";
-import { sentThisMonth } from "@/lib/queries/quotes";
+import { getAccess } from "@/lib/membership/access";
+import { getActivationUsage } from "@/lib/membership/activation";
+import { safeNextPath } from "@/lib/safe-next";
 
 export const metadata: Metadata = { title: "Choose a plan" };
 
 /**
- * Screen 30 · the in-app plan picker · Flow 11.
+ * Screen 30 · the in-app plan picker · Flow 11 · Billing §3.1.
  *
- * Plan selection lives in two places on purpose. `/pricing` on the marketing
- * site serves someone comparison-shopping before signup — full matrix,
- * objection handling. This one serves someone **mid-decision who wants
- * permission to stop deciding**: the same prices, their own usage as context.
+ * Serves someone **mid-decision who wants permission to stop deciding**: the
+ * same prices as the pricing page, with their own usage as context.
  *
- * The rule the whole journey is subordinate to: **work in progress survives the
- * upgrade prompt, always.** A contractor who loses a half-built quote in front
- * of a customer does not upgrade — they uninstall, and they tell the forum. So
- * the draft is saved before they ever reach here, and the copy says so.
- *
- * The send count is real. "You've sent 3 quotes this month" is the whole reason
- * this screen is on their phone, and a made-up number is one they would notice.
+ * The rule the journey is subordinate to: **work in progress survives the
+ * upgrade prompt, always.** The draft that hit the limit is saved before
+ * anyone gets here, the copy says so, and `?next=` brings them back to it.
+ * The count is real — "3 of 3 free jobs" is the reason this screen is on
+ * their phone, and a made-up number is one they would notice.
  */
-export default async function UpgradePage() {
+export default async function UpgradePage({ searchParams }: PageProps<"/upgrade">) {
   const org = await requireActiveOrganization();
-
-  const [plans, subscription, sent] = await Promise.all([
-    getActivePlans(),
-    getSubscription(org.id),
-    sentThisMonth(org.id),
-  ]);
+  const params = await searchParams;
+  const next = safeNextPath(params.next, "");
+  const [access, usage] = await Promise.all([getAccess(org.id), getActivationUsage(org.id)]);
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-10">
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-8">
       <PageHeader
-        title="Which one is you?"
-        description={`${sentLine(sent)} Your draft is saved and ready — any paid plan sends it now.`}
+        title="A plan for your next chapter"
+        description={
+          usage.limit === null
+            ? "Pick the plan that fits. Upgrades start as soon as they're paid."
+            : `You've activated ${usage.used} of ${usage.limit} free jobs this month.${next ? " Your draft is saved — any paid plan sends it now." : ""}`
+        }
       />
 
-      <PlanGrid
-        plans={plans}
-        organizationId={org.id}
-        currentPriceId={subscription?.price?.id ?? null}
-      />
+      {usage.limit !== null ? (
+        <p className="text-muted-foreground -mt-4 text-sm">
+          Or wait: your free jobs reset <LocalTime iso={usage.resetsAt.toISOString()} />.
+          {next ? (
+            <>
+              {" "}
+              <Link href={next} className="text-primary-ink underline underline-offset-4">Back to your draft</Link>
+            </>
+          ) : null}
+        </p>
+      ) : null}
+
+      {params.checkout === "cancelled" ? (
+        <p className="rounded-lg border px-4 py-3 text-sm">Checkout was cancelled. Nothing was charged.</p>
+      ) : null}
+
+      <PlanChooser organizationId={org.id} access={access} returnPath={next || undefined} />
 
       <p className="text-muted-foreground text-sm">
-        Trade packs are a separate line on the same bill — one membership,
-        however many packs.{" "}
-        <Link
-          href="/office/packs"
-          className="text-primary-ink underline underline-offset-4"
-        >
+        Trade packs are a line on the same bill, never a second subscription.{" "}
+        <Link href="/office/packs" className="text-primary-ink underline underline-offset-4">
           See the packs
         </Link>
       </p>
     </div>
   );
-}
-
-function sentLine(sent: number) {
-  if (sent === 0) return "Nothing sent this month yet.";
-  return `You've sent ${sent} quote${sent === 1 ? "" : "s"} this month.`;
 }

@@ -11,6 +11,8 @@ import {
   type HeaderSnapshot,
 } from "@/lib/db/schema";
 
+import { readAccess } from "@/lib/membership/access";
+
 import type { Executor } from "./repository";
 
 /**
@@ -25,6 +27,11 @@ import type { Executor } from "./repository";
  * Before a document is sent there is nothing to freeze, so drafts read the
  * Office live — that is what lets the letterhead fill in on the preview while
  * he types his business name.
+ *
+ * **The plan is frozen too** (Billing §2.2): the logo goes on only for a shop
+ * whose plan includes branding at the moment of sending, and a Free shop's
+ * document carries the ServiceClerk footer. A later upgrade or downgrade
+ * never restyles a document already in someone's hands.
  */
 export async function captureHeader(
   input: {
@@ -35,6 +42,8 @@ export async function captureHeader(
   },
   on: Executor = db
 ): Promise<HeaderSnapshot> {
+  const { features } = await readAccess(input.organizationId);
+
   const [office] = await on
     .select({
       name: organizations.name,
@@ -79,7 +88,8 @@ export async function captureHeader(
     businessPhone: office?.phone ?? undefined,
     businessEmail: office?.email ?? undefined,
     businessAddress: office?.address ?? undefined,
-    logoUrl: office?.logoUrl ?? undefined,
+    logoUrl: features.branding ? (office?.logoUrl ?? undefined) : undefined,
+    promoFooter: features.promoFooter,
     licenseNumber: license?.number ?? undefined,
     licenseKind: license?.kind ?? undefined,
     customerName: customer?.name ?? undefined,
