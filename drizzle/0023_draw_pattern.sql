@@ -1,0 +1,1 @@
+ALTER TABLE "quote_details" ADD COLUMN "draw_pattern" jsonb;

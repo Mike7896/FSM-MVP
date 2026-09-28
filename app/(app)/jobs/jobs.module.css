@@ -1,0 +1,67 @@
+.page { width: 100%; max-width: var(--workspace-max-width, 100rem); margin-inline: auto; display: flex; flex-direction: column; gap: 25px; --job-soft: color-mix(in srgb, var(--background) 96%, var(--primary)); }
+.eyebrow { font-family: var(--font-archivo), sans-serif; font-size: 10px; font-weight: 600; letter-spacing: .13em; color: var(--muted-foreground); }
+.breadcrumb { display: flex; align-items: center; gap: 9px; font-size: 12px; color: var(--muted-foreground); }
+.breadcrumb a:hover { color: var(--foreground); text-decoration: underline; text-underline-offset: 4px; }
+.overview { background: linear-gradient(120deg, var(--card) 35%, var(--job-soft)); border: 1px solid var(--border); border-radius: 15px; padding: 32px; box-shadow: 0 8px 30px -20px rgb(22 32 42 / .15); }
+.jobHeader { display: flex; align-items: start; justify-content: space-between; gap: 24px; }
+.jobTitle { font-size: clamp(27px, 3vw, 38px); font-weight: 600; line-height: 1.16; letter-spacing: -.04em; margin: 13px 0 16px; overflow-wrap: anywhere; }
+.jobMeta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; color: var(--muted-foreground); font-size: 12px; line-height: 1.7; }
+.jobMeta > span { display: inline-flex; align-items: center; gap: 5px; }
+.jobMeta svg { flex-shrink: 0; }
+.customerLink { color: var(--foreground); font-weight: 500; text-decoration: underline; text-decoration-color: var(--border); text-underline-offset: 4px; }
+.customerLink:hover { text-decoration-color: var(--primary-ink); }
+.jobIdentity { display: flex; flex-direction: column; align-items: end; gap: 17px; flex-shrink: 0; }
+.jobIcon { display: grid; place-items: center; width: 56px; height: 56px; color: var(--primary-ink); background: var(--job-soft); border: 1px solid color-mix(in srgb, var(--primary) 25%, var(--border)); border-radius: 13px; }
+.status { text-transform: capitalize; background: var(--job-soft); border: 1px solid color-mix(in srgb, var(--primary) 25%, var(--border)); color: var(--primary-ink); border-radius: 20px; padding: 4px 10px; font-size: 10px; }
+.moneyStrip { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); border-block: 1px solid var(--border); margin-top: 30px; padding-block: 23px; }
+.figure { min-width: 0; }
+.figure + .figure { border-left: 1px solid var(--border); padding-left: 26px; }
+.figureValue { font-size: clamp(24px, 3vw, 36px); font-family: var(--font-archivo), sans-serif; font-weight: 550; letter-spacing: -.04em; font-variant-numeric: tabular-nums; margin-top: 9px; overflow-wrap: anywhere; }
+.collection { margin-top: 22px; }
+.collection > div:first-child { display: flex; justify-content: space-between; gap: 15px; font-size: 11px; margin-bottom: 11px; }
+.collection > div:first-child > span:last-child { color: var(--muted-foreground); }
+.progress { height: 6px; border-radius: 8px; background: var(--muted); overflow: hidden; }
+.progress > span { display: block; height: 100%; background: var(--primary); border-radius: inherit; }
+.gate { padding: 22px 26px; border: 1px solid color-mix(in srgb, var(--primary) 45%, var(--border)); background: var(--job-soft); border-radius: 12px; }
+.detailGrid { display: grid; grid-template-columns: minmax(0,1fr) 280px; align-items: start; gap: 24px; }
+.mainColumn, .sideColumn { display: flex; flex-direction: column; gap: 24px; min-width: 0; }
+.panel { min-width: 0; border: 1px solid var(--border); border-radius: 13px; padding: 24px; background: var(--card); }
+.sectionTitle { font-size: 15px; font-weight: 600; letter-spacing: -.025em; margin-bottom: 18px; }
+.panel > p { line-height: 1.8; }
+.phases { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px,1fr)); gap: 9px; margin-block: 8px 23px; }
+.phase { background: var(--muted); border: 1px solid transparent; border-radius: 8px; padding: 13px; min-width: 0; }
+.stageLine { display: flex; align-items: center; gap: 13px; border-top: 1px solid var(--border); padding: 19px 4px; transition: background-color .15s; }
+.stageLine:hover { background: var(--muted); }
+.stageIcon { display: grid; place-items: center; flex-shrink: 0; width: 32px; height: 32px; border-radius: 50%; color: var(--muted-foreground); background: var(--muted); }
+.stageIcon[data-state="ready"] { background: var(--job-soft); color: var(--primary-ink); box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary) 35%, transparent); }
+.stageIcon[data-state="paid"] { color: var(--foreground); }
+.actionBar { position: sticky; bottom: 0; z-index: 5; display: flex; align-items: center; justify-content: space-between; gap: 20px; border: 1px solid var(--border); border-radius: 12px 12px 0 0; padding: 17px 24px; background: color-mix(in srgb, var(--background) 95%, transparent); backdrop-filter: blur(12px); box-shadow: 0 -6px 25px -18px rgb(22 32 42 / .2); }
+.actionHint { display: flex; flex-direction: column; gap: 5px; font-size: 12px; }
+.listHeader { margin-top: -10px; padding-bottom: 27px; border-bottom: 1px solid var(--border); }
+.listHeader h1 { font-size: 38px; letter-spacing: -.04em; }
+.search { position: relative; width: 100%; max-width: 460px; }
+.jobList { border: 1px solid var(--border); border-radius: 13px; background: var(--card); overflow: hidden; }
+.listHeading { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 20px 24px; background: var(--job-soft); }
+.listHeading h2 { font-size: 14px; font-weight: 600; }
+.listHeading > span { font-size: 11px; color: var(--muted-foreground); }
+.jobRow { display: grid; grid-template-columns: minmax(0,1fr) auto 17px; align-items: center; gap: 24px; padding: 25px 24px; border-top: 1px solid var(--border); transition: background-color .15s; }
+.jobRow:hover { background: var(--muted); }
+.rowIdentity { display: flex; gap: 15px; align-items: start; min-width: 0; }
+.rowIcon { display: grid; place-items: center; flex-shrink: 0; width: 41px; height: 41px; background: var(--muted); color: var(--muted-foreground); border: 1px solid var(--border); border-radius: 10px; }
+.rowMoney { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 24px; font-size: 14px; min-width: 300px; text-align: right; }
+.rowMoney > div > p:last-child { font-family: var(--font-archivo), sans-serif; font-size: 17px; font-weight: 550; letter-spacing: -.025em; }
+.rowMoney > div > p:first-child { font-size: 10px; }
+.rowArrow { color: var(--muted-foreground); }
+@container (max-width: 900px) { .detailGrid { grid-template-columns: minmax(0,1fr) 240px; gap: 18px; } .panel { padding: 20px; } .jobRow { grid-template-columns: minmax(0,1fr) 17px; gap: 18px; } .rowMoney { grid-column: 1; text-align: left; min-width: 0; padding-left: 56px; } .rowArrow { grid-column: 2; grid-row: 1; } }
+@container (max-width: 720px) { .detailGrid { grid-template-columns: minmax(0,1fr); } .overview { padding: 24px; } .figure + .figure { padding-left: 16px; } .sideColumn { display: grid; grid-template-columns: repeat(auto-fit,minmax(230px,1fr)); } .phases { display: none; } }
+@media (max-width: 1100px) { .jobRow { grid-template-columns: minmax(0,1fr) 17px; gap: 18px; } .rowMoney { grid-column: 1; text-align: left; min-width: 0; padding-left: 56px; } .rowArrow { grid-column: 2; grid-row: 1; } }
+@media (max-width: 540px) { .page { gap: 20px; } .overview { padding: 20px; } .jobHeader { gap: 12px; } .jobIcon { width: 42px; height: 42px; border-radius: 10px; } .jobIdentity { max-width: 100px; } .jobTitle { font-size: 27px; } .moneyStrip { padding-block: 18px; margin-top: 24px; } .figureValue { font-size: 21px; } .figure + .figure { padding-left: 10px; } .figure > p:first-child { font-size: 8px; letter-spacing: .08em; } .panel { padding: 18px; } .stageLine { flex-wrap: wrap; } .stageLine > span:last-child { margin-left: auto; font-size: 13px; } .gate { padding: 20px; } .actionBar { padding: 14px; } .actionHint { display: none; } .listHeading { padding: 18px; } .jobRow { padding: 20px 16px; gap: 15px; } .rowIcon { display: none; } .rowMoney { padding-left: 0; gap: 12px; } .rowMoney > div > p:last-child { font-size: 15px; } .listHeader h1 { font-size: 34px; } }
+@container (max-width: 330px) {
+  .moneyStrip { grid-template-columns: minmax(0,1fr); padding-block: 0; }
+  .figure { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding-block: 13px; }
+  .figure + .figure { border-left: 0; border-top: 1px solid var(--border); padding-left: 0; }
+  .figureValue { margin-top: 0; font-size: 23px; }
+  .jobHeader { flex-wrap: wrap; }
+  .jobIdentity { max-width: none; flex-direction: row; align-items: center; }
+  .jobIcon { display: none; }
+}

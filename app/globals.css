@@ -1,26 +1,360 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@custom-variant dark (&:is(.dark *));
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* Inter for body, Archivo for headings and labels — Brand Kit, "Typography".
+     The `--font-inter` / `--font-archivo` variables come from next/font in
+     app/layout.tsx. There is no brand mono: code-like strings use the system's. */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-heading: var(--font-archivo), ui-sans-serif, system-ui, sans-serif;
+  /* Headings track −1% to −1.8% in the kit, not Tailwind's −2.5%. Every
+     heading already asks for `tracking-tight`, so the token moves instead. */
+  --tracking-tight: -0.018em;
+  /* Body copy is set at 1.65. `leading-relaxed` is what reading text uses. */
+  --leading-relaxed: 1.65;
+  --shadow-lg: 0 10px 30px rgb(22 32 42 / 0.12);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-ink: var(--primary-ink);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  /* Paper. A document is a light object in both themes — the way it is on a
+     desk at night — so these do not flip with the interface. */
+  --color-paper: var(--paper);
+  --color-paper-ink: var(--paper-ink);
+  --color-paper-ink-soft: var(--paper-ink-soft);
+  --color-paper-rule: var(--paper-rule);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+:root {
+  /*
+   * The ServiceClerk palette — Strategy/Brand Kit.md, "Colour". Every colour
+   * below derives from these, so a hex value lives nowhere else.
+   *
+   * One neutral ramp, charcoal with a navy cast, and one accent, amber. There
+   * is deliberately no brand primary: the dark role is the top of the neutral
+   * ramp, and amber is the only expressive colour.
+   */
+  --brand-ink: #16202a;
+  --brand-neutral-100: #f4f6f8;
+  --brand-neutral-200: #e7ebef;
+  --brand-neutral-300: #d4dae1;
+  --brand-neutral-400: #b0b9c4;
+  --brand-neutral-500: #8996a5;
+  --brand-neutral-600: #667485;
+  --brand-neutral-700: #47535f;
+  --brand-neutral-800: #1f2933;
+  --brand-amber-100: #fef6e7;
+  --brand-amber-200: #fce7bf;
+  --brand-amber-300: #f7ce85;
+  --brand-amber: #e8a317;
+  --brand-amber-700: #96620a;
+  --brand-amber-900: #5e3d05;
+
+  /*
+   * Amber is a fill, never an ink — white on it is 2.2:1. So `primary` is the
+   * amber fill with neutral-800 on it, and `primary-ink` is the lowest accent
+   * that may carry text (accent 700, 5.2:1) for links and accent labels.
+   * Reach for `text-primary-ink`, never `text-primary`.
+   */
+  --background: #ffffff;
+  --foreground: var(--brand-ink);
+  --card: #ffffff;
+  --card-foreground: var(--brand-ink);
+  --popover: #ffffff;
+  --popover-foreground: var(--brand-ink);
+  --primary: var(--brand-amber);
+  --primary-foreground: var(--brand-neutral-800);
+  --primary-ink: var(--brand-amber-700);
+  --secondary: var(--brand-neutral-100);
+  --secondary-foreground: var(--brand-neutral-800);
+  --muted: var(--brand-neutral-100);
+  --muted-foreground: var(--brand-neutral-600);
+  --accent: var(--brand-neutral-100);
+  --accent-foreground: var(--brand-neutral-800);
+  /* Success, warning and danger are still open in the kit — a separate
+     system from the brand. Destructive stays as shipped until they land. */
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: var(--brand-neutral-300);
+  --input: var(--brand-neutral-400);
+  /* A focus ring is non-text, so it needs 3:1: accent 700, not the base. */
+  --ring: var(--brand-amber-700);
+  --chart-1: var(--brand-amber);
+  --chart-2: var(--brand-neutral-700);
+  --chart-3: var(--brand-amber-300);
+  --chart-4: var(--brand-neutral-500);
+  --chart-5: var(--brand-neutral-300);
+  --radius: 0.625rem;
+
+  /* The page itself: white, near-black ink, hairline rules. Lifted from
+     DocumentThumbnail, which has drawn paper this way since the shelf. */
+  --paper: #ffffff;
+  --paper-ink: #16202a;
+  --paper-ink-soft: #667485;
+  --paper-rule: #e3e3e3;
+  --sidebar: var(--brand-neutral-100);
+  --sidebar-foreground: var(--brand-ink);
+  --sidebar-primary: var(--brand-amber);
+  --sidebar-primary-foreground: var(--brand-neutral-800);
+  --sidebar-accent: var(--brand-neutral-200);
+  --sidebar-accent-foreground: var(--brand-neutral-800);
+  --sidebar-border: var(--brand-neutral-300);
+  --sidebar-ring: var(--brand-amber-700);
+}
+
+/*
+ * Dark is derived — the kit defines light only. The ground is the kit's text
+ * colour, which is what the brand sheet reverses the marks onto ("not pure
+ * black"). The ramp has no step between neutral 800 and 700, so the raised
+ * fills are a mix of the two rather than a new hex.
+ */
+.dark {
+  --raised: color-mix(in oklab, var(--brand-neutral-700) 30%, var(--brand-neutral-800));
+
+  --background: var(--brand-ink);
+  --foreground: var(--brand-neutral-100);
+  --card: var(--brand-neutral-800);
+  --card-foreground: var(--brand-neutral-100);
+  --popover: var(--brand-neutral-800);
+  --popover-foreground: var(--brand-neutral-100);
+  --primary: var(--brand-amber);
+  --primary-foreground: var(--brand-neutral-800);
+  /* On the dark ground a lighter amber carries text; 700 would sink. */
+  --primary-ink: var(--brand-amber-300);
+  --secondary: var(--raised);
+  --secondary-foreground: var(--brand-neutral-100);
+  --muted: var(--raised);
+  --muted-foreground: var(--brand-neutral-400);
+  --accent: var(--raised);
+  --accent-foreground: var(--brand-neutral-100);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: var(--brand-amber);
+  --chart-1: var(--brand-amber);
+  --chart-2: var(--brand-neutral-300);
+  --chart-3: var(--brand-amber-300);
+  --chart-4: var(--brand-neutral-500);
+  --chart-5: var(--brand-neutral-700);
+  --sidebar: var(--brand-neutral-800);
+  --sidebar-foreground: var(--brand-neutral-100);
+  --sidebar-primary: var(--brand-amber);
+  --sidebar-primary-foreground: var(--brand-neutral-800);
+  --sidebar-accent: var(--raised);
+  --sidebar-accent-foreground: var(--brand-neutral-100);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: var(--brand-amber);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply font-heading;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/*
+ * The label role — Brand Kit, "Typography": Archivo 600 at 14% tracking, set
+ * uppercase at the call site. Section labels, table heads and tags all use it,
+ * so the role changes here rather than at every one of them.
+ */
+@utility font-label {
+  @apply font-heading;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+}
+
+/**
+ * What a tour step is pointing at.
+ *
+ * Set by `TourHost` on the element carrying the step's `data-tour` marker, so a
+ * screen never learns that a tour exists. A ring rather than a full-page dim:
+ * steps ask people to open pickers and sheets, and a mask would sit on top of
+ * the very dialogs the step is asking for.
+ */
+@layer components {
+  /* No radius here: each marked element keeps its own, and the ring follows. */
+  [data-tour-active] {
+    @apply ring-foreground/60 ring-2 ring-offset-4 ring-offset-[var(--color-background)];
+  }
+
+  /**
+   * A document, drawn as a document.
+   *
+   * **The interface is a surface; a quote is a page.** Cards, rounded corners
+   * and theme colours say "part of an app", and the one thing a quote must not
+   * look like is part of an app — it is the artifact a homeowner prints, files
+   * and takes to their spouse, and it is the same artifact a PDF export will
+   * produce. So the page keeps paper's own colours in both themes, squares its
+   * corners, and rules its rows with hairlines instead of borders around boxes.
+   *
+   * Redefining the theme's own variables here rather than restyling every row
+   * is deliberate: `text-muted-foreground` inside a document keeps meaning
+   * "quieter ink" and starts resolving to paper's quiet ink, so a component can
+   * be rendered on screen or on paper without knowing which it is in.
+   */
+  .document-paper {
+    /* **The source variables, not the `--color-*` ones.** The theme is
+       declared `@theme inline`, so `text-muted-foreground` compiles to
+       `var(--muted-foreground)` directly — overriding the `--color-*` alias
+       here would do nothing at all, and every quiet line on the page would
+       keep the interface's ink. */
+    --background: var(--paper);
+    --foreground: var(--paper-ink);
+    --card: var(--paper);
+    --card-foreground: var(--paper-ink);
+    --popover: var(--paper);
+    --popover-foreground: var(--paper-ink);
+    --muted: #f2f4f5;
+    --muted-foreground: var(--paper-ink-soft);
+    --secondary: #f2f4f5;
+    --secondary-foreground: var(--paper-ink);
+    --accent: #f2f4f5;
+    --accent-foreground: var(--paper-ink);
+    --border: var(--paper-rule);
+    --input: var(--paper-rule);
+    background-color: var(--paper);
+    color: var(--paper-ink);
+
+    /**
+     * 11pt, which is what a blank document opens at in both Word and Google
+     * Docs, and leading a shade looser than their 1.15 — their default is set
+     * for Calibri and Arial, and Inter's larger x-height needs the extra
+     * quarter-line to breathe at the same size.
+     *
+     * Points rather than pixels on purpose: this is the one surface in the
+     * product whose sizes have to survive being printed.
+     */
+    font-size: 11pt;
+    line-height: 1.35;
+  }
+
+  /* Document rhythm, in the units a document is set in. A section break is a
+     line of space; a paragraph is a third of one. */
+  .document-paper p + p {
+    margin-top: 6pt;
+  }
+
+  /* Corners belong to controls. A sheet of paper has none, and neither does
+     anything drawn on it — except the things you press. */
+  .document-paper
+    :not(button):not([role="button"]):not(a):not(input):not(textarea):not(
+      select
+    ):not([data-control]) {
+    border-radius: 0;
+  }
+}
+
+/**
+ * A document tile — a sheet of paper on a shelf.
+ *
+ * The top-left corner is cut away rather than drawn over, so the fold is a
+ * real notch in the sheet: the tile's own shadow follows the cut, and what is
+ * behind the tile shows through it. `clip-path` does that; a rotated square
+ * pasted on top would not.
+ *
+ * Square everywhere else. Paper has corners, interfaces have radii.
+ */
+@layer components {
+  .document-tile {
+    border-radius: 0;
+    clip-path: polygon(14px 0, 100% 0, 100% 100%, 0 100%, 0 14px);
+    /* A dropped shadow, not a box shadow: `clip-path` cuts a box shadow off
+       with everything else, while `drop-shadow` traces the shape it is given
+       — including the notch, which is what makes the corner read as folded. */
+    filter: drop-shadow(0 1px 1px rgb(22 32 42 / 0.2));
+    transition: filter 150ms ease;
+  }
+
+  .group:hover .document-tile,
+  .group:focus-visible .document-tile {
+    filter: drop-shadow(0 5px 10px rgb(22 32 42 / 0.3));
+  }
+}
+
+/**
+ * Printing, and therefore PDFs.
+ *
+ * The same page the customer reads is the page that prints: no second
+ * template, no export that can drift from the screen. Everything the app wraps
+ * around it — sidebars, toolbars, buttons — is marked and disappears.
+ */
+@media print {
+  [data-print="hide"] {
+    display: none !important;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+  }
+
+  .document-paper {
+    border: 0 !important;
+    box-shadow: none !important;
+    max-width: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Rows and totals must not be split across a page break mid-line. */
+  .document-paper section,
+  .document-paper li {
+    break-inside: avoid;
+  }
+
+  @page {
+    margin: 0.75in;
+  }
 }

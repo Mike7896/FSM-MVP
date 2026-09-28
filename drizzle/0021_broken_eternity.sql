@@ -1,0 +1,1 @@
+CREATE INDEX "info_requests_document_idx" ON "info_requests" USING btree ("document_id");
