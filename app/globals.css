@@ -191,7 +191,7 @@
   --sidebar-primary-foreground: var(--brand-neutral-800);
   --sidebar-accent: color-mix(in oklab, var(--brand-neutral-700) 55%, var(--brand-neutral-800));
   --sidebar-accent-foreground: var(--brand-neutral-100);
-  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-border: oklch(1 0 0 / 12%);
   --sidebar-ring: var(--brand-amber);
 }
 
@@ -346,7 +346,7 @@
   .group:hover .document-tile-shadow,
   .group:focus-visible .document-tile-shadow {
     filter: drop-shadow(0 0 1px var(--tile-edge))
-      drop-shadow(0 4px 6px var(--tile-lift));
+      drop-shadow(0 3px 5px var(--tile-lift));
   }
 
   /* On the dark ground white paper is its own edge, and an ink shadow on an

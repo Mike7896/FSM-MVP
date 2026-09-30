@@ -58,11 +58,13 @@ export default async function QuoteDocumentPage({
     : undefined;
 
   return (
-    <div className="-m-4 flex min-h-0 flex-1 flex-col md:-m-6">
+    // Out to the edges of the content area — the layout pads it px-4 py-6,
+    // md:px-8 md:py-8 — so the desk runs up to the sidebar with no white rim.
+    <div className="-mx-4 -my-6 flex min-h-0 flex-1 flex-col md:-mx-8 md:-my-8">
       {/* The app's furniture, and none of it prints. */}
       <div
         data-print="hide"
-        className="bg-background flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3 md:px-6"
+        className="bg-background flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3 md:px-8"
       >
         <div className="min-w-0">
           <p className="text-sm font-medium">

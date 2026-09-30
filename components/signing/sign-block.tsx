@@ -111,7 +111,9 @@ export function SignBlock({
   }
 
   return (
-    <div className={bare ? "flex flex-col gap-4" : "flex flex-col gap-4 rounded-xl border p-5"}>
+    // A surface of its own: it sits on the document desk, and quiet text
+    // straight on the desk falls short of 4.5:1.
+    <div className={bare ? "flex flex-col gap-4" : "bg-background flex flex-col gap-4 rounded-xl border p-5"}>
       <div>
         <p className={bare ? "text-base font-semibold" : "font-label text-[11px] uppercase"}>
           {heading}
