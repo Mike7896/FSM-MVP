@@ -188,7 +188,10 @@ function Dashboard({
     for (const row of metrics.data?.newest ?? []) names[String(row.id)] = String(row.name);
     return names;
   }, [initialPresence, metrics.data]);
+  // Check scripts and testers aren't users; Realtime delivers them anyway.
+  const testUsers = useMemo(() => new Set(metrics.data?.testUserIds ?? []), [metrics.data]);
   const online = Object.values(presence)
+    .filter((row) => !testUsers.has(row.user_id))
     .map((row) => ({ ...row, business: row.organization_id ? (businessNames[row.organization_id] ?? null) : null }))
     .sort((a, b) => b.last_seen.localeCompare(a.last_seen));
   const onlineNow = online.filter((row) => now - new Date(row.last_seen).getTime() < 120_000).length;

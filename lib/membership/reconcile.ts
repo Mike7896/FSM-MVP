@@ -24,6 +24,7 @@ import {
   type PaidTier,
 } from "./catalog";
 import { endEvaluation } from "./evaluation";
+import { monthlyRecurringCents } from "./mrr";
 
 /**
  * RECONCILIATION — Stripe's subscription, read into ServiceClerk's terms (§11.2).
@@ -108,7 +109,7 @@ const LIVE = new Set(["active", "trialing", "past_due", "unpaid"]);
 
 export async function reconcileSubscription(subscriptionId: string): Promise<BillingAccount | null> {
   const subscription = await stripe().subscriptions.retrieve(subscriptionId, {
-    expand: ["latest_invoice", "schedule.phases.items.price"],
+    expand: ["latest_invoice", "schedule.phases.items.price", "discounts.source.coupon"],
   });
   return reconcileFrom(subscription);
 }
@@ -237,6 +238,7 @@ export async function reconcileFrom(subscription: Stripe.Subscription): Promise<
     packs: ended ? [] : current.packs,
     priceKeys: ended ? [] : current.priceKeys,
     foundingPrice: !ended && current.founding,
+    mrrCents: ended ? 0 : monthlyRecurringCents(subscription),
     currentPeriodStart: periodStart,
     currentPeriodEnd: periodEnd,
     paidThrough,

@@ -130,6 +130,14 @@ export const billingAccounts = pgTable(
     /** Notices already sent, as dedupe keys — `dunning:in_123:3`, `eval:electrical:10`. */
     notices: text("notices").array().notNull().default(sql`'{}'::text[]`),
 
+    /**
+     * What the subscription brings in a month, in cents — every recurring
+     * line (core plan and packs) at its quantity, less any recurring
+     * discount. Null when Stripe's answer couldn't be read in full; the admin
+     * dashboard then falls back to list prices.
+     */
+    mrrCents: integer("mrr_cents"),
+
     reconciledAt: timestamp("reconciled_at", { withTimezone: true }),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .notNull()

@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
-import { desc, eq, gt, sql } from "drizzle-orm";
+import { and, desc, eq, gt, sql } from "drizzle-orm";
 
 import { AdminDashboard } from "@/components/admin/admin-dashboard";
 import type { LiveEvent, PresenceRow } from "@/components/admin/use-live";
 import { requireAdmin } from "@/lib/admin/access";
+import { realUser } from "@/lib/admin/metrics";
 import { db } from "@/lib/db";
 import { adminEvents, organizations, userPresence } from "@/lib/db/schema";
 
@@ -26,7 +27,7 @@ export default async function AdminPage() {
       .select({ presence: userPresence, business: organizations.name })
       .from(userPresence)
       .leftJoin(organizations, eq(organizations.id, userPresence.organizationId))
-      .where(gt(userPresence.lastSeen, sql`now() - interval '15 minutes'`))
+      .where(and(gt(userPresence.lastSeen, sql`now() - interval '15 minutes'`), realUser(sql`${userPresence.userId}`)))
       .orderBy(desc(userPresence.lastSeen));
 
   // The same shape Realtime delivers — straight from Postgres, snake_case.

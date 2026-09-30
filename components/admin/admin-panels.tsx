@@ -77,10 +77,19 @@ export function KpiGrid({ metrics, online }: { metrics: AdminMetrics; online: nu
       <Stat label="Events · last hour" value={num(people.events_hour)} sub={`${num(people.events_today)} today`} />
       <Stat label="Signups today" value={num(people.signups_today)} sub={`${num(people.signups_7d)} 7d · ${num(people.signups_30d)} 30d · ${num(people.users)} all`} />
       <Stat label="New businesses today" value={num(people.businesses_today)} sub={`${num(people.businesses_7d)} 7d · ${num(people.businesses)} all`} />
-      <Stat label="Signed in today" value={num(people.signed_in_today)} sub="people" />
-      <Stat label="Support open" value={metrics.support.filter((row) => row.status === "open").length} sub={`${metrics.support.length} recent`} tone={metrics.support.some((row) => row.status === "open") ? "bad" : undefined} />
+      <Stat
+        label="Active today"
+        value={num(people.active_today)}
+        sub={people.signins_logged ? `people · ${num(people.signed_in_today)} fresh sign-ins` : "people · sign-ins aren't being logged"}
+      />
+      <Stat label="Support open" value={num(people.support_open)} sub={`${metrics.support.length} recent shown`} tone={n(people, "support_open") ? "bad" : undefined} />
 
-      <Stat label="MRR" value={money(revenue.mrrCents)} sub={`${revenue.paying} paying`} tone="money" />
+      <Stat
+        label="MRR"
+        value={money(revenue.mrrCents)}
+        sub={revenue.estimated ? `${revenue.paying} paying · ${revenue.estimated} at list price` : `${revenue.paying} paying`}
+        tone="money"
+      />
       <Stat label="Trials" value={revenue.trialing} sub={`${revenue.trialsEnding.length} ending in 7 days`} />
       <Stat label="Past due" value={revenue.pastDue} sub={`${revenue.canceled} canceled all-time`} tone={revenue.pastDue ? "bad" : undefined} />
       <Stat label="Collected today" value={money(cash.today)} sub={`${money(cash.week)} 7d · ${money(cash.month)} 30d`} tone="money" />
@@ -140,7 +149,7 @@ export function TrendPanels({ metrics }: { metrics: AdminMetrics }) {
 export function FunnelPanel({ metrics }: { metrics: AdminMetrics }) {
   const f = metrics.funnel;
   const steps: [string, number][] = [
-    ["Signed up", n(f, "signed_up")],
+    ["People signed up", n(f, "signed_up")],
     ["Set up a business", n(f, "business")],
     ["Started a quote", n(f, "quoted")],
     ["Sent a quote", n(f, "sent")],
@@ -150,7 +159,7 @@ export function FunnelPanel({ metrics }: { metrics: AdminMetrics }) {
     ["Paying", n(f, "paying")],
   ];
   return (
-    <Panel title="Funnel · last 90 days" aside="businesses reaching each step · % of the step before">
+    <Panel title="Funnel · last 90 days" aside="people who signed up, then businesses reaching each step · % of the step before">
       <div className="flex flex-col gap-1.5">
         {steps.map(([label, value], index) => (
           <FunnelRow key={label} label={label} value={value} first={steps[0][1] || steps[1][1]} previous={index ? steps[index - 1][1] : null} />
@@ -163,7 +172,7 @@ export function FunnelPanel({ metrics }: { metrics: AdminMetrics }) {
 export function RevenuePanel({ metrics }: { metrics: AdminMetrics }) {
   const { revenue } = metrics;
   return (
-    <Panel title="Subscriptions" aside={`MRR ${money(revenue.mrrCents)}`}>
+    <Panel title="Subscriptions" aside={`MRR ${money(revenue.mrrCents)} · after discounts, packs included`}>
       {revenue.byPlan.length ? (
         <Table
           head={["Plan", "Status", "Count", "MRR"]}

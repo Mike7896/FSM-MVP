@@ -3,7 +3,7 @@ import "server-only";
 import { desc, eq, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
-import { billingAccounts, billingEvents } from "@/lib/db/schema";
+import { billingAccounts, billingEvents, stripeEvents } from "@/lib/db/schema";
 import { serverEnv } from "@/lib/env";
 import { stripe } from "@/lib/stripe/server";
 
@@ -30,7 +30,12 @@ export type Gate = {
 export async function billingReadiness(): Promise<Gate[]> {
   const gates: Gate[] = [];
   const env = serverEnv();
-  const [book, releases, portal] = await Promise.all([getPriceBook(), getReleases(), membershipPortalConfiguration()]);
+  const [book, releases, portal, [lastEvent]] = await Promise.all([
+    getPriceBook(),
+    getReleases(),
+    membershipPortalConfiguration(),
+    db.select().from(stripeEvents).orderBy(desc(stripeEvents.processedAt)).limit(1),
+  ]);
 
   const missing = PRICES.filter((price) => {
     const live = book.get(price.lookupKey);
@@ -52,13 +57,17 @@ export async function billingReadiness(): Promise<Gate[]> {
       : "No membership portal configuration. Run npm run stripe:seed.",
   });
 
+  // Secrets being set says we *could* verify an event; one having been
+  // handled says Stripe is actually sending them here.
+  const secrets = Boolean(env.STRIPE_WEBHOOK_SECRET && env.STRIPE_CONNECT_WEBHOOK_SECRET);
   gates.push({
     label: "Webhooks",
-    state: env.STRIPE_WEBHOOK_SECRET && env.STRIPE_CONNECT_WEBHOOK_SECRET ? "ok" : "open",
-    detail:
-      env.STRIPE_WEBHOOK_SECRET && env.STRIPE_CONNECT_WEBHOOK_SECRET
-        ? "Both signing secrets are set. In production, check the endpoints list the events in .env.example."
-        : "A webhook signing secret is missing — access can't follow payment without it.",
+    state: secrets && lastEvent ? "ok" : "open",
+    detail: !secrets
+      ? "A webhook signing secret is missing — access can't follow payment without it."
+      : !lastEvent
+        ? "Both signing secrets are set, but no Stripe event has been handled on this database yet. Check the endpoint URLs in Stripe, or run npm run stripe:listen locally."
+        : `Both signing secrets are set, and Stripe events are arriving — the last, ${lastEvent.type}, was handled ${lastEvent.processedAt.toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" })} UTC. Check the endpoints list the events in .env.example.`,
   });
 
   try {

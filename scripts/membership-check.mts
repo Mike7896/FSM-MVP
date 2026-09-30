@@ -13,6 +13,7 @@
  */
 
 import assert from "node:assert";
+import type Stripe from "stripe";
 import { eq, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
@@ -43,6 +44,7 @@ import {
   settleCredits,
 } from "@/lib/membership/credits";
 import { startEvaluation } from "@/lib/membership/evaluation";
+import { monthlyRecurringCents } from "@/lib/membership/mrr";
 
 let passed = 0;
 const failures: string[] = [];
@@ -108,6 +110,27 @@ check("Founding Starter + Electrical = $27/month, $270/year", total("starter", "
 check("Founding Pro + Electrical = $47/month, $470/year", total("pro", "month", true) === 4700 && total("pro", "year", true) === 47000);
 check("the annual saving on Starter + Electrical is $74", total("starter", "month") * 12 - total("starter", "year") === 7400);
 
+/* ── MRR, as the admin dashboard counts it ─────────────────────────────── */
+
+console.log("\nMONTHLY RECURRING REVENUE (admin dashboard)");
+{
+  const item = (unit_amount: number | null, interval: "month" | "year", quantity = 1) =>
+    ({ quantity, price: { unit_amount, recurring: { interval, interval_count: 1, usage_type: "licensed" } } }) as unknown as Stripe.SubscriptionItem;
+  const sub = (items: Stripe.SubscriptionItem[], discounts: unknown[] = []) =>
+    ({ items: { data: items }, discounts }) as unknown as Pick<Stripe.Subscription, "items" | "discounts">;
+  const off = (coupon: Partial<Stripe.Coupon>, end: number | null = null) => ({ end, source: { coupon } });
+  check("Starter + Electrical monthly → $37", monthlyRecurringCents(sub([item(2900, "month"), item(800, "month")])) === 3700);
+  check("Starter + Electrical yearly → $370 / 12", monthlyRecurringCents(sub([item(29000, "year"), item(8000, "year")])) === Math.round(37000 / 12));
+  check("quantity counts", monthlyRecurringCents(sub([item(2900, "month", 2)])) === 5800);
+  check("a forever 20% promo comes off", monthlyRecurringCents(sub([item(5000, "month")], [off({ duration: "forever", percent_off: 20 })])) === 4000);
+  check("a repeating $10 off a yearly plan is $10/12 a month", monthlyRecurringCents(sub([item(29000, "year")], [off({ duration: "repeating", amount_off: 1000 })])) === Math.round((29000 - 1000) / 12));
+  check("a once-only coupon doesn't lower MRR", monthlyRecurringCents(sub([item(2900, "month")], [off({ duration: "once", amount_off: 2900 })])) === 2900);
+  check("an ended discount doesn't count", monthlyRecurringCents(sub([item(2900, "month")], [off({ duration: "repeating", percent_off: 50 }, 1)])) === 2900);
+  check("never below zero", monthlyRecurringCents(sub([item(500, "month")], [off({ duration: "forever", amount_off: 900 })])) === 0);
+  check("an unexpanded discount → unknown", monthlyRecurringCents(sub([item(2900, "month")], ["di_123"])) === null);
+  check("a price with no flat amount → unknown", monthlyRecurringCents(sub([item(null, "month")])) === null);
+}
+
 /* ── §2.2, §4, §5.3 access ────────────────────────────────────────────── */
 
 console.log("\nWHAT A SHOP MAY DO (§2.2, §4.1, §5.3)");
@@ -139,6 +162,7 @@ const blankAccount = (over: Partial<BillingAccount>): BillingAccount => ({
   foundingHoldSession: null,
   foundingEnrolledAt: null,
   notices: [],
+  mrrCents: null,
   reconciledAt: null,
   updatedAt: now,
   ...over,
