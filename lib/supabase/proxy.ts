@@ -26,6 +26,8 @@ const PUBLIC_ROUTES = [
   "/auth/auth-code-error",
   "/forgot-password",
   "/reset-password",
+  // An invite link is opened before its account has ever signed in.
+  "/invite",
 ];
 
 function isPublic(pathname: string) {

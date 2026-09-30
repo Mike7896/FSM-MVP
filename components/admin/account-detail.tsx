@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Ban, Check, Copy, KeyRound, Loader2, ShieldCheck, ShieldOff, Undo2 } from "lucide-react";
+import { ArrowLeft, Ban, Check, Copy, KeyRound, Link2, Loader2, Mail, ShieldCheck, ShieldOff, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,8 @@ import { Textarea } from "@/components/ui/textarea";
 import type { AccountRow } from "@/lib/admin/accounts";
 import { cn } from "@/lib/utils";
 
-import { Badges, short } from "./accounts-view";
+import { Badges, inviteStatus, planLabel, short } from "./accounts-view";
+import { InviteSent, longDate } from "./invite-dialog";
 
 type Detail = AccountRow & {
   activity: { id: number; occurredAt: string; kind: string; level: string; title: string; orgName: string | null }[];
@@ -35,6 +36,8 @@ export function AccountDetail({ account, me }: { account: Detail; me: string }) 
   const [busy, setBusy] = useState<string | null>(null);
   const [suspending, setSuspending] = useState(false);
   const [password, setPassword] = useState<string | null>(null);
+  const [newLink, setNewLink] = useState<Parameters<typeof InviteSent>[0]["sent"] | null>(null);
+  const invite = inviteStatus(account);
 
   async function call(label: string, url: string, init: RequestInit, done: string) {
     setBusy(label);
@@ -84,7 +87,23 @@ export function AccountDetail({ account, me }: { account: Detail; me: string }) 
             <dt className="text-muted-foreground">Business</dt>
             <dd>{account.businesses.length ? account.businesses.map((b) => `${b.name || "Unnamed"} (${b.role})`).join(", ") : "None yet"}</dd>
             <dt className="text-muted-foreground">Plan</dt>
-            <dd>{account.policy?.compPlan ? "Complimentary" : (account.plan ?? "Free")}</dd>
+            <dd>
+              {planLabel(account) ?? "Free"}
+              {account.founding ? " · founding pricing" : ""}
+            </dd>
+            {account.invite ? (
+              <>
+                <dt className="text-muted-foreground">Invited</dt>
+                <dd>
+                  {short(account.invite.sentAt)} by {account.invite.by}
+                  {invite === "accepted"
+                    ? ` · accepted ${short(account.invite.acceptedAt ?? account.lastSignInAt)}`
+                    : invite === "pending"
+                      ? ` · link good until ${short(account.invite.expiresAt)}`
+                      : " · link expired"}
+                </dd>
+              </>
+            ) : null}
             <dt className="text-muted-foreground">Sent · 7 days</dt>
             <dd>{account.sends7d}</dd>
             {suspended ? (
@@ -101,6 +120,40 @@ export function AccountDetail({ account, me }: { account: Detail; me: string }) 
 
         <PolicyForm account={account} onSave={(change) => call("policy", `/api/v1/admin/accounts/${account.id}`, { method: "PATCH", body: JSON.stringify(change) }, "Saved.")} busy={busy === "policy"} />
       </div>
+
+      {invite === "pending" || invite === "expired" ? (
+        <section className="bg-card flex flex-wrap items-center gap-2 rounded-lg border p-4">
+          <p className="mr-auto text-sm">
+            {invite === "pending" ? "They haven't accepted their invite yet." : "Their invite link ran out before they used it."}
+            <span className="text-muted-foreground block text-xs">A new link replaces the old one, good for another two weeks.</span>
+          </p>
+          {([
+            { send: true, label: "Email a new link", Icon: Mail },
+            { send: false, label: "Just get a new link", Icon: Link2 },
+          ] as const).map(({ send, label, Icon }) => (
+            <Button
+              key={label}
+              variant="outline"
+              size="sm"
+              disabled={busy !== null}
+              onClick={async () => {
+                const result = (await call(
+                  `invite-${send}`,
+                  `/api/v1/admin/accounts/${account.id}/invite`,
+                  { method: "POST", body: JSON.stringify({ send }) },
+                  ""
+                )) as Parameters<typeof InviteSent>[0]["sent"] | null;
+                if (!result) return;
+                if (send && result.emailed) toast.success(`New invite emailed to ${account.email}.`);
+                setNewLink(result);
+              }}
+            >
+              {busy === `invite-${send}` ? <Loader2 className="animate-spin" /> : <Icon className="size-4" />}
+              {label}
+            </Button>
+          ))}
+        </section>
+      ) : null}
 
       <section className="bg-card rounded-lg border p-4">
         <h2 className="text-muted-foreground mb-3 font-label text-[10px] uppercase">Access</h2>
@@ -212,6 +265,18 @@ export function AccountDetail({ account, me }: { account: Detail; me: string }) 
       ) : null}
 
       {password ? <PasswordShown email={account.email} password={password} onClose={() => setPassword(null)} /> : null}
+
+      {newLink ? (
+        <Dialog open onOpenChange={(open) => !open && setNewLink(null)}>
+          <DialogContent className="sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle>{newLink.emailed ? "New invite sent" : "New invite link"}</DialogTitle>
+              <DialogDescription>The previous link no longer works.</DialogDescription>
+            </DialogHeader>
+            <InviteSent sent={newLink} />
+          </DialogContent>
+        </Dialog>
+      ) : null}
     </div>
   );
 }
@@ -228,6 +293,7 @@ function PolicyForm({
   const policy = account.policy;
   const [tester, setTester] = useState(policy?.kind === "tester");
   const [comp, setComp] = useState(policy?.compPlan ?? false);
+  const [founding, setFounding] = useState(account.founding);
   const [until, setUntil] = useState(policy?.accessUntil ?? "");
   const [limit, setLimit] = useState(policy?.dailySendLimit === null || policy?.dailySendLimit === undefined ? "" : String(policy.dailySendLimit));
   const [note, setNote] = useState(policy?.note ?? "");
@@ -240,6 +306,7 @@ function PolicyForm({
         onSave({
           kind: tester ? "tester" : "standard",
           compPlan: comp,
+          ...(founding !== account.founding ? { foundingMember: founding } : {}),
           accessUntil: until || null,
           dailySendLimit: limit === "" ? null : Number(limit),
           note: note.trim() || null,
@@ -258,14 +325,27 @@ function PolicyForm({
         <Checkbox checked={comp} onCheckedChange={(checked) => setComp(checked === true)} className="mt-0.5" />
         <span>
           Complimentary plan
-          <span className="text-muted-foreground block text-xs">Treated as paying, charged nothing.</span>
+          <span className="text-muted-foreground block text-xs">
+            Pro, charged nothing{!tester && until ? ` — through ${longDate(until)}, then Free until they subscribe` : ""}.
+          </span>
+        </span>
+      </label>
+      <label className="flex items-start gap-3 text-sm">
+        <Checkbox checked={founding} onCheckedChange={(checked) => setFounding(checked === true)} className="mt-0.5" />
+        <span>
+          Founding member
+          <span className="text-muted-foreground block text-xs">Founding prices when they subscribe, even if the public offer is closed or full.</span>
         </span>
       </label>
       <div className="grid grid-cols-2 gap-3">
         <div className="grid gap-1.5">
-          <Label htmlFor="policy-until">Access until</Label>
+          <Label htmlFor="policy-until">{tester ? "Access until" : "Free until"}</Label>
           <Input id="policy-until" type="date" value={until} onChange={(event) => setUntil(event.target.value)} />
-          <p className="text-muted-foreground text-xs">Suspended automatically the day after.</p>
+          <p className="text-muted-foreground text-xs">
+            {tester
+              ? "A tester is suspended automatically the day after."
+              : "Last day of the complimentary plan. Blank: no end."}
+          </p>
         </div>
         <div className="grid gap-1.5">
           <Label htmlFor="policy-limit">Sends a day</Label>

@@ -55,9 +55,13 @@ export type AccountRow = {
   policy: AccountPolicyView | null;
   sends7d: number;
   lastSeen: string | null;
+  /** Founding pricing given from the panel (§6). */
+  founding: boolean;
+  /** Set when they were invited rather than signing up. */
+  invite: { sentAt: string; expiresAt: string; by: string; acceptedAt: string | null } | null;
 };
 
-export type AccountFilter = "all" | "admins" | "testers" | "suspended";
+export type AccountFilter = "all" | "admins" | "testers" | "invited" | "suspended";
 
 /* ── Reading ──────────────────────────────────────────────────────────── */
 
@@ -74,7 +78,9 @@ export async function listAccounts({ q, filter = "all" }: { q?: string; filter?:
       exists (select 1 from platform_admins a where a.user_id = u.id) as admin,
       ap.kind, ap.comp_plan, ap.access_until, ap.daily_send_limit, ap.note, ap.banned_at, ap.banned_reason,
       (select count(*) from document_sends s where s.sent_by = u.id and s.sent_at > now() - interval '7 days')::int as sends_7d,
-      (select up.last_seen from user_presence up where up.user_id = u.id) as last_seen
+      (select up.last_seen from user_presence up where up.user_id = u.id) as last_seen,
+      coalesce((u.raw_app_meta_data ->> 'founding_member')::boolean, false) as founding_member,
+      u.raw_app_meta_data -> 'invite' as invite
     from auth.users u
     left join profiles p on p.id = u.id
     left join account_policies ap on ap.user_id = u.id
@@ -85,6 +91,7 @@ export async function listAccounts({ q, filter = "all" }: { q?: string; filter?:
       and (${filter} = 'all'
         or (${filter} = 'admins' and exists (select 1 from platform_admins a where a.user_id = u.id))
         or (${filter} = 'testers' and ap.kind = 'tester')
+        or (${filter} = 'invited' and u.raw_app_meta_data ? 'invite')
         or (${filter} = 'suspended' and (ap.banned_at is not null or u.banned_until > now())))
     order by u.created_at desc
     limit 300
@@ -104,7 +111,9 @@ export async function getAccount(userId: string) {
       exists (select 1 from platform_admins a where a.user_id = u.id) as admin,
       ap.kind, ap.comp_plan, ap.access_until, ap.daily_send_limit, ap.note, ap.banned_at, ap.banned_reason,
       (select count(*) from document_sends s where s.sent_by = u.id and s.sent_at > now() - interval '7 days')::int as sends_7d,
-      (select up.last_seen from user_presence up where up.user_id = u.id) as last_seen
+      (select up.last_seen from user_presence up where up.user_id = u.id) as last_seen,
+      coalesce((u.raw_app_meta_data ->> 'founding_member')::boolean, false) as founding_member,
+      u.raw_app_meta_data -> 'invite' as invite
     from auth.users u
     left join profiles p on p.id = u.id
     left join account_policies ap on ap.user_id = u.id
@@ -351,7 +360,7 @@ async function mustFind(userId: string) {
   return account;
 }
 
-async function log(
+export async function log(
   kind: string,
   level: "activity" | "problem",
   target: string,
@@ -394,6 +403,19 @@ function toRow(row: Record<string, unknown>): AccountRow {
       : null,
     sends7d: Number(row.sends_7d ?? 0),
     lastSeen: iso(row.last_seen),
+    founding: Boolean(row.founding_member),
+    invite: inviteOf(row.invite),
+  };
+}
+
+function inviteOf(value: unknown): AccountRow["invite"] {
+  if (!value || typeof value !== "object") return null;
+  const invite = value as Record<string, unknown>;
+  return {
+    sentAt: iso(invite.sent_at) ?? "",
+    expiresAt: iso(invite.expires_at) ?? "",
+    by: String(invite.by ?? ""),
+    acceptedAt: iso(invite.accepted_at),
   };
 }
 

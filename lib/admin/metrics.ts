@@ -255,7 +255,8 @@ export async function getAdminMetrics(timeZone: string) {
           (select s.status::text from subscriptions s where s.organization_id = o.id order by s.created_at desc limit 1),
           -- A complimentary plan is set on the owner from the admin panel, as membership access reads it.
           (select 'complimentary' from memberships m join account_policies ap on ap.user_id = m.user_id
-            where m.organization_id = o.id and m.role = 'owner' and ap.comp_plan limit 1)
+            where m.organization_id = o.id and m.role = 'owner' and ap.comp_plan
+              and (ap.access_until is null or ap.access_until >= current_date) limit 1)
         ) as plan,
         (select max(up.last_seen) from user_presence up where up.organization_id = o.id) as last_seen,
         (select max(e.occurred_at) from admin_events e where e.organization_id = o.id) as last_event

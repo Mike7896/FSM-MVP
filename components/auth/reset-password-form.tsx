@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { useForm } from "react-hook-form";
@@ -36,7 +37,20 @@ import { resetPasswordSchema, type ResetPasswordInput } from "@/lib/schemas";
  * Saving signs every other device out, which is the point of a reset. This one
  * stays in and goes straight back to work.
  */
-export function ResetPasswordForm({ email }: { email: string }) {
+export function ResetPasswordForm({
+  email,
+  title = "Set a new password",
+  submitLabel = "Save new password",
+  successMessage = "New password saved. Any other devices were signed out; this one stays in.",
+  skipHref,
+}: {
+  email: string;
+  title?: string;
+  submitLabel?: string;
+  successMessage?: string;
+  /** Offered when choosing a password can wait — an invite, not a reset. */
+  skipHref?: string;
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
@@ -65,9 +79,7 @@ export function ResetPasswordForm({ email }: { email: string }) {
         return;
       }
 
-      toast.success(
-        "New password saved. Any other devices were signed out; this one stays in."
-      );
+      toast.success(successMessage);
       router.replace("/dashboard");
     });
   });
@@ -77,7 +89,7 @@ export function ResetPasswordForm({ email }: { email: string }) {
   return (
     <Card className="w-full max-w-sm [--card-spacing:--spacing(6)]">
       <CardHeader>
-        <CardTitle>Set a new password</CardTitle>
+        <CardTitle>{title}</CardTitle>
         <CardDescription>
           For <span className="text-foreground font-medium">{email}</span>
         </CardDescription>
@@ -137,9 +149,14 @@ export function ResetPasswordForm({ email }: { email: string }) {
                 Saving...
               </>
             ) : (
-              "Save new password"
+              submitLabel
             )}
           </Button>
+          {skipHref ? (
+            <Button asChild type="button" variant="ghost" className="w-full">
+              <Link href={skipHref}>Skip — I&apos;ll sign in with Google</Link>
+            </Button>
+          ) : null}
         </form>
       </CardContent>
     </Card>
