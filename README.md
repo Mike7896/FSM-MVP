@@ -139,15 +139,51 @@ Two layers, deliberately:
 > Next.js 16 renamed the `middleware` file convention to `proxy`, and the
 > exported function must be named `proxy`. It runs on the Node.js runtime.
 
-Server Functions are POSTs to the route they live on, so a proxy matcher can
-silently stop covering one after a refactor. Each Server Function re-checks
-what it needs — see `app/auth/actions.ts`.
+Auth route handlers verify credentials or sessions themselves. Admin pages
+use `requireAdmin()` and admin APIs use `requireAdminCaller()`; the proxy is
+not sufficient authorization for either.
 
 Routes:
 
 - `app/auth/callback/route.ts` — OAuth / PKCE code exchange
 - `app/auth/confirm/route.ts` — email links (signup, magic link, recovery)
-- `app/auth/actions.ts` — sign in, sign up, sign out, password reset, Google
+- `app/auth/google/route.ts` — starts Google sign-in
+- `app/api/v1/auth/` — email/password sign-in, signup, sign-out and password recovery
+
+### Roles and test accounts
+
+Platform access has two effective roles: **admin** (a `platform_admins` grant)
+and **contractor** (the default for everyone else). Organization membership
+roles apply within a business and never confer platform admin access.
+
+Set `ADMIN_EMAILS` to the owner's sign-in email in the deployment environment.
+Opening `/admin` registers that account's admin grant. Manage additional admins
+in `/admin/accounts`; owners cannot be demoted or suspended from the panel.
+Removing an address from `ADMIN_EMAILS` removes owner protection but leaves
+its persisted admin grant; revoke that separately from another admin account.
+
+To make a password-based test account, open **Admin → Accounts → Create a test
+account**, enter an email and an optional password, and copy the credentials
+shown after creation. A blank password generates one. The admin creation path
+confirms the email without sending mail, so a Google account or working inbox
+is not required. Use an address reserved for testing, such as
+`contractor-01@example.invalid`. Sign in through `/login` with email/password.
+Email authentication must be enabled in Supabase, and the server needs
+`SUPABASE_SECRET_KEY` to create users. Public signup still follows Supabase's
+email-confirmation settings.
+
+Tester status and complimentary billing are account policies, separate from
+admin access. A test account starts as a regular contractor. Its first sign-in
+goes through business setup. Password recovery by email requires a real inbox;
+admins can set a replacement test password from the account detail screen.
+
+Supabase's `auth.users` is the stable account ID; `auth.identities` holds its
+sign-in providers, `profiles` holds app profile data, and organizations own
+business data through memberships. Google and email/password therefore share
+the same account model. Username sign-in is not implemented or required.
+
+See [the roles and authentication audit](docs/auth-roles-audit-2026-09-30.md)
+for verification results and scope.
 
 ### Google OAuth
 

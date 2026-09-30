@@ -281,6 +281,13 @@
       "when": 1790740000000,
       "tag": "0039_notifications_realtime",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1790750000000,
+      "tag": "0040_platform_usage",
+      "breakpoints": true
     }
   ]
 }

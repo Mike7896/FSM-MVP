@@ -1,8 +1,9 @@
 import "server-only";
 
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import { db } from "@/lib/db";
+import { withOperationLock } from "@/lib/db/operation-lock";
 import { billingAccounts, billingEvents } from "@/lib/db/schema";
 import { DomainError } from "@/lib/errors";
 import { stripe } from "@/lib/stripe/server";
@@ -22,8 +23,7 @@ import { reconcileSubscription } from "./reconcile";
  * membership refund cannot refund a job payment (§8.3).
  */
 export async function refundFirstPurchase(organizationId: string, actorUserId: string) {
-  return db.transaction(async (tx) => {
-    await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${organizationId}::text, 21))`);
+  return withOperationLock(organizationId, 21, async () => {
     return refundLocked(organizationId, actorUserId);
   });
 }

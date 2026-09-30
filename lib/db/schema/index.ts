@@ -57,3 +57,4 @@ export * from "./tags";
 export * from "./support";
 // The admin dashboard's log, its admins, and who's online.
 export * from "./admin";
+export * from "./platform-usage";

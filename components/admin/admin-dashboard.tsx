@@ -329,9 +329,10 @@ function Dashboard({
         <Panel
           title="Live feed"
           aside={`${feed.length} shown`}
-          className="xl:sticky xl:top-3 xl:max-h-[calc(100svh-1.5rem)]"
+          className="min-h-0 overflow-hidden xl:sticky xl:top-3 xl:max-h-[calc(100svh-1.5rem)] xl:self-start"
+          contentClassName="flex min-h-0 flex-col overflow-hidden"
         >
-          <div className="mb-2 flex flex-wrap items-center gap-1">
+          <div className="mb-2 flex shrink-0 flex-wrap items-center gap-1">
             {LEVELS.map((entry) => {
               const on = shownLevels.has(entry.level);
               return (
@@ -366,7 +367,7 @@ function Dashboard({
               Test shops
             </label>
           </div>
-          <ol className="flex max-h-[70svh] flex-col overflow-y-auto xl:max-h-none xl:flex-1">
+          <ol className="flex min-h-0 max-h-[70svh] flex-col overflow-y-auto overscroll-contain xl:max-h-none xl:flex-1">
             {feed.length === 0 ? (
               <li className="text-muted-foreground py-6 text-center text-xs">
                 Nothing yet. It appears here the moment it happens.
@@ -445,19 +446,19 @@ function FeedRow({ event, now, fresh }: { event: LiveEvent; now: number; fresh: 
   return (
     <li
       className={cn(
-        "flex gap-2 border-b py-1.5 text-xs transition-colors duration-1000",
+        "flex shrink-0 gap-2 border-b py-1.5 text-xs transition-colors duration-1000",
         fresh && (event.level === "money" ? "bg-emerald-500/15" : "bg-primary/10"),
         (event.test || event.demo) && "opacity-60"
       )}
     >
       <look.Icon className={cn("mt-0.5 size-3.5 shrink-0", look.text)} />
       <div className="min-w-0 flex-1">
-        <p className="leading-snug">
+        <p className="leading-snug [overflow-wrap:anywhere]">
           {event.title}
           {event.demo ? <span className="text-muted-foreground"> · demo</span> : null}
           {event.test ? <span className="text-muted-foreground"> · test</span> : null}
         </p>
-        <p className="text-muted-foreground text-[10px]">
+        <p className="text-muted-foreground text-[10px] [overflow-wrap:anywhere]">
           {event.kind}
           {event.org_name ? ` · ${event.org_name}` : ""}
         </p>

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronsUpDown, LifeBuoy, LogOut, Megaphone } from "lucide-react";
+import { ChevronsUpDown, LifeBuoy, LogOut, Megaphone, ShieldCheck } from "lucide-react";
 
 import { BrandIcon, Wordmark } from "@/components/brand";
 import { useSignOut } from "@/hooks/use-sign-out";
@@ -51,6 +51,7 @@ export function AppSidebar({
   personName,
   userEmail,
   monthlyTotal,
+  isAdmin,
 }: {
   businessName: string;
   /** The contractor's own name, where we have one. */
@@ -58,6 +59,8 @@ export function AppSidebar({
   userEmail: string;
   /** What they pay us, shown on the Account row. Null when nothing is due. */
   monthlyTotal: string | null;
+  /** Platform admin access, resolved by the server. */
+  isAdmin: boolean;
 }) {
   const pathname = usePathname();
   const { signOut, pending: signingOut } = useSignOut();
@@ -130,6 +133,21 @@ export function AppSidebar({
         <SidebarGroup className="mt-auto">
           <SidebarGroupContent>
             <SidebarMenu>
+              {isAdmin ? (
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={isActive("/admin")}
+                    tooltip="Admin"
+                    className="h-9 gap-3 px-2.5"
+                  >
+                    <Link href="/admin">
+                      <ShieldCheck />
+                      <span>Admin</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ) : null}
               <SidebarMenuItem>
                 <SidebarMenuButton
                   asChild

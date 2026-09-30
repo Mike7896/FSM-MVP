@@ -50,7 +50,7 @@ export function PlanComparison({
   };
 
   return (
-    <div className="w-full overflow-x-auto rounded-2xl border bg-card p-4 sm:p-6">
+    <div className="relative w-full overflow-x-auto rounded-2xl border bg-card p-4 sm:p-6">
       <table className="w-full min-w-[480px] table-fixed border-separate border-spacing-0 text-sm">
         <caption className="sr-only">What each plan includes</caption>
         <colgroup>

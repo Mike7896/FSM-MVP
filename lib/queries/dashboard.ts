@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getAccess } from "@/lib/membership/access";
+import { dashboardDate, dashboardHorizon, quoteFollowUp } from "@/lib/dashboard";
 
 import {
   and,
@@ -53,7 +54,8 @@ import { quoteTotalExpression } from "@/lib/queries/scope-sql";
  *
  * **Sections collapse when empty.** An empty gate list is a good outcome, not a
  * state to display. The only section that always renders is "this week", where
- * *nothing scheduled* is genuinely information.
+ * *nothing scheduled* is genuinely information. The web groups it into Today
+ * and Coming up; due tasks also appear among the next actions.
  *
  * Everything here is **derived at read time**, and scoped to an organization
  * the caller proved through `requireOrg` or `requireActiveOrganization`.
@@ -66,18 +68,30 @@ import { quoteTotalExpression } from "@/lib/queries/scope-sql";
  */
 const DOCUMENT_ID = sql.raw('"documents"."id"');
 
-/** How far ahead "this week" looks. */
-const WEEK_AHEAD_DAYS = 7;
-
 export type DashboardRow = {
   /** `**name**` marks the emphasis the page renders bold. */
   sentence: string;
   detail: string;
   action: string;
   href: string;
+  needsAction?: boolean;
+};
+
+export type DashboardScheduleItem = {
+  key: string;
+  title: string;
+  address: string | null;
+  when: string;
+  at: string | null;
+  on: string;
+  href: string;
+  kind: "job" | "inspection" | "visit" | "task";
+  overdue: boolean;
 };
 
 export type DashboardData = {
+  today: string;
+  timeZone: string;
   clearedToProceed: DashboardRow[];
   waitingOnCustomer: DashboardRow[];
   moneyToCollect: { totalCents: number; rows: DashboardRow[] };
@@ -85,7 +99,7 @@ export type DashboardData = {
    * `when` is a weekday; `at`, when there is one, is the instant a timed visit
    * starts — printed by the browser, which knows the clock it's read on.
    */
-  thisWeek: { key: string; title: string; address: string | null; when: string; at: string | null }[];
+  thisWeek: DashboardScheduleItem[];
   quickStart: {
     label: string;
     href: string;
@@ -97,25 +111,29 @@ export type DashboardData = {
     totalCents: number;
     rows: { description: string; amountCents: number; unpriced: boolean }[];
   }[];
-  /** What the header counts. Excludes "this week" — that is not a to-do list. */
+  /** Available actions, including tasks due today or overdue. */
   needsYou: number;
 };
 
 export async function getDashboard(
-  organizationId: string
+  organizationId: string,
+  timeZone = "UTC"
 ): Promise<DashboardData> {
+  const today = dashboardDate(new Date(), timeZone);
   const [cleared, waiting, unbilled, overdue, week, recent] = await Promise.all([
     clearedToProceed(organizationId),
     waitingOnCustomer(organizationId),
     earnedButUnbilled(organizationId),
-    overdueInvoices(organizationId),
-    thisWeek(organizationId),
+    overdueInvoices(organizationId, today),
+    thisWeek(organizationId, today, timeZone),
     quickStart(organizationId),
   ]);
 
-  const moneyRows = [...unbilled.rows, ...overdue.rows];
+  const moneyRows = [...overdue.rows, ...unbilled.rows];
 
   return {
+    today,
+    timeZone,
     clearedToProceed: cleared,
     waitingOnCustomer: waiting,
     moneyToCollect: {
@@ -124,7 +142,8 @@ export async function getDashboard(
     },
     thisWeek: week,
     quickStart: recent,
-    needsYou: cleared.length + waiting.length + moneyRows.length,
+    needsYou: cleared.length + waiting.filter((row) => row.needsAction).length + moneyRows.length
+      + week.filter((item) => item.kind === "task" && item.on <= today).length,
   };
 }
 
@@ -155,9 +174,8 @@ async function clearedToProceed(
 /**
  * Quotes that have gone out and not come back.
  *
- * **`viewed` is never merged into `sent`.** The difference between "they
- * haven't looked" and "they looked and went quiet" is the whole reason this
- * section exists — it changes the verb on the button.
+ * Show only observed facts. A quote sent or viewed recently is context;
+ * three days without activity makes it a suggested follow-up.
  */
 async function waitingOnCustomer(
   organizationId: string
@@ -187,8 +205,7 @@ async function waitingOnCustomer(
         inArray(documents.status, ["sent", "viewed"])
       )
     )
-    .orderBy(asc(documents.sentAt))
-    .limit(6);
+    .orderBy(asc(documents.sentAt));
 
   // Whether she opened it is quote-view tracking — Pro only (Billing §2.2).
   // Without it the row says only what is known: no answer yet.
@@ -196,21 +213,23 @@ async function waitingOnCustomer(
 
   return rows.map((row) => {
     const work = row.title ?? `quote ${row.number}`;
-    const opened = row.status === "viewed" && row.viewedAt;
+    const opened = features.viewTracking && row.status === "viewed" ? row.viewedAt : null;
+    const followUp = quoteFollowUp(row.sentAt, opened, features.viewTracking);
 
     return {
       sentence: !features.viewTracking
         ? `**${row.customerName}** hasn't answered the ${lower(work)} quote yet.`
         : opened
-          ? `**${row.customerName}** opened the ${lower(work)} quote, then went quiet.`
+          ? `**${row.customerName}** viewed the ${lower(work)} quote.`
           : `**${row.customerName}** hasn't opened the ${lower(work)} quote yet.`,
       detail: [
         row.sentAt ? `Sent ${when(row.sentAt)}` : "Not sent",
+        ...(opened ? [`Viewed ${when(opened)}`] : []),
         money(Number(row.totalCents)),
       ].join(" · "),
-      // Different facts, different verbs: chase a reader, resend to a
-      // non-reader.
-      action: opened ? "Nudge" : "Resend",
+      // Hidden view tracking never influences the action for a free account.
+      action: followUp ? "Follow up" : "View quote",
+      needsAction: followUp,
       href: `/quotes/${row.id}`,
     };
   });
@@ -247,8 +266,7 @@ async function earnedButUnbilled(organizationId: string) {
         isNotNull(evidence.completedAt)
       )
     )
-    .orderBy(asc(evidence.completedAt))
-    .limit(6);
+    .orderBy(asc(evidence.completedAt));
 
   // A planned phase carries its own amount. Evidence from before phases had
   // ids falls back to the job's unbilled balance — counted once per job.
@@ -257,8 +275,12 @@ async function earnedButUnbilled(organizationId: string) {
   let totalCents = 0;
   const counted = new Set<string>();
   const out: DashboardRow[] = [];
+  const phases = new Set<string>();
 
   for (const row of rows) {
+    // Multiple evidence entries can describe the same completed phase.
+    if (row.phaseId && phases.has(row.phaseId)) continue;
+    if (row.phaseId) phases.add(row.phaseId);
     const job = state.get(row.jobId);
     const unbilled =
       row.phaseCents ??
@@ -292,8 +314,7 @@ async function earnedButUnbilled(organizationId: string) {
  * Counted net of whatever has actually been paid against them, so a partly-paid
  * invoice shows what is still owed rather than what it was issued for.
  */
-async function overdueInvoices(organizationId: string) {
-  const today = todayISO();
+async function overdueInvoices(organizationId: string, today: string) {
 
   const rows = await db
     .select({
@@ -320,8 +341,7 @@ async function overdueInvoices(organizationId: string) {
         lt(invoiceDetails.dueOn, today)
       )
     )
-    .orderBy(asc(invoiceDetails.dueOn))
-    .limit(6);
+    .orderBy(asc(invoiceDetails.dueOn));
 
   let totalCents = 0;
   const out: DashboardRow[] = [];
@@ -354,13 +374,13 @@ async function overdueInvoices(organizationId: string) {
  * the work. A task already past its date is here too, first — overdue is the
  * most pressing thing a week can hold.
  */
-async function thisWeek(organizationId: string) {
-  const today = todayISO();
-  const horizon = daysAhead(WEEK_AHEAD_DAYS);
+async function thisWeek(organizationId: string, today: string, timeZone: string): Promise<DashboardScheduleItem[]> {
+  const horizon = dashboardHorizon(today);
 
   const [starting, booked, onSchedule, falling] = await Promise.all([
     db
       .select({
+        id: jobs.id,
         name: jobs.name,
         address: jobs.address,
         startsOn: jobs.startsOn,
@@ -372,6 +392,7 @@ async function thisWeek(organizationId: string) {
         and(
           eq(jobs.organizationId, organizationId),
           eq(jobs.isDemo, false),
+          notInArray(jobs.status, ["complete", "paid"]),
           isNotNull(jobs.startsOn),
           gte(jobs.startsOn, today),
           lte(jobs.startsOn, horizon)
@@ -380,6 +401,8 @@ async function thisWeek(organizationId: string) {
 
     db
       .select({
+        id: inspections.id,
+        jobId: jobs.id,
         type: inspections.type,
         scheduledOn: inspections.scheduledOn,
         address: jobs.address,
@@ -402,6 +425,7 @@ async function thisWeek(organizationId: string) {
     db
       .select({
         id: visits.id,
+        jobId: jobs.id,
         kind: visits.kind,
         title: visits.title,
         allDay: visits.allDay,
@@ -423,8 +447,8 @@ async function thisWeek(organizationId: string) {
           or(
             and(
               eq(visits.allDay, false),
-              gte(visits.startsAt, new Date(`${today}T00:00:00Z`)),
-              lt(visits.startsAt, new Date(Date.parse(`${horizon}T00:00:00Z`) + 86_400_000))
+              sql`(${visits.startsAt} at time zone ${timeZone})::date >= ${today}::date`,
+              sql`(${visits.startsAt} at time zone ${timeZone})::date <= ${horizon}::date`
             ),
             and(
               eq(visits.allDay, true),
@@ -457,7 +481,9 @@ async function thisWeek(organizationId: string) {
 
   return [
     ...starting.map((row) => ({
-      key: `job-${row.startsOn}-${row.name}`,
+      key: `job-${row.id}`,
+      href: `/jobs/${row.id}`,
+      kind: "job" as const,
       title: `Start ${surname(row.customerName)}${row.name ? ` — ${lower(row.name)}` : ""}`,
       address: row.address,
       sort: `${row.startsOn!}T00:00:00Z`,
@@ -465,7 +491,9 @@ async function thisWeek(organizationId: string) {
       at: null,
     })),
     ...booked.map((row) => ({
-      key: `inspection-${row.scheduledOn}-${row.type}-${row.customerName}`,
+      key: `inspection-${row.id}`,
+      href: `/jobs/${row.jobId}`,
+      kind: "inspection" as const,
       title: `${surname(row.customerName)} — ${row.type.replace(/_/g, " ")} inspection`,
       address: row.address,
       sort: `${row.scheduledOn!}T00:00:00Z`,
@@ -476,9 +504,11 @@ async function thisWeek(organizationId: string) {
       // A visit that began before today and runs on is on today.
       const on = row.allDay
         ? row.startsOn! < today ? today : row.startsOn!
-        : row.startsAt!.toISOString().slice(0, 10);
+        : dashboardDate(row.startsAt!, timeZone);
       return {
         key: `visit-${row.id}`,
+        href: row.jobId ? `/jobs/${row.jobId}` : `/schedule?date=${on}&visit=${row.id}`,
+        kind: "visit" as const,
         title: titleOf(row.kind, row.title, row.jobName, row.customerName),
         address: row.address,
         sort: row.allDay ? `${on}T00:00:00Z` : row.startsAt!.toISOString(),
@@ -490,6 +520,8 @@ async function thisWeek(organizationId: string) {
       const late = row.dueOn! < today;
       return {
         key: `task-${row.id}`,
+        href: `/tasks?task=${row.id}`,
+        kind: "task" as const,
         title: row.title,
         address: row.address,
         // Late sorts before everything; otherwise it's due that day.
@@ -501,10 +533,14 @@ async function thisWeek(organizationId: string) {
     }),
   ]
     .sort((a, b) => a.sort.localeCompare(b.sort))
-    .map(({ key, title, address, on, at, ...rest }) => ({
+    .map(({ key, title, address, on, at, href, kind, ...rest }) => ({
       key,
       title,
       address,
+      on,
+      href,
+      kind,
+      overdue: "late" in rest && rest.late,
       // A task is due by a day, not booked on it — said, so it never reads as
       // the visit booked to do it.
       when: "late" in rest ? (rest.late ? "Overdue" : `Due ${dayLabel(on)}`) : dayLabel(on),
@@ -587,14 +623,6 @@ function dayLabel(iso: string) {
   return new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-US", {
     weekday: "short",
   });
-}
-
-function todayISO() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function daysAhead(count: number) {
-  return new Date(Date.now() + count * 86_400_000).toISOString().slice(0, 10);
 }
 
 function daysBetween(from: string, to: string) {

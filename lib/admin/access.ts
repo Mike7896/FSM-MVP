@@ -45,6 +45,12 @@ async function adminFor(userId: string, email: string): Promise<Admin | null> {
   return row ? { userId, email, owner: false } : null;
 }
 
+/** Optional admin access for navigation; regular users stay in the app. */
+export const getCurrentAdmin = cache(async (): Promise<Admin | null> => {
+  const session = await verifySession();
+  return session ? adminFor(session.userId, session.email) : null;
+});
+
 /**
  * For the panel's pages: the admin, or a 404. Cached per request, so the
  * layout and the page share one check instead of racing two on the one dev

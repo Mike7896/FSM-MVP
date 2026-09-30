@@ -3,6 +3,7 @@ import "server-only";
 import type Stripe from "stripe";
 
 import { db } from "@/lib/db";
+import { withOperationLock } from "@/lib/db/operation-lock";
 import { billingEvents } from "@/lib/db/schema";
 import { DomainError } from "@/lib/errors";
 import { stripe } from "@/lib/stripe/server";
@@ -224,7 +225,11 @@ export type ChangeResult =
   | { status: "applied"; preview: ChangePreview }
   | { status: "payment_required"; invoiceUrl: string | null; message: string };
 
-export async function applyChange(input: {
+export async function applyChange(input: Parameters<typeof applyChangeLocked>[0]): Promise<ChangeResult> {
+  return withOperationLock(input.organizationId, 26, () => applyChangeLocked(input));
+}
+
+async function applyChangeLocked(input: {
   organizationId: string;
   target: MembershipConfig;
   /** From the preview the person confirmed. */
@@ -368,6 +373,10 @@ async function writeSchedule(subscriptionId: string, next: MembershipConfig, fou
 
 /** Paid → Free at the end of the period, packs and all (§4.2, §5.2). */
 export async function cancelMembership(organizationId: string, actorUserId: string) {
+  return withOperationLock(organizationId, 26, () => cancelMembershipLocked(organizationId, actorUserId));
+}
+
+async function cancelMembershipLocked(organizationId: string, actorUserId: string) {
   const access = await readAccess(organizationId);
   if (!access.subscriptionId) throw new DomainError("There's no membership to cancel.", "conflict");
 
@@ -384,6 +393,10 @@ export async function cancelMembership(organizationId: string, actorUserId: stri
 
 /** Undo a scheduled cancellation — the existing renewal resumes, no new charge. */
 export async function resumeMembership(organizationId: string, actorUserId: string) {
+  return withOperationLock(organizationId, 26, () => resumeMembershipLocked(organizationId, actorUserId));
+}
+
+async function resumeMembershipLocked(organizationId: string, actorUserId: string) {
   const access = await readAccess(organizationId);
   if (!access.subscriptionId || !access.cancelAtPeriodEnd) {
     throw new DomainError("Your membership isn't set to end.", "conflict");
@@ -395,6 +408,10 @@ export async function resumeMembership(organizationId: string, actorUserId: stri
 
 /** Drop the change scheduled for the renewal; this period's configuration continues. */
 export async function keepCurrentPlan(organizationId: string, actorUserId: string) {
+  return withOperationLock(organizationId, 26, () => keepCurrentPlanLocked(organizationId, actorUserId));
+}
+
+async function keepCurrentPlanLocked(organizationId: string, actorUserId: string) {
   const access = await readAccess(organizationId);
   if (!access.subscriptionId || !access.scheduled || access.scheduled.tier === null) {
     throw new DomainError("Nothing is scheduled to change.", "conflict");

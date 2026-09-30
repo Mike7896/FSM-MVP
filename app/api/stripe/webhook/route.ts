@@ -1,8 +1,9 @@
 import type Stripe from "stripe";
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { NextResponse, type NextRequest } from "next/server";
 
 import { db } from "@/lib/db";
+import { withOperationLock } from "@/lib/db/operation-lock";
 import { stripeEvents } from "@/lib/db/schema";
 import { serverEnv } from "@/lib/env";
 import { stripe } from "@/lib/stripe/server";
@@ -73,15 +74,14 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const duplicate = await db.transaction(async (tx) => {
-      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${event.id}::text, 23))`);
-      const [done] = await tx.select({ id: stripeEvents.id }).from(stripeEvents)
+    const duplicate = await withOperationLock(event.id, 23, async () => {
+      const [done] = await db.select({ id: stripeEvents.id }).from(stripeEvents)
         .where(eq(stripeEvents.id, event.id)).limit(1);
       if (done) return true;
-      // Side effects have natural idempotency keys. A process failure rolls
-      // back this receipt so redelivery retries any unfinished effects.
+      // Side effects have natural idempotency keys. A process failure happens
+      // before this receipt so redelivery retries any unfinished effects.
       await handleEvent(event);
-      await tx.insert(stripeEvents).values({ id: event.id, type: event.type });
+      await db.insert(stripeEvents).values({ id: event.id, type: event.type });
       return false;
     });
     return NextResponse.json({ received: true, ...(duplicate ? { duplicate: true } : {}) });

@@ -5,6 +5,7 @@ import type Stripe from "stripe";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
+import { withOperationLock } from "@/lib/db/operation-lock";
 import { ledgerEntries, paymentAttempts, type PaymentAttempt } from "@/lib/db/schema";
 import { DomainError } from "@/lib/errors";
 import { recordEntry } from "@/lib/ledger";
@@ -63,8 +64,7 @@ export async function startPaymentAttempt(token: string, rail: Rail) {
   // The lock coordinates all rails and is released automatically on a crash.
   // Attempts are persisted outside the lock transaction before calling Stripe,
   // so retries can recover the same idempotency key after a process failure.
-  return db.transaction(async (tx) => {
-    await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${initial.invoiceId}::text, 19))`);
+  return withOperationLock(initial.invoiceId, 19, async () => {
     return withActivation({ organizationId: initial.organizationId, jobId: initial.jobId, action: "payment" },
       () => startLocked(token, rail));
   });
@@ -218,6 +218,10 @@ export async function onPaymentIntentEvent(
   intent: Stripe.PaymentIntent,
   context: EventContext
 ) {
+  return withOperationLock(intent.id, 25, () => reconcileIntent(intent, context));
+}
+
+async function reconcileIntent(intent: Stripe.PaymentIntent, context: EventContext) {
   const attempt = await attemptFor(intent.id, context);
   if (!attempt) return;
 
@@ -259,7 +263,11 @@ export async function onAttemptRefunded(charge: Stripe.Charge, context: EventCon
   const full = refunded >= attempt.amountCents;
   await db
     .update(paymentAttempts)
-    .set({ refundedCents: refunded, status: full ? "refunded" : attempt.status, updatedAt: new Date() })
+    .set({
+      refundedCents: sql`greatest(${paymentAttempts.refundedCents}, ${refunded})`,
+      status: sql`case when greatest(${paymentAttempts.refundedCents}, ${refunded}) >= ${paymentAttempts.amountCents} then 'refunded' else ${paymentAttempts.status} end`,
+      updatedAt: new Date(),
+    })
     .where(eq(paymentAttempts.id, attempt.id));
 
   const target = full
@@ -283,8 +291,7 @@ export async function onAttemptReversed(charge: Stripe.Charge, context: EventCon
 async function returnFee(charge: Stripe.Charge, attempt: PaymentAttempt, target: number, context: EventContext) {
   const feeId = typeof charge.application_fee === "string" ? charge.application_fee : charge.application_fee?.id;
   if (!feeId) return;
-  await db.transaction(async (tx) => {
-    await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${feeId}::text, 20))`);
+  await withOperationLock(feeId, 20, async () => {
     const fee = await stripe().applicationFees.retrieve(feeId);
     const delta = Math.max(0, Math.min(target, fee.amount) - fee.amount_refunded);
     if (delta > 0) {

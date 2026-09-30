@@ -1,8 +1,8 @@
 import "server-only";
 
-import { sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
+import { withOperationLock } from "@/lib/db/operation-lock";
 import { billingEvents } from "@/lib/db/schema";
 import { absoluteUrl } from "@/lib/env";
 import { DomainError } from "@/lib/errors";
@@ -47,8 +47,7 @@ export type CheckoutRequest = {
 };
 
 export async function startMembershipCheckout(request: CheckoutRequest) {
-  return db.transaction(async (tx) => {
-    await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${request.organizationId}::text, 24))`);
+  return withOperationLock(request.organizationId, 24, async () => {
     return startCheckoutLocked(request);
   });
 }

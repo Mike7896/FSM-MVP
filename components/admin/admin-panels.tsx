@@ -21,19 +21,21 @@ export function Panel({
   aside,
   children,
   className,
+  contentClassName,
 }: {
   title: string;
   aside?: ReactNode;
   children: ReactNode;
   className?: string;
+  contentClassName?: string;
 }) {
   return (
     <section className={cn("bg-card flex min-w-0 flex-col rounded-lg border", className)}>
-      <header className="flex items-baseline justify-between gap-2 border-b px-3 py-2">
+      <header className="flex shrink-0 items-baseline justify-between gap-2 border-b px-3 py-2">
         <h2 className="text-muted-foreground font-label text-[10px] tracking-wide uppercase">{title}</h2>
         {aside ? <span className="text-muted-foreground text-[11px]">{aside}</span> : null}
       </header>
-      <div className="min-w-0 flex-1 p-3">{children}</div>
+      <div className={cn("min-w-0 flex-1 p-3", contentClassName)}>{children}</div>
     </section>
   );
 }

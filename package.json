@@ -40,6 +40,7 @@
     "contract-send:check": "tsx --env-file=.env.local --conditions=react-server scripts/contract-send-check.mts",
     "import:check": "tsx --env-file=.env.local --conditions=react-server scripts/import-check.mts",
     "change-orders:http-check": "tsx --env-file=.env.local --conditions=react-server scripts/change-orders-http-check.mts",
+    "collection:check": "tsx --env-file=.env.local --conditions=react-server scripts/collection-check.mts",
     "membership:check": "tsx --env-file=.env.local --conditions=react-server scripts/membership-check.mts",
     "membership:scenarios": "tsx --env-file=.env.local --conditions=react-server scripts/membership-scenarios.mts"
   },

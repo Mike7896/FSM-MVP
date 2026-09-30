@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity, ArrowLeft, CreditCard, LifeBuoy, ScrollText, Users } from "lucide-react";
+import { Activity, ArrowLeft, CreditCard, Gauge, LifeBuoy, ScrollText, Users } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
@@ -11,6 +11,7 @@ const ITEMS = [
   { href: "/admin/accounts", label: "Accounts", icon: Users },
   { href: "/admin/support", label: "Support", icon: LifeBuoy },
   { href: "/admin/billing", label: "Billing", icon: CreditCard },
+  { href: "/admin/usage", label: "Costs & Usage", icon: Gauge },
   { href: "/admin/events", label: "Event log", icon: ScrollText },
 ];
 

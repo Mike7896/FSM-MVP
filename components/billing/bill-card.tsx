@@ -56,7 +56,8 @@ export function BillCard({
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <span className="text-3xl font-semibold tracking-tight tabular-nums">
           {bill.totalCents === null ? "—" : formatMoney(bill.totalCents)}
-          <span className="text-muted-foreground text-sm font-normal">{per} plus applicable tax</span>
+          <span className="text-muted-foreground text-sm font-normal">{per}</span>
+          <span className="text-muted-foreground mt-2 block text-xs font-normal">Plus applicable tax</span>
         </span>
         <span className="text-muted-foreground text-sm">
           {access.cancelAtPeriodEnd ? "ends" : "renews"} {renews ? dateOf(renews) : "—"}

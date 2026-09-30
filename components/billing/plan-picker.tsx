@@ -248,14 +248,13 @@ export function PlanPicker({
           return (
             <div
               key={tier}
-              className={cn("relative flex flex-col rounded-2xl border bg-card p-6 sm:p-8", tier === "starter" && "border-primary shadow-sm ring-1 ring-primary/30", selected && "bg-primary/[0.04]")}
+              className={cn("relative flex flex-col rounded-2xl border bg-card p-6 sm:p-8", tier === "starter" && mode.kind !== "change" && "border-primary shadow-sm ring-1 ring-primary/30", selected && "bg-primary/[0.04]")}
             >
               <div className="flex items-baseline justify-between gap-2">
                 <h2 className="text-xl font-semibold tracking-tight">
                   {TIER_LABEL[tier]}
-                  {packs.length ? " + Electrical" : ""}
                 </h2>
-                {selected ? <Badge variant="secondary">Your plan</Badge> : tier === "starter" ? <Badge variant="secondary">For everyday work</Badge> : null}
+                {selected ? <Badge variant="secondary">Your plan</Badge> : tier === "starter" && mode.kind !== "change" ? <Badge variant="secondary">For everyday work</Badge> : null}
               </div>
 
               <p className="mt-6 text-4xl font-semibold tracking-tight tabular-nums sm:text-5xl">

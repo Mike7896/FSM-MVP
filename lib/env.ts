@@ -117,9 +117,9 @@ const serverSchema = z.object({
    * Resend) every request is still saved, and still reaches Sentry.
    */
   /**
-   * Who may open the admin dashboard at /admin — comma-separated sign-in
-   * addresses. Anyone else gets a 404 there, as if it didn't exist. Empty,
-   * nobody can open it.
+   * Bootstrap owners — comma-separated sign-in addresses. Their admin grants
+   * are persisted when they open /admin. Additional admins are stored in
+   * platform_admins; removing an address here does not revoke that grant.
    */
   ADMIN_EMAILS: z.string().optional(),
   SUPPORT_EMAIL: z.preprocess((value) => (value === "" ? undefined : value), z.email().optional()),

@@ -71,7 +71,7 @@ export default async function PacksPage() {
               <div className="flex flex-wrap items-baseline justify-between gap-3">
                 <h2 className="text-lg font-semibold">{pack.name}</h2>
                 <div className="flex flex-wrap items-center gap-3">
-                  {priceCents !== null && !coming ? (
+                  {priceCents !== null && (!coming || entitled) ? (
                     <span className="text-muted-foreground text-sm tabular-nums">
                       {formatMoney(priceCents)}{access.interval === "year" ? "/yr" : "/mo"}
                     </span>
@@ -104,12 +104,12 @@ export default async function PacksPage() {
                 </p>
               ) : null}
 
-              {!coming ? (
+              {!coming || entitled ? (
                 <Link
                   href={`/office/packs/${pack.id}`}
                   className="text-primary-ink mt-2 inline-block text-sm underline underline-offset-4"
                 >
-                  {entitled ? "See what's inside" : "See what's inside"}
+                  {entitled ? "Manage pack" : "See what's inside"}
                 </Link>
               ) : null}
             </div>

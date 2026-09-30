@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import { AppHeader } from "@/components/app-header";
 import { AppSidebar } from "@/components/app-sidebar";
+import { getCurrentAdmin } from "@/lib/admin/access";
 import { NotificationsProvider } from "@/components/notifications/notifications-provider";
 import { TourProvider } from "@/components/tours/tour-provider";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
@@ -44,12 +45,13 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
   // The chrome carries two names a few pixels apart — the business's in the
   // header, the person's on the account menu — because that adjacency is the
   // whose-thing-is-it split made visible (wireframe 94 · 56c).
-  const [profile, billSummary, tours] = await Promise.all([
+  const [profile, billSummary, tours, admin] = await Promise.all([
     getCurrentUser(),
     getBillSummary(organizations[0].id),
     // Seeded here so the tour system knows what this person has finished on
     // the first render — nothing opens and then snaps shut.
     listTourProgress(session.userId),
+    getCurrentAdmin(),
   ]);
 
   return (
@@ -66,6 +68,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
           personName={profile?.fullName ?? null}
           userEmail={session.email}
           monthlyTotal={billSummary}
+          isAdmin={admin !== null}
         />
         {/* `min-w-0`: a wide board scrolls inside its page instead of
             stretching the page past the window. */}

@@ -1,5 +1,6 @@
 import { requireCaller, requireOrg } from "@/lib/api/auth";
-import { handler } from "@/lib/api/handler";
+import { handler, readQuery } from "@/lib/api/handler";
+import { z } from "zod";
 import { ok } from "@/lib/api/response";
 import { getDashboard } from "@/lib/queries/dashboard";
 
@@ -24,5 +25,11 @@ export const GET = handler(async (request) => {
   const caller = await requireCaller(request);
   const { organizationId } = await requireOrg(request, caller);
 
-  return ok(await getDashboard(organizationId));
+  const { tz } = readQuery(request, z.object({
+    tz: z.string().max(100).refine((value) => {
+      try { new Intl.DateTimeFormat("en-US", { timeZone: value }); return true; }
+      catch { return false; }
+    }, "Choose a valid timezone.").default("UTC"),
+  }));
+  return ok(await getDashboard(organizationId, tz));
 });
