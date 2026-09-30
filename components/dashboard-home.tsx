@@ -156,7 +156,7 @@ export function DashboardContent({ data, businessName, license, start, refreshFa
           <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
             {data.quickStart.map((item) => (
               <Link key={item.id} href={item.href} className="group hover:border-primary/50 focus-visible:ring-ring flex min-w-0 items-center gap-5 rounded-xl border bg-muted/20 p-5 transition-colors focus-visible:ring-2">
-                <div aria-hidden className="document-paper pointer-events-none w-20 shrink-0 overflow-hidden bg-white shadow-sm sm:w-24">
+                <div aria-hidden className="document-paper pointer-events-none w-20 shrink-0 overflow-hidden bg-white shadow-sm ring-1 ring-paper-edge sm:w-24">
                   <DocumentThumbnail businessName={businessName} license={license} customerName={item.customerName} title={item.title} number={item.number} rows={item.rows} totalCents={item.totalCents} />
                 </div>
                 <div className="min-w-0">

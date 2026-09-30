@@ -80,65 +80,69 @@ export function DocumentCard({
       href={href}
       className="group focus-visible:ring-ring/50 relative block outline-none focus-visible:ring-3"
     >
-      {/* The sheet. The clipped corner is a real cut in the shape rather than a
-          drawn triangle, so the page behind it genuinely isn't there. */}
-      <div
-        className="document-tile relative bg-white text-[#111]"
-      >
-        <DocumentThumbnail
-          businessName={businessName}
-          license={license}
-          customerName={customerName}
-          title={title}
-          rows={rows}
-          totalCents={totalCents}
-          documentType={documentType}
-          number={number}
-        />
-
-        {/* The fold's underside: the little triangle of paper turned over,
-            catching a shade less light than the face of the sheet. */}
-        <span
-          aria-hidden
-          className="absolute top-0 left-0 size-[14px] bg-[#e4e6e8] [clip-path:polygon(0_0,100%_100%,0_100%)]"
-        />
-
-        {/* What the document is doing, over the page, only while reached for.
-            `backdrop-blur` on the wash keeps the page legible as a page
-            underneath rather than hiding it behind a panel. */}
+      {/* The edge and the shadow, cast one element out from the sheet: on the
+          sheet itself its own clip would cut them away with the corner. */}
+      <div className="document-tile-shadow">
+        {/* The sheet. The clipped corner is a real cut in the shape rather than a
+            drawn triangle, so the page behind it genuinely isn't there. */}
         <div
-          className={cn(
-            // `document-paper` so the badge and the chip inside resolve to
-            // paper's own ink and rules — a theme-coloured badge is invisible
-            // on a white wash the moment the interface is dark.
-            "document-paper absolute inset-0 flex flex-col items-center justify-center gap-2 p-3 text-center",
-            "bg-white/75! opacity-0 backdrop-blur-[2px] transition-opacity",
-            "group-hover:opacity-100 group-focus-visible:opacity-100"
-          )}
+          className="document-tile relative bg-white text-[#111]"
         >
+          <DocumentThumbnail
+            businessName={businessName}
+            license={license}
+            customerName={customerName}
+            title={title}
+            rows={rows}
+            totalCents={totalCents}
+            documentType={documentType}
+            number={number}
+          />
+
+          {/* The fold's underside: the little triangle of paper turned over,
+              catching a shade less light than the face of the sheet. */}
           <span
-            title={caption ?? customerName ?? undefined}
-            className="line-clamp-2 text-sm font-medium text-[#16202a] capitalize"
+            aria-hidden
+            className="absolute top-0 left-0 size-[14px] bg-[#e4e6e8] [clip-path:polygon(0_0,100%_100%,0_100%)]"
+          />
+
+          {/* What the document is doing, over the page, only while reached for.
+              `backdrop-blur` on the wash keeps the page legible as a page
+              underneath rather than hiding it behind a panel. */}
+          <div
+            className={cn(
+              // `document-paper` so the badge and the chip inside resolve to
+              // paper's own ink and rules — a theme-coloured badge is invisible
+              // on a white wash the moment the interface is dark.
+              "document-paper absolute inset-0 flex flex-col items-center justify-center gap-2 p-3 text-center",
+              "bg-white/75! opacity-0 backdrop-blur-[2px] transition-opacity",
+              "group-hover:opacity-100 group-focus-visible:opacity-100"
+            )}
           >
-            {caption ?? customerName ?? "New customer"}
-          </span>
-
-          <span className="text-base font-semibold text-[#16202a] tabular-nums">
-            {formatMoney(totalCents)}
-          </span>
-
-          <span className="flex flex-wrap items-center justify-center gap-1.5">
-            <Badge variant={statusVariant} className="capitalize">
-              {status}
-            </Badge>
-            {demo ? <DemoChip /> : null}
-          </span>
-
-          {standing ? (
-            <span className="line-clamp-2 text-xs text-[#667485]">
-              {standing}
+            <span
+              title={caption ?? customerName ?? undefined}
+              className="line-clamp-2 text-sm font-medium text-[#16202a] capitalize"
+            >
+              {caption ?? customerName ?? "New customer"}
             </span>
-          ) : null}
+
+            <span className="text-base font-semibold text-[#16202a] tabular-nums">
+              {formatMoney(totalCents)}
+            </span>
+
+            <span className="flex flex-wrap items-center justify-center gap-1.5">
+              <Badge variant={statusVariant} className="capitalize">
+                {status}
+              </Badge>
+              {demo ? <DemoChip /> : null}
+            </span>
+
+            {standing ? (
+              <span className="line-clamp-2 text-xs text-[#667485]">
+                {standing}
+              </span>
+            ) : null}
+          </div>
         </div>
       </div>
     </Link>

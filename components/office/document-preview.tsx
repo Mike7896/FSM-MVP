@@ -32,7 +32,7 @@ export function OfficeDocumentPreview({
     <div className="rounded-xl border bg-muted/30 p-4 sm:p-5">
       <div
         ref={frame}
-        className="relative mx-auto aspect-[8.5/11] w-full max-w-[480px] bg-white shadow-[0_2px_8px_rgb(0_0_0/0.12)]"
+        className="relative mx-auto aspect-[8.5/11] w-full max-w-[480px] bg-white shadow-[0_2px_8px_rgb(0_0_0/0.12)] ring-1 ring-paper-edge"
         aria-label="Document preview, US Letter portrait"
       >
         <div
@@ -40,7 +40,7 @@ export function OfficeDocumentPreview({
           style={{ transform: `scale(${scale ?? 0})`, visibility: scale === null ? "hidden" : "visible" }}
         >
           <DocumentSheet
-            className="h-[1056px] min-h-[1056px] w-[816px] max-w-none overflow-hidden p-[96px] shadow-none [overflow-wrap:anywhere]"
+            className="h-[1056px] min-h-[1056px] w-[816px] max-w-none overflow-hidden border-0 p-[96px] shadow-none [overflow-wrap:anywhere]"
             footer={footer}
           >
             {children}

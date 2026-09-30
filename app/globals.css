@@ -55,6 +55,7 @@
   --color-paper-ink: var(--paper-ink);
   --color-paper-ink-soft: var(--paper-ink-soft);
   --color-paper-rule: var(--paper-rule);
+  --color-paper-edge: var(--paper-edge);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -130,6 +131,10 @@
   --paper-ink: #16202a;
   --paper-ink-soft: #667485;
   --paper-rule: #e3e3e3;
+  /* Where a sheet meets whatever it lies on. Not the rule — that is drawn on
+     the paper and prints — but the paper's own edge, so it is the
+     interface's hairline: #e3e3e3 all but vanished into a near-white desk. */
+  --paper-edge: var(--brand-neutral-300);
   --sidebar: var(--brand-neutral-100);
   --sidebar-foreground: var(--brand-ink);
   --sidebar-primary: var(--brand-amber);
@@ -166,7 +171,9 @@
   --accent: var(--raised);
   --accent-foreground: var(--brand-neutral-100);
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
+  /* 12%, not 10%: most dark panels are told apart from the page by their
+     outline alone, and at 10% it was a whisper (1.34:1 on the ground). */
+  --border: oklch(1 0 0 / 12%);
   --input: oklch(1 0 0 / 15%);
   --ring: var(--brand-amber);
   --chart-1: var(--brand-amber);
@@ -174,11 +181,15 @@
   --chart-3: var(--brand-amber-300);
   --chart-4: var(--brand-neutral-500);
   --chart-5: var(--brand-neutral-700);
-  --sidebar: var(--brand-neutral-800);
+  /* A step off the ground of its own. At neutral 800 — the card's step — the
+     sidebar and the page were 1.12:1 and read as one surface. The active and
+     hover fill moves up with it, or the current page stops showing. Mixes,
+     like `--raised`, because the ramp has no step here. */
+  --sidebar: color-mix(in oklab, var(--brand-neutral-700) 18%, var(--brand-neutral-800));
   --sidebar-foreground: var(--brand-neutral-100);
   --sidebar-primary: var(--brand-amber);
   --sidebar-primary-foreground: var(--brand-neutral-800);
-  --sidebar-accent: var(--raised);
+  --sidebar-accent: color-mix(in oklab, var(--brand-neutral-700) 55%, var(--brand-neutral-800));
   --sidebar-accent-foreground: var(--brand-neutral-100);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: var(--brand-amber);
@@ -300,7 +311,7 @@
  * A document tile — a sheet of paper on a shelf.
  *
  * The top-left corner is cut away rather than drawn over, so the fold is a
- * real notch in the sheet: the tile's own shadow follows the cut, and what is
+ * real notch in the sheet: the tile's shadow follows the cut, and what is
  * behind the tile shows through it. `clip-path` does that; a rotated square
  * pasted on top would not.
  *
@@ -310,16 +321,39 @@
   .document-tile {
     border-radius: 0;
     clip-path: polygon(14px 0, 100% 0, 100% 100%, 0 100%, 0 14px);
-    /* A dropped shadow, not a box shadow: `clip-path` cuts a box shadow off
-       with everything else, while `drop-shadow` traces the shape it is given
-       — including the notch, which is what makes the corner read as folded. */
-    filter: drop-shadow(0 1px 1px rgb(22 32 42 / 0.2));
+  }
+
+  /*
+   * What the sheet casts — from the element around it, never the sheet
+   * itself. A dropped shadow rather than a box shadow, because `drop-shadow`
+   * traces the shape it is given, notch included. But on one element
+   * `clip-path` is applied after `filter`, so a shadow on the tile was cut
+   * away with the corner: white paper on a white page with no edge at all.
+   *
+   * A soft ink hairline all the way round (zero offset, one pixel of blur),
+   * and under it the lift, which grows while the sheet is reached for. Kept
+   * short: a document rail clips what falls much below it.
+   */
+  .document-tile-shadow {
+    --tile-edge: rgb(22 32 42 / 0.35);
+    --tile-shadow: rgb(22 32 42 / 0.12);
+    --tile-lift: rgb(22 32 42 / 0.2);
+    filter: drop-shadow(0 0 1px var(--tile-edge))
+      drop-shadow(0 2px 3px var(--tile-shadow));
     transition: filter 150ms ease;
   }
 
-  .group:hover .document-tile,
-  .group:focus-visible .document-tile {
-    filter: drop-shadow(0 5px 10px rgb(22 32 42 / 0.3));
+  .group:hover .document-tile-shadow,
+  .group:focus-visible .document-tile-shadow {
+    filter: drop-shadow(0 0 1px var(--tile-edge))
+      drop-shadow(0 4px 6px var(--tile-lift));
+  }
+
+  /* On the dark ground white paper is its own edge, and an ink shadow on an
+     ink page is no shadow at all — so there the lift is cast in black. */
+  .dark .document-tile-shadow {
+    --tile-shadow: rgb(0 0 0 / 0.3);
+    --tile-lift: rgb(0 0 0 / 0.45);
   }
 }
 

@@ -113,7 +113,6 @@ export function AppSidebar({
                       <span>{item.title}</span>
                       {item.reserved ? (
                         <ComingSoon
-                          variant="secondary"
                           className="ml-auto group-data-[collapsible=icon]:hidden"
                         />
                       ) : null}
