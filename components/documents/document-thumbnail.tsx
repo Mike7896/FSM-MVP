@@ -75,71 +75,69 @@ export function DocumentThumbnail({
         // object even in a dark interface, the way it is on a desk at night.
         // Square: the tile it sits in is a sheet of paper, and paper has
         // corners.
-        "relative aspect-[5/6] w-full overflow-hidden bg-white text-[#111] select-none",
+        "@container relative aspect-[3/4] w-full overflow-hidden bg-white text-[#111] select-none",
         className
       )}
     >
       {/* The paper's colour, top edge to edge. */}
-      <div className={cn("absolute inset-x-0 top-0 h-[4px]", inkFor(documentType).band)} />
+      <div className={cn("absolute inset-x-0 top-0 h-[3px]", inkFor(documentType).band)} />
 
-      <div className="flex flex-col gap-[5px] p-[11px] leading-[1.4]">
+      <div className="flex min-w-0 flex-col px-[10%] pt-[12%] pb-[10%] text-[clamp(6px,3.6cqw,9px)] leading-[1.5]">
         {/* The trust header — the ten seconds in which she decides whether this
             is a real licensed business. It is the first thing on her page, so
             it is the first thing here. */}
-        <div className="flex items-start justify-between gap-1">
-          <span className="truncate text-[8px] font-semibold tracking-tight">
+        <div className="flex min-w-0 flex-col gap-[0.35em] border-b border-[#dedede] pb-[1em]">
+          <span className="line-clamp-2 text-[1.25em] font-semibold tracking-tight [overflow-wrap:anywhere]">
             {businessName || " "}
           </span>
           {license ? (
-            <span className="shrink-0 text-[6px] text-[#666]">
+            <span className="truncate text-[0.85em] tracking-wide text-[#777]">
               LIC #{license}
             </span>
           ) : null}
         </div>
 
-        <div className="h-px bg-[#e3e3e3]" />
-
-        <div className="flex items-baseline justify-between gap-1">
-          <span className="truncate text-[6.5px] text-[#666]">
+        <div className="mt-[1em] flex min-w-0 flex-wrap items-baseline justify-between gap-x-[1em] gap-y-[0.3em]">
+          <span className="min-w-0 truncate text-[#666]">
             {customerName ? `Prepared for ${customerName}` : " "}
           </span>
           {number ? (
-            <span className="shrink-0 text-[6px] text-[#999]">
+            <span className="shrink-0 text-[0.85em] tabular-nums text-[#888]">
               {number}
             </span>
           ) : null}
         </div>
 
         {/* What this paper is, in its own ink. */}
-        <p className={cn("mt-[3px] text-[6px] font-semibold tracking-[0.14em] uppercase", inkFor(documentType).word)}>
+        <p className={cn("mt-[1.8em] text-[0.85em] font-semibold tracking-[0.14em] uppercase", inkFor(documentType).word)}>
           {documentType}
         </p>
 
-        <p className="truncate text-[7.5px] font-medium">
+        <p className="mt-[0.4em] line-clamp-2 text-[1.2em] font-semibold leading-[1.35] [overflow-wrap:anywhere]">
           {title || "Untitled"}
         </p>
 
         {/* The rows. Real descriptions and real money — this is what makes one
             document distinguishable from another at this size. */}
-        <div className="mt-[6px] flex flex-col gap-[4px]">
+        <div className="mt-[1.5em] flex flex-col">
           {rows.length === 0 ? (
-            <span className="text-[6.5px] text-[#aaa]">Nothing priced yet</span>
+            <span className="border-t border-[#efefef] pt-[0.75em] text-[#999]">Nothing priced yet</span>
           ) : (
             rows.map((row, index) => (
               <div
                 key={index}
-                className="flex items-baseline justify-between gap-2 border-t border-[#efefef] pt-[4px]"
+                className="flex min-w-0 items-baseline justify-between gap-[1em] border-t border-[#efefef] py-[0.65em]"
               >
                 <span
                   className={cn(
-                    "truncate text-[6.5px]",
+                    "min-w-0 line-clamp-2 [overflow-wrap:anywhere]",
                     row.unpriced && "text-[#888] italic"
                   )}
                 >
                   {row.description || " "}
                 </span>
                 {!row.unpriced ? (
-                  <span className="shrink-0 text-[6.5px] tabular-nums">
+                  <span className="shrink-0 tabular-nums">
                     {formatMoney(row.amountCents)}
                   </span>
                 ) : null}
@@ -149,11 +147,11 @@ export function DocumentThumbnail({
         </div>
 
         {totalCents > 0 ? (
-          <div className="mt-[7px] flex items-baseline justify-between border-t border-[#d4d4d4] pt-[5px]">
-            <span className="text-[6px] tracking-[0.08em] text-[#666] uppercase">
+          <div className="mt-[0.8em] flex items-baseline justify-between gap-[1em] border-t border-[#bfc3c7] pt-[0.85em]">
+            <span className="text-[0.85em] tracking-[0.08em] text-[#666] uppercase">
               Total
             </span>
-            <span className="text-[11px] font-semibold tabular-nums">
+            <span className="text-[1.45em] font-semibold tabular-nums">
               {formatMoney(totalCents)}
             </span>
           </div>
@@ -162,7 +160,7 @@ export function DocumentThumbnail({
 
       {/* The page continues below the card. A hard stop would read as a short
           document; the fade reads as the rest of the page. */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-b from-transparent to-white" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[10%] bg-gradient-to-b from-transparent to-white" />
     </div>
   );
 }

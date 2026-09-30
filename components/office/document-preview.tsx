@@ -32,7 +32,7 @@ export function OfficeDocumentPreview({
     <div className="rounded-xl border bg-muted/30 p-4 sm:p-5">
       <div
         ref={frame}
-        className="relative mx-auto aspect-[8.5/11] w-full max-w-[360px] bg-white shadow-[0_2px_8px_rgb(0_0_0/0.12)]"
+        className="relative mx-auto aspect-[8.5/11] w-full max-w-[480px] bg-white shadow-[0_2px_8px_rgb(0_0_0/0.12)]"
         aria-label="Document preview, US Letter portrait"
       >
         <div

@@ -103,7 +103,7 @@ export function IdentityForm({
   return (
     <form onSubmit={onSubmit} className="w-full max-w-6xl @container/identity flex min-w-0 flex-col gap-6">
       {/* Use the panel's width: the app and Office sidebars also take space. */}
-      <div className="grid min-w-0 gap-6 @4xl/identity:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="grid min-w-0 gap-6 @4xl/identity:grid-cols-[minmax(0,1fr)_480px]">
         <div className="@container/fields flex min-w-0 flex-col gap-5">
           <div className="flex flex-col gap-6 rounded-xl border p-5 sm:p-6 [&_input]:h-10">
             <div className="grid gap-2">

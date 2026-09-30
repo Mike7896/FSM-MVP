@@ -90,7 +90,7 @@ export function BrandingForm({
   }
 
   return (
-    <form onSubmit={save} className="w-full max-w-6xl grid min-w-0 gap-6 @3xl/office:grid-cols-[minmax(0,1fr)_360px]">
+    <form onSubmit={save} className="w-full max-w-6xl grid min-w-0 gap-6 @4xl/office:grid-cols-[minmax(0,1fr)_480px]">
       <div className="flex min-w-0 flex-col gap-5">
         <RadioGroup
           value={selected}
@@ -163,7 +163,7 @@ export function BrandingForm({
         /> : <p className="text-muted-foreground text-sm">Pro is required to save document branding.</p>}
       </div>
 
-      <div className="flex min-w-0 flex-col gap-2 @3xl/office:sticky @3xl/office:top-22 @3xl/office:self-start">
+      <div className="flex min-w-0 flex-col gap-2 @4xl/office:sticky @4xl/office:top-22 @4xl/office:self-start">
         <p className="text-muted-foreground font-label text-[10px] uppercase">
           What your customer sees
         </p>
