@@ -130,13 +130,11 @@ export const billingAccounts = pgTable(
     /** Notices already sent, as dedupe keys — `dunning:in_123:3`, `eval:electrical:10`. */
     notices: text("notices").array().notNull().default(sql`'{}'::text[]`),
 
-    /**
-     * What the subscription brings in a month, in cents — every recurring
-     * line (core plan and packs) at its quantity, less any recurring
-     * discount. Null when Stripe's answer couldn't be read in full; the admin
-     * dashboard then falls back to list prices.
-     */
-    mrrCents: integer("mrr_cents"),
+    // `mrr_cents` (drizzle/0041) is on this table but deliberately not in
+    // this model: every `select()` here would name it, so code deployed
+    // before the migration ran would fail every page that reads a
+    // membership. Reconcile writes it and the admin dashboard reads it, both
+    // in SQL that tolerate its absence.
 
     reconciledAt: timestamp("reconciled_at", { withTimezone: true }),
     updatedAt: timestamp("updated_at", { withTimezone: true })

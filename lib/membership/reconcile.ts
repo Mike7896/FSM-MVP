@@ -1,7 +1,7 @@
 import "server-only";
 
 import type Stripe from "stripe";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import {
@@ -238,7 +238,6 @@ export async function reconcileFrom(subscription: Stripe.Subscription): Promise<
     packs: ended ? [] : current.packs,
     priceKeys: ended ? [] : current.priceKeys,
     foundingPrice: !ended && current.founding,
-    mrrCents: ended ? 0 : monthlyRecurringCents(subscription),
     currentPeriodStart: periodStart,
     currentPeriodEnd: periodEnd,
     paidThrough,
@@ -269,6 +268,7 @@ export async function reconcileFrom(subscription: Stripe.Subscription): Promise<
     .onConflictDoUpdate({ target: billingAccounts.organizationId, set: values })
     .returning();
 
+  await recordMrr(organizationId, ended ? 0 : monthlyRecurringCents(subscription));
   await syncPackEntitlements(organizationId, live ? values.packs : [], items);
 
   // A purchased pack takes over from its evaluation.
@@ -286,6 +286,19 @@ export async function reconcileFrom(subscription: Stripe.Subscription): Promise<
   }
 
   return after;
+}
+
+/**
+ * What the membership brings in a month, for the admin dashboard's MRR. Kept
+ * out of the Drizzle model (see the schema), so a database that hasn't had
+ * drizzle/0041 yet skips it with a warning instead of failing the reconcile.
+ */
+async function recordMrr(organizationId: string, cents: number | null) {
+  await db
+    .execute(sql`update billing_accounts set mrr_cents = ${cents} where organization_id = ${organizationId}`)
+    .catch((error: unknown) =>
+      console.warn("[membership] MRR not recorded — has drizzle/0041_billing_mrr.sql been applied?", error)
+    );
 }
 
 /** The entitlement rows other screens read, kept in step with the subscription. */

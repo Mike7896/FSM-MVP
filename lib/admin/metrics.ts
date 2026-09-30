@@ -98,14 +98,16 @@ export async function getAdminMetrics(timeZone: string) {
     // MRR is what reconcile read from Stripe — every line, less discounts.
     // A membership not reconciled since that was recorded falls back to the
     // list prices of all its lines (packs too), then to the core line alone.
+    // mrr_cents is read through to_jsonb so a database without drizzle/0041
+    // gets the fallback rather than an error.
     () => many(sql`
       select s.status::text as status, coalesce(pr.name, 'Unknown plan') as plan, count(*)::int as count,
         coalesce(sum(coalesce(
-          ba.mrr_cents,
+          (to_jsonb(ba) ->> 'mrr_cents')::bigint,
           (select sum(${monthly(sql`lp`, sql`1`)}) from prices lp where lp.lookup_key = any(ba.price_keys)),
           ${monthly(sql`p`, sql`coalesce(s.quantity, 1)`)}
         )), 0)::bigint as mrr_cents,
-        count(*) filter (where ba.mrr_cents is null)::int as estimated
+        count(*) filter (where to_jsonb(ba) ->> 'mrr_cents' is null)::int as estimated
       from subscriptions s
       join organizations o on o.id = s.organization_id
       left join billing_accounts ba on ba.subscription_id = s.id

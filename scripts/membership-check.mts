@@ -162,7 +162,6 @@ const blankAccount = (over: Partial<BillingAccount>): BillingAccount => ({
   foundingHoldSession: null,
   foundingEnrolledAt: null,
   notices: [],
-  mrrCents: null,
   reconciledAt: null,
   updatedAt: now,
   ...over,
