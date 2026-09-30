@@ -10,10 +10,8 @@ import { toast } from "sonner";
 import { SaveBar } from "@/components/save-bar";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  DocumentFooter,
-  DocumentSheet,
-} from "@/components/documents/document-sheet";
+import { DocumentFooter } from "@/components/documents/document-sheet";
+import { OfficeDocumentPreview } from "@/components/office/document-preview";
 import { QuoteProjection } from "@/components/quote/projection";
 import { emptyDraft } from "@/lib/quote";
 import type { Office } from "@/lib/queries/office";
@@ -105,7 +103,7 @@ export function IdentityForm({
   return (
     <form onSubmit={onSubmit} className="w-full max-w-6xl @container/identity flex min-w-0 flex-col gap-6">
       {/* Use the panel's width: the app and Office sidebars also take space. */}
-      <div className="grid min-w-0 gap-6 @4xl/identity:grid-cols-[minmax(0,1fr)_300px]">
+      <div className="grid min-w-0 gap-6 @4xl/identity:grid-cols-[minmax(0,1fr)_360px]">
         <div className="@container/fields flex min-w-0 flex-col gap-5">
           <div className="flex flex-col gap-6 rounded-xl border p-5 sm:p-6 [&_input]:h-10">
             <div className="grid gap-2">
@@ -209,9 +207,7 @@ export function IdentityForm({
           <p className="text-sm font-semibold">
             On every document you send
           </p>
-          <DocumentSheet
-            size="note"
-            className="[overflow-wrap:anywhere]"
+          <OfficeDocumentPreview
             footer={<DocumentFooter businessName={values.name?.trim() || null} />}
           >
             <QuoteProjection
@@ -219,8 +215,9 @@ export function IdentityForm({
               businessName={values.name?.trim() || null}
               license={license}
               phone={values.phone?.trim() || null}
+              action={null}
             />
-          </DocumentSheet>
+          </OfficeDocumentPreview>
           <p className="text-muted-foreground text-xs leading-relaxed">
             {license ? (
               <>

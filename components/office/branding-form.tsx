@@ -6,10 +6,8 @@ import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { SaveBar } from "@/components/save-bar";
-import {
-  DocumentFooter,
-  DocumentSheet,
-} from "@/components/documents/document-sheet";
+import { DocumentFooter } from "@/components/documents/document-sheet";
+import { OfficeDocumentPreview } from "@/components/office/document-preview";
 import { QuoteProjection } from "@/components/quote/projection";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -92,7 +90,7 @@ export function BrandingForm({
   }
 
   return (
-    <form onSubmit={save} className="w-full max-w-6xl grid min-w-0 gap-6 @3xl/office:grid-cols-[minmax(0,1fr)_320px]">
+    <form onSubmit={save} className="w-full max-w-6xl grid min-w-0 gap-6 @3xl/office:grid-cols-[minmax(0,1fr)_360px]">
       <div className="flex min-w-0 flex-col gap-5">
         <RadioGroup
           value={selected}
@@ -169,8 +167,7 @@ export function BrandingForm({
         <p className="text-muted-foreground font-label text-[10px] uppercase">
           What your customer sees
         </p>
-        <DocumentSheet
-          size="note"
+        <OfficeDocumentPreview
           footer={<DocumentFooter businessName={identity.businessName} />}
         >
           <QuoteProjection
@@ -178,8 +175,9 @@ export function BrandingForm({
             businessName={identity.businessName}
             license={identity.license}
             phone={identity.phone}
+            action={null}
           />
-        </DocumentSheet>
+        </OfficeDocumentPreview>
         <p className="text-muted-foreground text-xs">
           Updates as you pick. This is the real share surface, not a mockup of
           it.
