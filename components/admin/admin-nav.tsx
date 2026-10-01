@@ -12,6 +12,7 @@ const ITEMS = [
   { href: "/admin/support", label: "Support", icon: LifeBuoy },
   { href: "/admin/billing", label: "Billing", icon: CreditCard },
   { href: "/admin/usage", label: "Costs & Usage", icon: Gauge },
+  { href: "/admin/releases", label: "Releases", icon: ScrollText },
   { href: "/admin/events", label: "Event log", icon: ScrollText },
 ];
 

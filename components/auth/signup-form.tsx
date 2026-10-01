@@ -91,7 +91,7 @@ export function SignupForm({ next = "/welcome" }: { next?: string }) {
       <CardHeader>
         <CardTitle>Create an account</CardTitle>
         <CardDescription>
-          Start quoting in a few minutes. No card.
+          Create professional quotes and keep your job details together. No credit card required.
         </CardDescription>
       </CardHeader>
 

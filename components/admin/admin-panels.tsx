@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { CheckCircle2, CircleDashed, Mail, RotateCcw, XCircle } from "lucide-react";
+import { CheckCircle2, CircleDashed, RotateCcw, XCircle } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import type { AdminMetrics, Row } from "@/lib/admin/metrics";
 import { cn } from "@/lib/utils";
 
+import { SupportReply } from "./support-reply";
 import { Bars, FunnelRow } from "./charts";
 import { ago, money, n, num, pct, text, when } from "./format";
 
@@ -300,7 +301,6 @@ export function SupportPanel({ rows, onChanged }: { rows: Row[]; onChanged: () =
             const id = text(row, "id");
             const status = text(row, "status");
             const expanded = open === id;
-            const subject = `Re: [#${text(row, "number")}] ${text(row, "subject")}`;
             return (
               <li key={id} className="py-2">
                 <button type="button" className="flex w-full items-baseline gap-2 text-left" onClick={() => setOpen(expanded ? null : id)}>
@@ -330,11 +330,6 @@ export function SupportPanel({ rows, onChanged }: { rows: Row[]; onChanged: () =
                       {row.sentry_event_id ? ` · Sentry ${text(row, "sentry_event_id").slice(0, 8)}` : ""}
                     </p>
                     <div className="flex flex-wrap gap-1.5">
-                      <Button asChild size="sm" variant="outline">
-                        <a href={`mailto:${text(row, "reply_to")}?subject=${encodeURIComponent(subject)}`}>
-                          <Mail className="size-3.5" /> Reply by email
-                        </a>
-                      </Button>
                       {status !== "answered" ? (
                         <Button size="sm" variant="outline" disabled={busy === id} onClick={() => mark(id, "answered")}>
                           <CheckCircle2 className="size-3.5" /> Mark answered
@@ -351,6 +346,7 @@ export function SupportPanel({ rows, onChanged }: { rows: Row[]; onChanged: () =
                         </Button>
                       ) : null}
                     </div>
+                    <SupportReply requestId={id} recipient={text(row, "reply_to")} onSent={onChanged} />
                   </div>
                 ) : null}
               </li>

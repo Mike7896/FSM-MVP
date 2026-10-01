@@ -34,7 +34,7 @@ import {
  * 2. **It may be a demo** (14a). A blank quote, the chip, and a send that can
  *    only reach his own address — the flag rides every object it creates.
  * 3. **The onboarding tour**, which the tour system in the layout runs over
- *    this page. All this surface adds is "Show me around" to replay it.
+ *    this page. All this surface adds is "Show quote tour" to replay it.
  *
  * Everything else — the sections, the totals, the terms, the preview, the send
  * — is the same code the app uses, on purpose.
@@ -87,17 +87,17 @@ export function ActivationQuoteSurface({
         controllerRef={editor}
         onBack={() => router.push("/welcome")}
         onPreview={setPreview}
-        previewLabel="Preview it"
+        previewLabel="Preview quote"
         headerActions={
           <Button
             variant="ghost"
             size="sm"
             onClick={() => startTour("onboarding")}
-            aria-label="Show me around"
+            aria-label="Show quote tour"
             className="text-muted-foreground"
           >
             <Compass />
-            <span className="hidden @md:inline">Show me around</span>
+            <span className="hidden @md:inline">Show quote tour</span>
           </Button>
         }
       />

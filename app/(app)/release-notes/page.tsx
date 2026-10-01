@@ -3,11 +3,11 @@ import type { Metadata } from "next";
 import { MarkReleaseNotesSeen } from "@/components/release-notes/seen";
 import { PageHeader } from "@/components/page-header";
 import {
-  RELEASE_NOTES,
   RELEASE_NOTES_TITLE,
   KIND_LABEL,
   type BuildKind,
 } from "@/lib/release-notes/entries";
+import { listReleases } from "@/lib/release-notes/service";
 import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = { title: RELEASE_NOTES_TITLE };
@@ -25,28 +25,30 @@ export const metadata: Metadata = { title: RELEASE_NOTES_TITLE };
  * would turn a record into a set of promises, and the one thing this page is
  * for is being true.
  */
-export default function ReleaseNotesPage() {
+export default async function ReleaseNotesPage() {
+  const releases = (await listReleases()).sort((a, b) => b.publishedAt!.getTime() - a.publishedAt!.getTime());
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-10">
-      <MarkReleaseNotesSeen />
+      <MarkReleaseNotesSeen latest={releases[0]?.publishedAt?.toISOString() ?? ""} />
 
       <PageHeader
         title={RELEASE_NOTES_TITLE}
-        description="What landed in the app, and when. Newest first."
+        description="New features, improvements, and fixes, organized by release."
       />
 
       <div className="flex flex-col gap-10">
-        {RELEASE_NOTES.map((entry) => (
-          <section key={entry.date} className="flex flex-col gap-3">
+        {releases.length === 0 && <p className="text-muted-foreground rounded-xl border p-6 text-sm">No releases have been published yet. Product updates will appear here.</p>}
+        {releases.map((entry) => (
+          <section id={`v${entry.version}`} key={entry.id} className="flex flex-col gap-3">
             <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b pb-2">
               <h2 className="text-base font-semibold tracking-tight">
-                {entry.title}
+                <a href={`#v${entry.version}`}>v{entry.version} · {entry.title}</a>
               </h2>
               <time
-                dateTime={entry.date}
+                dateTime={entry.publishedAt!.toISOString()}
                 className="text-muted-foreground text-xs tabular-nums"
               >
-                {readableDate(entry.date)}
+                {readableDate(entry.publishedAt!.toISOString().slice(0, 10))}
               </time>
             </div>
 
@@ -65,8 +67,7 @@ export default function ReleaseNotesPage() {
       </div>
 
       <p className="text-muted-foreground border-t pt-5 text-sm leading-relaxed">
-        This app is built by one person, a piece at a time, with the people
-        using it. Anything here can be changed by telling us it&apos;s wrong.
+        Have feedback about an update? Contact us through Help in the app.
       </p>
     </div>
   );

@@ -18,6 +18,7 @@ export function emailConfigured(): boolean {
 }
 
 export type OutboundEmail = {
+  idempotencyKey?: string;
   to: string;
   subject: string;
   text: string;
@@ -50,7 +51,9 @@ export async function sendEmail(message: OutboundEmail): Promise<{ id: string }>
     headers: {
       Authorization: `Bearer ${env.RESEND_API_KEY}`,
       "Content-Type": "application/json",
+      ...(message.idempotencyKey ? { "Idempotency-Key": message.idempotencyKey } : {}),
     },
+    signal: AbortSignal.timeout(20_000),
     body: JSON.stringify({
       from,
       to: [message.to],

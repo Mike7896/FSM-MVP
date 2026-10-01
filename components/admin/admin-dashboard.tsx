@@ -164,7 +164,7 @@ function Dashboard({
         const show = event.level === "money" ? toast.success : event.level === "problem" ? toast.error : toast;
         show(event.title, { description: event.org_name ?? undefined, duration: event.level === "money" ? 15_000 : 6000 });
       }
-      if (channel.sound) playSound(event.level);
+      if (channel.sound) playSound(event.level, channel.volume);
       if (channel.desktop) notifyDesktop(heading, event.title, `admin-${event.id}`);
       if (event.level === "money" || event.level === "milestone") setSpotlight(event);
       if (document.visibilityState !== "visible") setUnseen((count) => count + 1);
@@ -232,7 +232,7 @@ function Dashboard({
               else {
                 unlockSound();
                 setSoundOn(true);
-                setTimeout(() => soundReady() && playSound("milestone"), 50);
+                setTimeout(() => soundReady() && playSound("milestone", prefs.milestone.volume), 50);
               }
             }}
           >
@@ -495,7 +495,7 @@ function AlertSettings({
           Alert me for…
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-80">
+      <PopoverContent align="end" className="max-h-[80svh] w-80 overflow-y-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="text-muted-foreground text-xs">
@@ -519,6 +519,7 @@ function AlertSettings({
                 {channels.map((channel) => (
                   <td key={channel.channel} className="text-center">
                     <Checkbox
+                      aria-label={`${entry.label} ${channel.label}`}
                       checked={prefs[entry.level][channel.channel]}
                       onCheckedChange={(checked) =>
                         onChange({
@@ -533,6 +534,15 @@ function AlertSettings({
             ))}
           </tbody>
         </table>
+        <div className="mt-4 space-y-3 border-t pt-4">
+          <p className="text-sm font-medium">Volume mixer</p>
+          {LEVELS.map(entry => <div key={entry.level} className="space-y-1">
+            <label htmlFor={`volume-${entry.level}`} className="flex justify-between text-xs"><span>{entry.label}</span><span>{Math.round(prefs[entry.level].volume * 100)}%</span></label>
+            <div className="flex items-center gap-3"><input id={`volume-${entry.level}`} type="range" min="0" max="100" step="1" className="min-w-0 flex-1 accent-primary" value={Math.round(prefs[entry.level].volume * 100)} onChange={event => onChange({ ...prefs, [entry.level]: { ...prefs[entry.level], volume: Number(event.target.value) / 100 } })} />
+            <Button size="sm" variant="ghost" aria-label={`Preview ${entry.label} sound`} onClick={() => { unlockSound(); setTimeout(() => playSound(entry.level, prefs[entry.level].volume), 50); }}>Test</Button></div>
+          </div>)}
+          <p className="text-muted-foreground text-xs">Saved in this browser. Set a volume to 0% to mute it.</p>
+        </div>
         <p className="text-muted-foreground mt-3 text-xs leading-relaxed">
           Money is purchases and payments. Milestones are signups, new businesses, trials, first quotes and
           wins. Problems are failed payments, cancellations, bug reports and failed deliveries. Activity is

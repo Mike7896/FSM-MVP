@@ -359,7 +359,7 @@ export function SentScreen({
               <Button asChild variant="outline">
                 <a href={url} target="_blank" rel="noreferrer">
                   <ExternalLink />
-                  {quote.demo ? "Open it like a customer" : `View what ${first} sees`}
+                  {quote.demo ? "View customer preview" : `View what ${first} sees`}
                 </a>
               </Button>
               <Button variant="outline" onClick={copyLink}>
@@ -560,8 +560,8 @@ function Offers({
           </div>
         ) : (
           <Offer
-            title="Put your logo on it"
-            detail={`Lands on the quote ${first}'s reading now.`}
+            title="Add your business logo"
+            detail="Your logo appears on the shared quote."
             action={
               <>
                 <input
@@ -591,7 +591,7 @@ function Offers({
       {deposit ? (
         <Offer
           title={`Let ${first} pay the deposit`}
-          detail="Two minutes. Money lands in your account."
+          detail="Connect your payment account to accept deposits online."
           action={
             <Button asChild size="sm" variant="outline">
               <Link href="/office/connections">Set up</Link>
@@ -737,26 +737,25 @@ function Handoff({ url }: { url: string | null }) {
       </div>
 
       <div>
-        <p className={EYEBROW}>That was a demo</p>
+        <p className={EYEBROW}>Practice complete</p>
         <h1 className="mt-2 text-3xl leading-tight font-semibold tracking-tight text-balance">
-          You just ran the whole thing.
+          Your practice quote is ready to review.
         </h1>
         <p className="text-muted-foreground mt-3 leading-relaxed">
-          Built it, priced it, sent it — to yourself. Nothing left your account
-          and nobody was quoted.
+          You’ve created and sent a practice quote to yourself. Open it to see how your customers will review your work and prices.
         </p>
         {url ? (
           <Button asChild variant="outline" size="sm" className="mt-4">
             <a href={url} target="_blank" rel="noreferrer">
               <ExternalLink />
-              Open it like a customer
+              View customer preview
             </a>
           </Button>
         ) : null}
       </div>
 
       <div>
-        <p className={EYEBROW}>What we kept</p>
+        <p className={EYEBROW}>Saved in your account</p>
         <ul className="mt-2">
           <Kept label="The demo quote — in Quotes" tag="Labelled" />
           <Kept label="The demo job — in Jobs" tag="Labelled" />
@@ -765,22 +764,20 @@ function Handoff({ url }: { url: string | null }) {
       </div>
 
       <section className="bg-card rounded-xl border p-5 shadow-sm">
-        <p className="text-lg font-semibold">Ready to do a real one?</p>
+        <p className="text-lg font-semibold">Start a quote for your next customer</p>
         <p className="text-muted-foreground mt-1 text-sm leading-relaxed">
-          Same screens you just used, about ten minutes, and at the end it
-          actually goes to your customer.
+          Describe a job, set your prices, and send the quote when you’re ready.
         </p>
         <Button asChild size="lg" className="mt-4 w-full">
           <Link href="/welcome">Quote a real job</Link>
         </Button>
         <Button asChild variant="ghost" className="mt-2 w-full">
-          <Link href="/dashboard">Not now — go to my dashboard</Link>
+          <Link href="/dashboard">Go to dashboard</Link>
         </Button>
       </section>
 
       <p className="text-muted-foreground text-xs leading-relaxed">
-        None of the demo counts. Your dashboard, your money and your price book
-        stay empty until you send a real one.
+        Practice quotes stay separate from your business totals.
       </p>
     </div>
   );

@@ -7,8 +7,6 @@ import { ArrowRight } from "lucide-react";
 import {
   RELEASE_NOTES_ROUTE,
   RELEASE_NOTES_TITLE,
-  LATEST_NOTE,
-  unseenCount,
 } from "@/lib/release-notes/entries";
 
 /**
@@ -52,23 +50,42 @@ function read(): string | null {
  * it hydrates with are the same. The dot appears in the pass after hydration,
  * which is the earliest moment the answer is actually known.
  */
-function useUnseen(): number {
-  const seen = useSyncExternalStore(subscribe, read, () => LATEST_NOTE);
-  return unseenCount(seen);
+let published: string[] = [];
+let loading: Promise<void> | null = null;
+const listeners = new Set<() => void>();
+function loadPublished() {
+  loading ??= fetch("/api/v1/releases").then(async response => {
+    if (!response.ok) throw new Error("Release notes unavailable");
+    const result = await response.json();
+    published = result.data.map((entry: { publishedAt: string }) => entry.publishedAt);
+    listeners.forEach(listener => listener());
+  }).catch(() => {}).finally(() => { loading = null; });
 }
+function subscribePublished(listener: () => void) {
+  listeners.add(listener);
+  loadPublished();
+  window.addEventListener("focus", loadPublished);
+  return () => { listeners.delete(listener); window.removeEventListener("focus", loadPublished); };
+}
+function useUnseen(): number {
+  const seen = useSyncExternalStore(subscribe, read, () => "");
+  const dates = useSyncExternalStore(subscribePublished, () => published, () => EMPTY);
+  return dates.filter(date => !seen || date > seen).length;
+}
+const EMPTY: string[] = [];
 
 /** Marks everything up to the newest entry as seen. Rendered by the page. */
-export function MarkReleaseNotesSeen() {
+export function MarkReleaseNotesSeen({ latest }: { latest: string }) {
   useEffect(() => {
     try {
-      window.localStorage.setItem(KEY, LATEST_NOTE);
+      if (latest && latest > (read() ?? "")) window.localStorage.setItem(KEY, latest);
       // Same-tab writes don't raise `storage`, so the dot beside the nav would
       // sit there until a reload. This is what tells it to look again.
       window.dispatchEvent(new Event(CHANGED));
     } catch {
       /* nothing to do, and nothing worth telling anybody about */
     }
-  }, []);
+  }, [latest]);
 
   return null;
 }

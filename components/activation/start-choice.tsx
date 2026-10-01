@@ -23,7 +23,7 @@ import { cn } from "@/lib/utils";
 /**
  * Screen 3 · the start choice — and 16a, the one question before it.
  *
- * **Three starts, and they are not equal.** Quote a real job is first, framed,
+ * **Three starts, and they are not equal.** Start your first quote is first, framed,
  * and holds the only button on the screen, with the reason given in his words:
  * only the real start activates. The demo and the skip are rows — one tap away,
  * never weighted the same — because offered flat, most people take the
@@ -135,12 +135,12 @@ function TradeQuestion({
   return (
     <div className="mx-auto flex w-full max-w-md flex-col gap-8 px-4 py-12">
       <div>
-        <p className={EYEBROW}>One question, then we build</p>
+        <p className={EYEBROW}>Welcome to ServiceClerk</p>
         <h1 className="mt-3 text-3xl leading-tight font-semibold tracking-tight text-balance">
-          What do you do?
+          What kind of work do you do?
         </h1>
         <p className="text-muted-foreground mt-3 leading-relaxed">
-          So the line items and the scope language start in your language.
+          Choose your trade to help us tailor your experience. You can change this later in your profile.
         </p>
       </div>
 
@@ -164,10 +164,10 @@ function TradeQuestion({
           onClick={onSkip}
           className="text-muted-foreground hover:text-foreground text-sm underline underline-offset-4"
         >
-          Skip — I&apos;ll say later
+          Skip for now
         </button>
         <p className="text-muted-foreground text-xs">
-          Not asked again this session. Nothing here costs anything.
+          You can start a quote with any trade.
         </p>
       </div>
     </div>
@@ -226,36 +226,42 @@ function Starts({
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-md flex-col gap-8 px-4 py-10 md:max-w-2xl md:py-16">
+    <div className="mx-auto flex w-full max-w-md flex-col gap-8 px-4 py-10 md:max-w-3xl md:py-16">
       <div>
         {returning ? (
           <>
             <h1 className="text-3xl leading-tight font-semibold tracking-tight text-balance">
-              What are we quoting?
+              Ready to start your first quote?
             </h1>
             <p className="text-muted-foreground mt-3 leading-relaxed">
-              Nothing sent yet. Start with a job you&apos;ve already got.
+              Start with a customer and a short description of the work.
             </p>
           </>
         ) : (
           <>
             <p className={EYEBROW}>
-              You&apos;re in{firstName ? `, ${firstName}` : ""}
+              Welcome{firstName ? `, ${firstName}` : ""}
             </p>
             <h1 className="mt-3 text-3xl leading-tight font-semibold tracking-tight text-balance">
-              Let&apos;s build a quote you can actually send.
+              Turn your next job into a clear, professional quote.
             </h1>
             <p className="text-muted-foreground mt-3 leading-relaxed">
-              About ten minutes. You can change every number.
+              Describe the work, add your prices, and review a quote your customer can accept online.
             </p>
           </>
         )}
       </div>
 
+      <ol aria-label="Steps to your first quote" className="grid grid-cols-3 gap-3 border-y py-4 text-sm">
+        {["Describe the job", "Add your prices", "Review and send"].map((step, index) => (
+          <li key={step} className="flex flex-col gap-2 sm:flex-row sm:items-center"><span className="bg-primary/10 text-primary-ink flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold">{index + 1}</span>{step}</li>
+        ))}
+      </ol>
+
       {/* The recommended start: framed, first, and the only button. */}
       <form
         onSubmit={start}
-        className="bg-card flex flex-col gap-5 rounded-xl border p-5 shadow-sm md:p-6"
+        className="bg-card flex flex-col gap-6 rounded-2xl border border-primary/20 p-6 shadow-sm md:p-8"
       >
         <div>
           {returning ? null : (
@@ -263,18 +269,17 @@ function Starts({
               Start here
             </p>
           )}
-          <h2 className="mt-1 text-lg font-semibold">Quote a real job</h2>
+          <h2 className="mt-1 text-lg font-semibold">Start your first quote</h2>
           {returning ? null : (
             <p className="text-muted-foreground mt-1 text-sm leading-relaxed">
-              Works best on a job you actually owe someone. At the end it goes
-              to them, for real.
+              Have a job in mind? Start with a few words. You’ll review the details before choosing to send anything.
             </p>
           )}
         </div>
 
         <div className="flex flex-col gap-2">
           <Label htmlFor="seed" className={EYEBROW}>
-            Who&apos;s it for, and what&apos;s the work?
+            Customer and job description
           </Label>
           {/* At the desk the input and its button are one row, so the act
               reads as a single gesture (3d). */}
@@ -283,6 +288,8 @@ function Starts({
               id="seed"
               autoFocus={!returning}
               autoComplete="off"
+              placeholder="e.g. Jordan Lee — replace the kitchen faucet"
+              maxLength={500}
               value={seed}
               onChange={(event) => setSeed(event.target.value)}
               className="h-12 text-base md:flex-1"
@@ -294,7 +301,7 @@ function Starts({
               disabled={!typed || starting}
             >
               {starting ? <Loader2 className="animate-spin" /> : null}
-              Start this quote
+              Create quote
               {starting ? null : <ArrowRight />}
             </Button>
           </div>
@@ -303,7 +310,7 @@ function Starts({
 
       {/* The alternates. Side by side at the desk rather than stacking into a
           menu, and quieter the moment he has typed. */}
-      <div className={cn("grid gap-1 border-t pt-3", !typed && "md:grid-cols-2")}>
+      <div className={cn("grid gap-3", !typed && "md:grid-cols-2")}>
         {demoQuote ? (
           <StartRow
             href={
@@ -313,7 +320,7 @@ function Starts({
             }
             title={
               <>
-                Pick up your demo quote <DemoChip />
+                Continue your practice quote <DemoChip />
               </>
             }
             detail={
@@ -328,11 +335,11 @@ function Starts({
         ) : (
           <StartRow
             href="/welcome/quote?demo=1"
-            title={typed ? "Build a demo quote instead" : "Build a demo quote"}
+            title={typed ? "Try a practice quote instead" : "Try a practice quote"}
             detail={
               typed
                 ? null
-                : "Nothing to quote right now. Same screens, labelled a demo — it stays in your account and never goes to a customer."
+                : "Explore the quote editor with a practice draft. You can send it to yourself to see the customer experience."
             }
           />
         )}
@@ -343,11 +350,11 @@ function Starts({
           <StartRow
             onClick={skip}
             pending={skipping}
-            title="Skip to the dashboard"
+            title="Explore the dashboard"
             detail={
               typed
                 ? null
-                : "Pick the tour up any time before your first real send."
+                : "Look around first. Start a quote whenever you’re ready."
             }
           />
         )}
@@ -391,7 +398,7 @@ function StartRow({
   );
 
   const className =
-    "hover:bg-muted/50 focus-visible:ring-ring/50 flex w-full items-center gap-4 rounded-lg px-3 py-3 text-left transition-colors outline-none focus-visible:ring-3";
+    "hover:bg-muted/50 focus-visible:ring-ring/50 flex w-full items-center gap-4 rounded-xl border px-4 py-4 text-left transition-colors outline-none focus-visible:ring-3";
 
   return href ? (
     <Link href={href} className={className}>

@@ -22,15 +22,15 @@ export const onboardingTour: TourDefinition = {
     {
       id: "header",
       anchor: "quote.header",
-      title: "Who it's for",
+      title: "Check the customer and job",
       body: "The customer and job name come from what you typed. Click either one to change it. Your business name and license number show up here too.",
       advance: { type: "continue" },
     },
     {
       id: "capture",
       anchor: "quote.capture",
-      title: "What you saw on site",
-      body: "Photos, notes and measurements from the walkthrough live here, beside the quote you write from them — drop in the photos already on your phone, or the ones a customer emailed you. Fold it away with the arrow when you want the room.",
+      title: "Keep site details close",
+      body: "Add site photos, notes, and measurements here to refer to while you write. Use the arrow to collapse this panel.",
       advance: { type: "continue" },
       // Optional, so it is passed over on a phone, where capture is the job's
       // own screen rather than a column beside the document.
@@ -39,7 +39,7 @@ export const onboardingTour: TourDefinition = {
     {
       id: "scope",
       anchor: "quote.scope",
-      title: "The work",
+      title: "Describe the scope",
       body: "This is the part you fill in: one row for each thing you'll do or supply. Your customer reads every row.",
       advance: { type: "continue" },
     },
@@ -53,15 +53,15 @@ export const onboardingTour: TourDefinition = {
     {
       id: "price",
       anchor: "quote.row-price",
-      title: "Put your price on it",
-      body: "Describe the row, set the quantity, and type your price per unit. The total adds itself up as you type.",
+      title: "Set the quantity and price",
+      body: "Describe the row, set the quantity, and type your price per unit. The line total updates automatically.",
       advance: { type: "action", event: "quote.price-entered" },
     },
     {
       id: "margin",
       anchor: "quote.margin",
-      title: "Only you see this",
-      body: "Click “Add your cost” on a row and this shows what you keep. It never appears on your customer's copy.",
+      title: "Check your margin",
+      body: "Click “Add your cost” on a row and to compare your cost with your selling price. It never appears on your customer's copy.",
       advance: { type: "continue" },
       optional: true,
     },

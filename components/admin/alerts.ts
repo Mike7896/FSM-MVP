@@ -17,17 +17,18 @@ import type { AdminEventLevel } from "@/lib/db/schema/admin";
  */
 
 export type AlertChannel = "toast" | "sound" | "desktop";
-export type AlertPrefs = Record<AdminEventLevel, Record<AlertChannel, boolean>>;
+export type AlertPrefs = Record<AdminEventLevel, Record<AlertChannel, boolean> & { volume: number }>;
 
 export const DEFAULT_PREFS: AlertPrefs = {
-  money: { toast: true, sound: true, desktop: true },
-  milestone: { toast: true, sound: true, desktop: true },
-  problem: { toast: true, sound: true, desktop: false },
-  activity: { toast: false, sound: false, desktop: false },
+  money: { volume: 1, toast: true, sound: true, desktop: true },
+  milestone: { volume: 1, toast: true, sound: true, desktop: true },
+  problem: { volume: 1, toast: true, sound: true, desktop: false },
+  activity: { volume: 1, toast: false, sound: false, desktop: false },
 };
 
 const KEY = "admin:alert-prefs";
 const CHANGED = "admin:alert-prefs:changed";
+let memoryPrefs = "";
 
 export function useAlertPrefs(): readonly [AlertPrefs, (next: AlertPrefs) => void] {
   const raw = useSyncExternalStore(
@@ -41,9 +42,9 @@ export function useAlertPrefs(): readonly [AlertPrefs, (next: AlertPrefs) => voi
     },
     () => {
       try {
-        return window.localStorage.getItem(KEY) ?? "";
+        return window.localStorage.getItem(KEY) ?? memoryPrefs;
       } catch {
-        return "";
+        return memoryPrefs;
       }
     },
     () => ""
@@ -51,13 +52,21 @@ export function useAlertPrefs(): readonly [AlertPrefs, (next: AlertPrefs) => voi
 
   const prefs = useMemo<AlertPrefs>(() => {
     try {
-      return raw ? { ...DEFAULT_PREFS, ...(JSON.parse(raw) as Partial<AlertPrefs>) } : DEFAULT_PREFS;
+      const saved = raw ? JSON.parse(raw) : {};
+      return Object.fromEntries(Object.entries(DEFAULT_PREFS).map(([level, defaults]) => {
+        const value = saved?.[level];
+        return [level, { ...defaults,
+          ...Object.fromEntries((["toast", "sound", "desktop"] as const).map(key => [key, typeof value?.[key] === "boolean" ? value[key] : defaults[key]])),
+          volume: typeof value?.volume === "number" && Number.isFinite(value.volume) ? Math.max(0, Math.min(1, value.volume)) : 1,
+        }];
+      })) as AlertPrefs;
     } catch {
       return DEFAULT_PREFS;
     }
   }, [raw]);
 
   const set = useCallback((next: AlertPrefs) => {
+    memoryPrefs = JSON.stringify(next);
     try {
       window.localStorage.setItem(KEY, JSON.stringify(next));
     } catch {
@@ -103,8 +112,10 @@ const TUNES: Record<AdminEventLevel, { freq: number; at: number; length: number;
   activity: [{ freq: 1046.5, at: 0, length: 0.06, type: "sine", gain: 0.06 }],
 };
 
-export function playSound(level: AdminEventLevel) {
+export function playSound(level: AdminEventLevel, volume = 1) {
   if (!audio || audio.state !== "running") return;
+  const levelVolume = Number.isFinite(volume) ? Math.max(0, Math.min(1, volume)) : 1;
+  if (levelVolume === 0) return;
   const now = audio.currentTime;
   for (const note of TUNES[level]) {
     const osc = audio.createOscillator();
@@ -112,7 +123,7 @@ export function playSound(level: AdminEventLevel) {
     osc.type = note.type;
     osc.frequency.value = note.freq;
     gain.gain.setValueAtTime(0.0001, now + note.at);
-    gain.gain.exponentialRampToValueAtTime(note.gain, now + note.at + 0.01);
+    gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, note.gain * levelVolume), now + note.at + 0.01);
     gain.gain.exponentialRampToValueAtTime(0.0001, now + note.at + note.length);
     osc.connect(gain).connect(audio.destination);
     osc.start(now + note.at);
