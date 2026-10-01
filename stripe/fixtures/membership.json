@@ -1,0 +1,380 @@
+{
+  "_meta": {
+    "template_version": 0
+  },
+  "fixtures": [
+    {
+      "name": "product_core_starter",
+      "path": "/v1/products",
+      "method": "post",
+      "params": {
+        "id": "sc_core_starter",
+        "name": "ServiceClerk Starter",
+        "description": "Unlimited jobs, quotes, contracts, deposits, progress invoices and payment collection for one shop.",
+        "tax_code": "txcd_10103001",
+        "metadata": {
+          "app": "serviceclerk",
+          "catalog_key": "core_starter"
+        }
+      }
+    },
+    {
+      "name": "product_core_pro",
+      "path": "/v1/products",
+      "method": "post",
+      "params": {
+        "id": "sc_core_pro",
+        "name": "ServiceClerk Pro",
+        "description": "Everything in Starter, plus your logo on documents, quote-view tracking and business analytics.",
+        "tax_code": "txcd_10103001",
+        "metadata": {
+          "app": "serviceclerk",
+          "catalog_key": "core_pro"
+        }
+      }
+    },
+    {
+      "name": "product_pack_electrical",
+      "path": "/v1/products",
+      "method": "post",
+      "params": {
+        "id": "sc_pack_electrical",
+        "name": "Electrical pack",
+        "description": "Electrical presets and specialist inputs. Requires a Starter or Pro membership.",
+        "tax_code": "txcd_10103001",
+        "metadata": {
+          "app": "serviceclerk",
+          "catalog_key": "pack_electrical"
+        }
+      }
+    },
+    {
+      "name": "product_ai_credits",
+      "path": "/v1/products",
+      "method": "post",
+      "params": {
+        "id": "sc_ai_credits",
+        "name": "AI credits",
+        "description": "1,000 prepaid AI credits. Not sold until AI is released.",
+        "tax_code": "txcd_10103001",
+        "metadata": {
+          "app": "serviceclerk",
+          "catalog_key": "ai_credits"
+        }
+      }
+    },
+    {
+      "name": "price_core_starter_month_v1",
+      "path": "/v1/prices",
+      "method": "post",
+      "params": {
+        "product": "${product_core_starter:id}",
+        "currency": "usd",
+        "unit_amount": 2900,
+        "tax_behavior": "exclusive",
+        "lookup_key": "core_starter_month_v1",
+        "transfer_lookup_key": true,
+        "nickname": "core_starter_month_v1",
+        "recurring": {
+          "interval": "month",
+          "interval_count": 1
+        },
+        "metadata": {
+          "app": "serviceclerk",
+          "role": "core",
+          "tier": "starter",
+          "founding": "false"
+        }
+      }
+    },
+    {
+      "name": "price_core_starter_year_v1",
+      "path": "/v1/prices",
+      "method": "post",
+      "params": {
+        "product": "${product_core_starter:id}",
+        "currency": "usd",
+        "unit_amount": 29000,
+        "tax_behavior": "exclusive",
+        "lookup_key": "core_starter_year_v1",
+        "transfer_lookup_key": true,
+        "nickname": "core_starter_year_v1",
+        "recurring": {
+          "interval": "year",
+          "interval_count": 1
+        },
+        "metadata": {
+          "app": "serviceclerk",
+          "role": "core",
+          "tier": "starter",
+          "founding": "false"
+        }
+      }
+    },
+    {
+      "name": "price_core_pro_month_v1",
+      "path": "/v1/prices",
+      "method": "post",
+      "params": {
+        "product": "${product_core_pro:id}",
+        "currency": "usd",
+        "unit_amount": 4900,
+        "tax_behavior": "exclusive",
+        "lookup_key": "core_pro_month_v1",
+        "transfer_lookup_key": true,
+        "nickname": "core_pro_month_v1",
+        "recurring": {
+          "interval": "month",
+          "interval_count": 1
+        },
+        "metadata": {
+          "app": "serviceclerk",
+          "role": "core",
+          "tier": "pro",
+          "founding": "false",
+          "release": "pro"
+        }
+      }
+    },
+    {
+      "name": "price_core_pro_year_v1",
+      "path": "/v1/prices",
+      "method": "post",
+      "params": {
+        "product": "${product_core_pro:id}",
+        "currency": "usd",
+        "unit_amount": 49000,
+        "tax_behavior": "exclusive",
+        "lookup_key": "core_pro_year_v1",
+        "transfer_lookup_key": true,
+        "nickname": "core_pro_year_v1",
+        "recurring": {
+          "interval": "year",
+          "interval_count": 1
+        },
+        "metadata": {
+          "app": "serviceclerk",
+          "role": "core",
+          "tier": "pro",
+          "founding": "false",
+          "release": "pro"
+        }
+      }
+    },
+    {
+      "name": "price_pack_electrical_month_v1",
+      "path": "/v1/prices",
+      "method": "post",
+      "params": {
+        "product": "${product_pack_electrical:id}",
+        "currency": "usd",
+        "unit_amount": 800,
+        "tax_behavior": "exclusive",
+        "lookup_key": "pack_electrical_month_v1",
+        "transfer_lookup_key": true,
+        "nickname": "pack_electrical_month_v1",
+        "recurring": {
+          "interval": "month",
+          "interval_count": 1
+        },
+        "metadata": {
+          "app": "serviceclerk",
+          "role": "pack",
+          "pack": "electrical",
+          "release": "pack_electrical"
+        }
+      }
+    },
+    {
+      "name": "price_pack_electrical_year_v1",
+      "path": "/v1/prices",
+      "method": "post",
+      "params": {
+        "product": "${product_pack_electrical:id}",
+        "currency": "usd",
+        "unit_amount": 8000,
+        "tax_behavior": "exclusive",
+        "lookup_key": "pack_electrical_year_v1",
+        "transfer_lookup_key": true,
+        "nickname": "pack_electrical_year_v1",
+        "recurring": {
+          "interval": "year",
+          "interval_count": 1
+        },
+        "metadata": {
+          "app": "serviceclerk",
+          "role": "pack",
+          "pack": "electrical",
+          "release": "pack_electrical"
+        }
+      }
+    },
+    {
+      "name": "price_founder_starter_month_v1",
+      "path": "/v1/prices",
+      "method": "post",
+      "params": {
+        "product": "${product_core_starter:id}",
+        "currency": "usd",
+        "unit_amount": 1900,
+        "tax_behavior": "exclusive",
+        "lookup_key": "founder_starter_month_v1",
+        "transfer_lookup_key": true,
+        "nickname": "founder_starter_month_v1",
+        "recurring": {
+          "interval": "month",
+          "interval_count": 1
+        },
+        "metadata": {
+          "app": "serviceclerk",
+          "role": "core",
+          "tier": "starter",
+          "founding": "true",
+          "release": "founding_offer"
+        }
+      }
+    },
+    {
+      "name": "price_founder_starter_year_v1",
+      "path": "/v1/prices",
+      "method": "post",
+      "params": {
+        "product": "${product_core_starter:id}",
+        "currency": "usd",
+        "unit_amount": 19000,
+        "tax_behavior": "exclusive",
+        "lookup_key": "founder_starter_year_v1",
+        "transfer_lookup_key": true,
+        "nickname": "founder_starter_year_v1",
+        "recurring": {
+          "interval": "year",
+          "interval_count": 1
+        },
+        "metadata": {
+          "app": "serviceclerk",
+          "role": "core",
+          "tier": "starter",
+          "founding": "true",
+          "release": "founding_offer"
+        }
+      }
+    },
+    {
+      "name": "price_founder_pro_month_v1",
+      "path": "/v1/prices",
+      "method": "post",
+      "params": {
+        "product": "${product_core_pro:id}",
+        "currency": "usd",
+        "unit_amount": 3900,
+        "tax_behavior": "exclusive",
+        "lookup_key": "founder_pro_month_v1",
+        "transfer_lookup_key": true,
+        "nickname": "founder_pro_month_v1",
+        "recurring": {
+          "interval": "month",
+          "interval_count": 1
+        },
+        "metadata": {
+          "app": "serviceclerk",
+          "role": "core",
+          "tier": "pro",
+          "founding": "true",
+          "release": "pro"
+        }
+      }
+    },
+    {
+      "name": "price_founder_pro_year_v1",
+      "path": "/v1/prices",
+      "method": "post",
+      "params": {
+        "product": "${product_core_pro:id}",
+        "currency": "usd",
+        "unit_amount": 39000,
+        "tax_behavior": "exclusive",
+        "lookup_key": "founder_pro_year_v1",
+        "transfer_lookup_key": true,
+        "nickname": "founder_pro_year_v1",
+        "recurring": {
+          "interval": "year",
+          "interval_count": 1
+        },
+        "metadata": {
+          "app": "serviceclerk",
+          "role": "core",
+          "tier": "pro",
+          "founding": "true",
+          "release": "pro"
+        }
+      }
+    },
+    {
+      "name": "price_ai_1000_credits_v1",
+      "path": "/v1/prices",
+      "method": "post",
+      "params": {
+        "product": "${product_ai_credits:id}",
+        "currency": "usd",
+        "unit_amount": 1000,
+        "tax_behavior": "exclusive",
+        "lookup_key": "ai_1000_credits_v1",
+        "transfer_lookup_key": true,
+        "nickname": "ai_1000_credits_v1",
+        "metadata": {
+          "app": "serviceclerk",
+          "role": "ai_topup",
+          "credits": "1000",
+          "release": "ai_credits"
+        }
+      }
+    },
+    {
+      "name": "portal_configuration",
+      "path": "/v1/billing_portal/configurations",
+      "method": "post",
+      "params": {
+        "name": "ServiceClerk membership v1",
+        "metadata": {
+          "app": "serviceclerk",
+          "portal": "membership_v1"
+        },
+        "features": {
+          "customer_update": {
+            "enabled": true,
+            "allowed_updates": [
+              "email",
+              "address",
+              "name",
+              "tax_id"
+            ]
+          },
+          "invoice_history": {
+            "enabled": true
+          },
+          "payment_method_update": {
+            "enabled": true
+          },
+          "subscription_cancel": {
+            "enabled": true,
+            "mode": "at_period_end",
+            "proration_behavior": "none",
+            "cancellation_reason": {
+              "enabled": true,
+              "options": [
+                "too_expensive",
+                "missing_features",
+                "switched_service",
+                "unused",
+                "other"
+              ]
+            }
+          },
+          "subscription_update": {
+            "enabled": false
+          }
+        }
+      }
+    }
+  ]
+}

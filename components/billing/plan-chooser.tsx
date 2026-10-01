@@ -1,0 +1,40 @@
+import { PlanPicker } from "@/components/billing/plan-picker";
+import type { Access } from "@/lib/membership/access";
+import { pickerPricing } from "@/lib/membership/bill";
+import { nextConfig } from "@/lib/membership/changes";
+
+/**
+ * The picker, set up for this shop: a Free shop goes to checkout; a paying
+ * shop previews and confirms a change to what it already has (Billing §5.2).
+ * Shared by `/upgrade` and `/account/billing/plan` so the two can't disagree.
+ */
+export async function PlanChooser({
+  organizationId,
+  access,
+  returnPath,
+}: {
+  organizationId: string;
+  access: Access;
+  returnPath?: string;
+}) {
+  const pricing = await pickerPricing(organizationId);
+  const paying = access.subscriptionId !== null && ["paid", "grace", "restricted"].includes(access.standing);
+
+  if (!paying) {
+    return <PlanPicker pricing={pricing} mode={{ kind: "checkout", returnPath }} />;
+  }
+
+  return (
+    <PlanPicker
+      pricing={pricing}
+      mode={{
+        kind: "change",
+        current: nextConfig(access),
+        canChange: access.canChangePlan,
+        blockedReason: access.pending
+          ? "A change is waiting for payment"
+          : "Settle your renewal first",
+      }}
+    />
+  );
+}

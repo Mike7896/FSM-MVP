@@ -1,0 +1,27 @@
+name: Check release version
+on:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: read
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check tag and package versions
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import fs from 'node:fs';
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          const lock = JSON.parse(fs.readFileSync('package-lock.json', 'utf8'));
+          assert.match(pkg.version, /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/);
+          assert.equal(process.env.GITHUB_REF_NAME, `v${pkg.version}`);
+          assert.equal(lock.version, pkg.version);
+          assert.equal(lock.packages[''].version, pkg.version);
+          console.log(`Release ${pkg.version} matches the package and lockfile.`);
+          NODE

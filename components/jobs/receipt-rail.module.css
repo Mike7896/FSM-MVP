@@ -1,0 +1,38 @@
+.trigger {
+  display: block;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  filter: drop-shadow(0 2px 2px rgb(0 0 0 / 12%));
+  transition: filter 150ms ease;
+}
+
+.trigger:hover {
+  filter: drop-shadow(0 4px 4px rgb(0 0 0 / 20%));
+}
+
+.trigger:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 4px;
+}
+
+.paper {
+  display: flex;
+  flex-direction: column;
+  height: 288px;
+  padding: 22px 15px;
+  background: #f8f5ec;
+  color: #38342d;
+  font-family: var(--font-mono, monospace);
+  clip-path: polygon(
+    0 5px, 5% 0, 10% 5px, 15% 0, 20% 5px, 25% 0,
+    30% 5px, 35% 0, 40% 5px, 45% 0, 50% 5px, 55% 0,
+    60% 5px, 65% 0, 70% 5px, 75% 0, 80% 5px, 85% 0,
+    90% 5px, 95% 0, 100% 5px,
+    100% 100%, 95% calc(100% - 5px), 90% 100%, 85% calc(100% - 5px),
+    80% 100%, 75% calc(100% - 5px), 70% 100%, 65% calc(100% - 5px),
+    60% 100%, 55% calc(100% - 5px), 50% 100%, 45% calc(100% - 5px),
+    40% 100%, 35% calc(100% - 5px), 30% 100%, 25% calc(100% - 5px),
+    20% 100%, 15% calc(100% - 5px), 10% 100%, 5% calc(100% - 5px), 0 100%
+  );
+}
