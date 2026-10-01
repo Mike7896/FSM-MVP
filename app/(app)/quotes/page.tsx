@@ -203,7 +203,7 @@ export default async function QuotesPage({
           </EmptyContent>
         </Empty>
       ) : asList ? (
-        <div className="overflow-x-auto rounded-xl border">
+        <div className="overflow-x-auto rounded-xl border bg-card">
           {/* The primitive's cells are p-2, which puts text 8px off the frame
               and makes a fifty-row table unreadable. */}
           <Table className="[&_td]:px-4 [&_td]:py-3.5 [&_th]:h-11 [&_th]:px-4">

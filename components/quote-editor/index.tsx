@@ -403,9 +403,10 @@ export function QuoteEditor({
 
         <div
           // A tinted ground under the section cards, so each one has an edge.
-          // Five sections sharing one background read as one long form.
+          // Five sections sharing one background read as one long form. In
+          // dark the cards carry their own fill, so the ground is the page's.
           className={cn(
-            "bg-muted/30 flex-1",
+            "bg-muted/30 dark:bg-transparent flex-1",
             singleColumn ? "flex flex-col" : "grid"
           )}
           style={

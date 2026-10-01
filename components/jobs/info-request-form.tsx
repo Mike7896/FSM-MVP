@@ -40,7 +40,7 @@ export function InfoRequestForm({ quoteId, customerEmail, emailEnabled, history 
         <div className="grid gap-2"><Label htmlFor="request-note">Anything else</Label><Textarea id="request-note" name="note" maxLength={2000} /></div>
       </fieldset>
       <fieldset disabled={busy} className="space-y-3">
-        <Label htmlFor="request-channel">Delivery</Label><select id="request-channel" name="channel" className="block rounded-md border bg-background p-2" defaultValue={emailEnabled && customerEmail ? "email" : "link"}><option value="link">Get a link to share</option>{emailEnabled && <option value="email">Send by email</option>}</select>
+        <Label htmlFor="request-channel">Delivery</Label><select id="request-channel" name="channel" className="block rounded-md border border-input bg-background p-2" defaultValue={emailEnabled && customerEmail ? "email" : "link"}><option value="link">Get a link to share</option>{emailEnabled && <option value="email">Send by email</option>}</select>
         {emailEnabled && <div className="grid gap-2"><Label htmlFor="request-to">Customer email (for email delivery)</Label><Input id="request-to" type="email" name="to" defaultValue={customerEmail} /></div>}
         {!result?.emailed && <Button type="submit">{busy ? "Saving…" : result ? "Retry delivery" : "Send request"}</Button>}
       </fieldset>

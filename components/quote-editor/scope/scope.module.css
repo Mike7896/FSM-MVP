@@ -41,7 +41,7 @@
 .description {
   min-height: 36px;
   padding: 7px 9px;
-  border-color: color-mix(in srgb, var(--border) 65%, transparent);
+  border-color: var(--input);
   background: var(--background);
   color: var(--foreground);
   box-shadow: none;
@@ -56,7 +56,7 @@
 .pricingControls { display: flex; align-items: end; flex-wrap: wrap; gap: 12px; }
 .control { display: flex; flex-direction: column; gap: 5px; }
 .control > span { font-size: 10px; font-weight: 500; color: var(--muted-foreground); }
-.control input { height: 31px; background: var(--background); border-color: var(--border); box-shadow: none; }
+.control input { height: 31px; background: var(--background); border-color: var(--input); box-shadow: none; }
 .costControls { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; min-height: 31px; border-left: 1px solid var(--border); padding-left: 12px; }
 .costFields { display: grid; grid-template-columns: repeat(auto-fit, minmax(135px, 1fr)); gap: 16px; margin: 0 18px 18px; padding: 16px; border: 1px dashed var(--border); background: var(--muted); border-radius: 8px; }
 .textRun { background: color-mix(in srgb, var(--muted) 45%, var(--background)); border-radius: 9px; }

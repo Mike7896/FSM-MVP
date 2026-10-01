@@ -431,7 +431,7 @@ export function TagFilters({
   }
   return (
     <div
-      className="flex flex-wrap items-center gap-2 rounded-xl border bg-card/60 p-3"
+      className="flex flex-wrap items-center gap-2 rounded-xl border bg-card p-3"
       aria-busy={pending}
     >
       <Popover>
@@ -489,7 +489,7 @@ export function TagFilters({
         disabled={pending}
         value={mode}
         onChange={(e) => update(ids, e.target.value)}
-        className="h-8 rounded-md border bg-background px-2 text-xs"
+        className="h-8 rounded-md border border-input bg-card px-2 text-xs"
       >
         <option value="any">Match any tag</option>
         <option value="all">Match all tags</option>

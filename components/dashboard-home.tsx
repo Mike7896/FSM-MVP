@@ -58,7 +58,7 @@ export function DashboardContent({ data, businessName, license, start, refreshFa
   if (!hasActions && data.thisWeek.length === 0 && waiting.length === 0 && start.realQuotes === 0 && !demo) {
     return (
       <div className="mx-auto w-full max-w-3xl py-6 md:py-12">
-        <div className="rounded-2xl border bg-muted/25 p-6 sm:p-10">
+        <div className="rounded-2xl border bg-muted/25 p-6 sm:p-10 dark:bg-card">
           <p className="text-muted-foreground text-xs font-medium tracking-wide">{businessName || "Your daily briefing"}</p>
           <h1 className="font-heading mt-5 text-3xl font-semibold tracking-tight sm:text-4xl">Your next job starts here.</h1>
           <p className="text-muted-foreground mt-4 max-w-lg text-base leading-relaxed">Start with a quote. As work comes in, this space brings together your appointments, customer follow-ups and money ready to collect.</p>
@@ -109,7 +109,7 @@ export function DashboardContent({ data, businessName, license, start, refreshFa
               </div>
             </section>
           ) : (
-            <section className="relative overflow-hidden rounded-2xl border bg-muted/25 p-6 sm:p-8">
+            <section className="relative overflow-hidden rounded-2xl border bg-muted/25 p-6 sm:p-8 dark:bg-card">
               <div className="bg-background mb-7 inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium">
                 <Check className="size-3.5" /> No outstanding actions in this briefing
               </div>
@@ -123,7 +123,7 @@ export function DashboardContent({ data, businessName, license, start, refreshFa
               </div>
             </section>
           )}
-          {waiting.length > 0 ? <section className="rounded-2xl border px-5 sm:px-6"><ActionGroup title="With your customers" detail="Recently sent or viewed. No follow-up suggested yet." rows={waiting} /></section> : null}
+          {waiting.length > 0 ? <section className="rounded-2xl border bg-card px-5 sm:px-6"><ActionGroup title="With your customers" detail="Recently sent or viewed. No follow-up suggested yet." rows={waiting} /></section> : null}
         </div>
 
         <aside className="order-first min-w-0 rounded-2xl border bg-card xl:order-last" aria-label="Your schedule">
@@ -155,7 +155,7 @@ export function DashboardContent({ data, businessName, license, start, refreshFa
           </div>
           <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
             {data.quickStart.map((item) => (
-              <Link key={item.id} href={item.href} className="group hover:border-primary/50 focus-visible:ring-ring flex min-w-0 items-center gap-5 rounded-xl border bg-muted/20 p-5 transition-colors focus-visible:ring-2">
+              <Link key={item.id} href={item.href} className="group hover:border-primary/50 focus-visible:ring-ring flex min-w-0 items-center gap-5 rounded-xl border bg-muted/20 p-5 transition-colors focus-visible:ring-2 dark:bg-card">
                 <div aria-hidden className="document-paper pointer-events-none w-20 shrink-0 overflow-hidden bg-white shadow-sm ring-1 ring-paper-edge sm:w-24">
                   <DocumentThumbnail businessName={businessName} license={license} customerName={item.customerName} title={item.title} number={item.number} rows={item.rows} totalCents={item.totalCents} />
                 </div>

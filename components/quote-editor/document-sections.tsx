@@ -560,7 +560,7 @@ function CollapsedRow({
     </div>
   );
 
-  const frame = "bg-background w-full scroll-mt-20 rounded-xl border";
+  const frame = "bg-card w-full scroll-mt-20 rounded-xl border";
 
   if (!onClick) {
     return (
@@ -575,7 +575,7 @@ function CollapsedRow({
       type="button"
       data-tour={`quote.${id}`}
       onClick={onClick}
-      className={cn(frame, "hover:bg-muted/50 transition-colors")}
+      className={cn(frame, "hover:bg-muted/50 dark:hover:bg-muted transition-colors")}
     >
       {content}
     </button>

@@ -80,9 +80,9 @@ export default async function EventsPage({ searchParams }: PageProps<"/admin/eve
           defaultValue={q}
           aria-label="Search the log"
           placeholder="Search titles and businesses"
-          className="bg-background h-8 min-w-56 rounded-md border px-2.5"
+          className="bg-background h-8 min-w-56 rounded-md border border-input px-2.5"
         />
-        <select name="kind" defaultValue={kind} aria-label="Kind" className="bg-background h-8 rounded-md border px-2">
+        <select name="kind" defaultValue={kind} aria-label="Kind" className="bg-background h-8 rounded-md border border-input px-2">
           <option value="">Every kind</option>
           {kinds.map((entry) => (
             <option key={entry.kind} value={entry.kind}>
@@ -90,7 +90,7 @@ export default async function EventsPage({ searchParams }: PageProps<"/admin/eve
             </option>
           ))}
         </select>
-        <select name="level" defaultValue={level} aria-label="Level" className="bg-background h-8 rounded-md border px-2">
+        <select name="level" defaultValue={level} aria-label="Level" className="bg-background h-8 rounded-md border border-input px-2">
           <option value="">Every level</option>
           {LEVELS.map((entry) => (
             <option key={entry} value={entry}>

@@ -43,7 +43,7 @@ export function MarginCheck({ draft }: { draft: QuoteDraft }) {
   return (
     <div
       data-tour="quote.margin"
-      className="bg-background rounded-xl border border-dashed p-4"
+      className="bg-card rounded-xl border border-dashed p-4"
     >
       {/* Dashed, unnumbered and marked private, because this is the one panel
           in the rail that is not part of the document. The numbered cards

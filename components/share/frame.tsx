@@ -38,7 +38,10 @@ export function ShareBar({
   respond?: string | null;
 }) {
   return (
-    <header className="bg-background/95 supports-[backdrop-filter]:bg-background/80 sticky top-0 z-20 border-b backdrop-blur print:hidden">
+    // 90%, not 80%: in the dark theme the bar passes over white paper (all
+    // the time on a phone, where the sheet runs edge to edge), and at 80% the
+    // grey that made left the label under the name at 4.33:1.
+    <header className="bg-background/95 supports-[backdrop-filter]:bg-background/90 sticky top-0 z-20 border-b backdrop-blur print:hidden">
       <div className="mx-auto flex max-w-[calc(8.5in+3rem)] items-center justify-between gap-3 px-4 py-2.5 sm:px-6">
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold">
