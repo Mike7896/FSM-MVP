@@ -61,14 +61,14 @@ export function PlanComparison({
         </colgroup>
         <thead>
           <tr>
-            <th scope="col" className="bg-background md:sticky md:top-18 z-10 border-b py-3 text-left align-bottom">
+            <th scope="col" className="bg-card md:sticky md:top-18 z-10 border-b py-3 text-left align-bottom">
               <span className="sr-only">Feature</span>
             </th>
             {tiers.map((tier) => (
               <th
                 key={tier}
                 scope="col"
-                className="bg-background md:sticky md:top-18 z-10 border-b px-1 py-3 text-center align-bottom sm:px-3"
+                className="bg-card md:sticky md:top-18 z-10 border-b px-1 py-3 text-center align-bottom sm:px-3"
               >
                 <span className="block font-semibold">{TIER_LABEL[tier]}</span>
                 <span className="text-muted-foreground block text-xs font-normal tabular-nums">{price(tier)}</span>

@@ -220,7 +220,7 @@ export default async function QuotesPage({
             </TableHeader>
             <TableBody>
               {quotes.map((quote) => (
-                <TableRow key={quote.id}>
+                <TableRow key={quote.id} className="dark:hover:bg-muted">
                   <TableCell className="text-xs tabular-nums">
                     {quote.number}
                   </TableCell>

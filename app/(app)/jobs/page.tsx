@@ -75,7 +75,7 @@ export default async function JobsPage({
           aria-label="Search jobs"
           defaultValue={search ?? ""}
           placeholder="Customer, work, or address"
-          className="h-11 rounded-lg border-border/70 bg-card pl-9 shadow-none"
+          className="h-11 rounded-lg bg-card pl-9 shadow-none"
         />
       </form>
 

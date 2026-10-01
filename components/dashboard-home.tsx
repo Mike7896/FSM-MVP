@@ -110,7 +110,7 @@ export function DashboardContent({ data, businessName, license, start, refreshFa
             </section>
           ) : (
             <section className="relative overflow-hidden rounded-2xl border bg-muted/25 p-6 sm:p-8 dark:bg-card">
-              <div className="bg-background mb-7 inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium">
+              <div className="bg-background dark:bg-muted mb-7 inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium">
                 <Check className="size-3.5" /> No outstanding actions in this briefing
               </div>
               <div className="max-w-md">
