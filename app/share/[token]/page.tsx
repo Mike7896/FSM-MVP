@@ -123,7 +123,12 @@ export default async function SharePage({ params }: PageProps<"/share/[token]">)
     // **The desk, and the paper on it.** The page carries only what would
     // print; what she can do with it — approve, sign, pay, answer, ask for a
     // change — sits in panels under the sheet, never on it.
-    <div className="bg-muted/50 flex min-h-svh flex-col">
+    //
+    // The desk is DocumentDesk's, so she sees the page the contractor
+    // previewed: at /50 it was #fafbfc, and the white sheet barely lay on
+    // anything. The print reset is important so the dark desk can't outrank
+    // it on paper, and the column drops its padding there, as the desk does.
+    <div className="bg-muted dark:bg-muted/40 flex min-h-svh flex-col print:bg-transparent!">
       <ShareBar
         business={shared.office.businessName}
         label={paper.label}
@@ -133,9 +138,9 @@ export default async function SharePage({ params }: PageProps<"/share/[token]">)
         respond={respondLabel(shared)}
       />
 
-      <main className="mx-auto flex w-full max-w-[calc(8.5in+3rem)] flex-1 flex-col gap-5 pb-12 sm:px-6 sm:pt-8">
+      <main className="mx-auto flex w-full max-w-[calc(8.5in+3rem)] flex-1 flex-col gap-5 pb-12 sm:px-6 sm:pt-8 print:p-0">
         {requests.length > 0 ? (
-          <div className="mx-4 flex flex-col gap-4 pt-4 sm:mx-0 sm:pt-0">
+          <div className="mx-4 flex flex-col gap-4 pt-4 sm:mx-0 sm:pt-0 print:hidden">
             {requests.map((request) => (
               <InfoRequestReply key={request.id} token={token} request={request} />
             ))}
@@ -210,7 +215,7 @@ export default async function SharePage({ params }: PageProps<"/share/[token]">)
             {shared.contract ? (
               <a
                 href={shared.contract.url}
-                className="text-muted-foreground text-center text-xs underline underline-offset-4"
+                className="text-muted-foreground text-center text-xs underline underline-offset-4 print:hidden"
               >
                 Your signed contract · {shared.contract.number}
               </a>

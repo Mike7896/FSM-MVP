@@ -152,7 +152,7 @@ export function DefaultsForm({ defaults }: { defaults: OfficeDefaultsRow }) {
 
       <div className="grid min-w-0 items-start gap-6 @4xl/office:grid-cols-2">
         <div className="flex min-w-0 flex-col gap-6">
-      <section className="@container/defaults flex min-w-0 flex-col gap-6 rounded-xl border p-5 sm:p-6 [&_input]:h-10">
+      <section className="@container/defaults flex min-w-0 flex-col gap-6 rounded-xl border bg-card p-5 sm:p-6 [&_input]:h-10">
         <p className="text-base font-semibold tracking-tight">
           Money
         </p>
@@ -251,7 +251,7 @@ export function DefaultsForm({ defaults }: { defaults: OfficeDefaultsRow }) {
       {/* Draws — a pattern, not a schedule. There is no job behind it and no
           amounts in it, which is exactly why it can live in the Office at all:
           a Job's own draw schedule is where percentages meet a price. */}
-      <section className="@container/defaults flex min-w-0 flex-col gap-6 rounded-xl border p-5 sm:p-6 [&_input]:h-10">
+      <section className="@container/defaults flex min-w-0 flex-col gap-6 rounded-xl border bg-card p-5 sm:p-6 [&_input]:h-10">
         <div>
           <p className="text-base font-semibold tracking-tight">
             Draws
@@ -333,7 +333,7 @@ export function DefaultsForm({ defaults }: { defaults: OfficeDefaultsRow }) {
         </div>
 
         <div className="flex min-w-0 flex-col gap-6">
-      <section className="@container/defaults flex min-w-0 flex-col gap-6 rounded-xl border p-5 sm:p-6 [&_input]:h-10">
+      <section className="@container/defaults flex min-w-0 flex-col gap-6 rounded-xl border bg-card p-5 sm:p-6 [&_input]:h-10">
         <div>
           <p className="text-base font-semibold tracking-tight">
             What you say on every quote
@@ -372,7 +372,7 @@ export function DefaultsForm({ defaults }: { defaults: OfficeDefaultsRow }) {
         </div>
       </section>
 
-      <section className="@container/defaults flex min-w-0 flex-col gap-6 rounded-xl border p-5 sm:p-6 [&_input]:h-10">
+      <section className="@container/defaults flex min-w-0 flex-col gap-6 rounded-xl border bg-card p-5 sm:p-6 [&_input]:h-10">
         <div>
           <p className="text-base font-semibold tracking-tight">
             Terms

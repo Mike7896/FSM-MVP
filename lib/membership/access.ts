@@ -1,7 +1,7 @@
 import "server-only";
 
 import { cache } from "react";
-import { and, eq } from "drizzle-orm";
+import { and, eq, gte, isNull, or, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import {
@@ -275,7 +275,8 @@ export async function loadAccessInput(
       .select({ packId: packEnablement.packId, enabled: packEnablement.enabled })
       .from(packEnablement)
       .where(eq(packEnablement.organizationId, organizationId)),
-    // A complimentary plan is set on the owner, from the admin panel.
+    // A complimentary plan is set on the owner, from the admin panel — for
+    // good, or free until a date (the last day it counts).
     on
       .select({ compPlan: accountPolicies.compPlan })
       .from(memberships)
@@ -284,7 +285,8 @@ export async function loadAccessInput(
         and(
           eq(memberships.organizationId, organizationId),
           eq(memberships.role, "owner"),
-          eq(accountPolicies.compPlan, true)
+          eq(accountPolicies.compPlan, true),
+          or(isNull(accountPolicies.accessUntil), gte(accountPolicies.accessUntil, sql`current_date`))
         )
       )
       .limit(1),

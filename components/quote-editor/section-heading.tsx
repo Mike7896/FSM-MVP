@@ -125,7 +125,7 @@ export function EditorCard({
       data-tour={tour}
       aria-labelledby={labelId}
       aria-label={labelId ? undefined : label}
-      className={cn("bg-background scroll-mt-20 rounded-xl border", className)}
+      className={cn("bg-card scroll-mt-20 rounded-xl border", className)}
     >
       <div className={cn("bg-muted/40 rounded-t-xl border-b py-3", SECTION_PAD)}>
         <CardHeading label={label} hint={hint} aside={aside} labelId={labelId} />

@@ -130,7 +130,7 @@ export function NotificationTable({
   return (
     <div className="flex flex-col gap-4">
       {/* Which, and where. */}
-      <div className="overflow-hidden rounded-lg border">
+      <div className="overflow-hidden rounded-lg border bg-card">
         <div className="text-muted-foreground grid grid-cols-[minmax(0,1fr)_repeat(3,3.25rem)] items-end gap-1.5 border-b px-4 sm:grid-cols-[minmax(0,1fr)_repeat(3,5.5rem)] sm:gap-2 sm:px-5 py-2.5 font-label text-[10px] uppercase">
           <span>When…</span>
           {COLUMNS.map((column) => (
@@ -416,7 +416,7 @@ function Card({
   children: React.ReactNode;
 }) {
   return (
-    <section className="flex flex-col rounded-lg border p-5">
+    <section className="flex flex-col rounded-lg border bg-card p-5">
       <div className="mb-4">
         <div className="flex items-center gap-2">
           <h3 className="text-sm font-semibold">{title}</h3>

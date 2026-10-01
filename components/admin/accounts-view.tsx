@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Check, Copy, FlaskConical, Loader2, Search, ShieldCheck, UserPlus } from "lucide-react";
+import { Check, Copy, FlaskConical, Loader2, Mail, Search, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -15,8 +15,11 @@ import { Textarea } from "@/components/ui/textarea";
 import type { AccountFilter, AccountRow } from "@/lib/admin/accounts";
 import { cn } from "@/lib/utils";
 
+import { InviteDialog } from "./invite-dialog";
+
 /**
- * Accounts — every person with a sign-in, and the door to making a test one.
+ * Accounts — every person with a sign-in, and the doors to inviting a real one
+ * or making a test one.
  *
  * Filters and the search live in the address, so "all testers" is a link.
  */
@@ -25,6 +28,7 @@ const FILTERS: { filter: AccountFilter; label: string }[] = [
   { filter: "all", label: "Everyone" },
   { filter: "admins", label: "Admins" },
   { filter: "testers", label: "Testers" },
+  { filter: "invited", label: "Invited" },
   { filter: "suspended", label: "Suspended" },
 ];
 
@@ -34,6 +38,7 @@ export function AccountsView({ accounts, filter, q }: { accounts: AccountRow[]; 
   const params = useSearchParams();
   const [typed, setTyped] = useState(q);
   const [creating, setCreating] = useState(false);
+  const [inviting, setInviting] = useState(false);
 
   function go(next: { filter?: AccountFilter; q?: string }) {
     const search = new URLSearchParams(params);
@@ -53,9 +58,13 @@ export function AccountsView({ accounts, filter, q }: { accounts: AccountRow[]; 
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="text-xl font-semibold tracking-tight">Accounts</h1>
         <span className="text-muted-foreground text-sm">{accounts.length} shown</span>
-        <Button className="ml-auto" size="sm" onClick={() => setCreating(true)}>
-          <UserPlus className="size-4" />
+        <Button className="ml-auto" size="sm" variant="outline" onClick={() => setCreating(true)}>
+          <FlaskConical className="size-4" />
           Create test account
+        </Button>
+        <Button size="sm" onClick={() => setInviting(true)}>
+          <Mail className="size-4" />
+          Invite someone
         </Button>
       </div>
 
@@ -123,7 +132,7 @@ export function AccountsView({ accounts, filter, q }: { accounts: AccountRow[]; 
                     {account.businesses.length ? account.businesses.map((business) => business.name || "Unnamed").join(", ") : <span className="text-muted-foreground">None yet</span>}
                   </td>
                   <td className="px-3 py-2 text-xs whitespace-nowrap">
-                    {account.policy?.compPlan ? "Complimentary" : (account.plan ?? <span className="text-muted-foreground">Free</span>)}
+                    {planLabel(account) ?? <span className="text-muted-foreground">Free</span>}
                   </td>
                   <td className="px-3 py-2">
                     <Badges account={account} />
@@ -139,6 +148,7 @@ export function AccountsView({ accounts, filter, q }: { accounts: AccountRow[]; 
       </div>
 
       {creating ? <CreateTestAccount onClose={() => setCreating(false)} onCreated={() => router.refresh()} /> : null}
+      {inviting ? <InviteDialog onClose={() => setInviting(false)} onInvited={() => router.refresh()} /> : null}
     </div>
   );
 }
@@ -149,11 +159,14 @@ export function Badges({ account }: { account: AccountRow }) {
     <span className="flex flex-wrap gap-1">
       {account.owner ? <Badge tone="violet">Owner</Badge> : account.admin ? <Badge tone="violet">Admin</Badge> : null}
       {account.policy?.kind === "tester" ? <Badge tone="sky">Tester{account.policy.accessUntil ? ` · to ${account.policy.accessUntil}` : ""}</Badge> : null}
+      {account.founding ? <Badge tone="amber">Founding</Badge> : null}
+      {inviteStatus(account) === "pending" ? <Badge tone="muted">Invited · not accepted</Badge> : null}
+      {inviteStatus(account) === "expired" ? <Badge tone="red">Invite expired</Badge> : null}
       {account.policy?.dailySendLimit !== null && account.policy?.dailySendLimit !== undefined ? (
         <Badge tone="muted">{account.policy.dailySendLimit}/day</Badge>
       ) : null}
       {suspended ? <Badge tone="red">Suspended</Badge> : null}
-      {!account.confirmedAt ? <Badge tone="amber">Email unconfirmed</Badge> : null}
+      {!account.confirmedAt ? <Badge tone="muted">Email unconfirmed</Badge> : null}
     </span>
   );
 }
@@ -178,6 +191,24 @@ function Badge({ tone, children }: { tone: "violet" | "sky" | "red" | "amber" | 
 function providers(account: AccountRow) {
   const names = account.providers.map((provider) => (provider === "email" ? "Email + password" : provider === "google" ? "Google" : provider));
   return names.length ? names.join(" · ") : "—";
+}
+
+/** An invite nobody has used yet — still good, or run out. */
+export function inviteStatus(account: AccountRow): "pending" | "expired" | "accepted" | null {
+  if (!account.invite) return null;
+  if (account.invite.acceptedAt || account.lastSignInAt) return "accepted";
+  return new Date(account.invite.expiresAt) > new Date() ? "pending" : "expired";
+}
+
+/** What they're on: a complimentary plan (and until when), else the subscription's state. */
+export function planLabel(account: AccountRow) {
+  if (account.policy?.compPlan) {
+    const until = account.policy.accessUntil;
+    if (!until) return "Complimentary";
+    const today = new Date().toLocaleDateString("en-CA");
+    return until >= today ? `Free until ${short(`${until}T12:00:00`)}` : (account.plan ?? `Free ended ${short(`${until}T12:00:00`)}`);
+  }
+  return account.plan;
 }
 
 export function short(value: string | null) {

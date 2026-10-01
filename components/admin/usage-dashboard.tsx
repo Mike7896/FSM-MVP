@@ -9,7 +9,7 @@ import { defaultProviders, headroom, providerUsageSchema, type SavedProvider, ty
 
 const number = (v: number) => new Intl.NumberFormat("en", { maximumFractionDigits: 2 }).format(v);
 const money = (v: number, currency: string) => new Intl.NumberFormat("en", { style: "currency", currency }).format(v);
-const inputClass = "bg-background w-full min-w-0 rounded-md border px-3 py-2 text-sm";
+const inputClass = "bg-popover w-full min-w-0 rounded-md border border-input px-3 py-2 text-sm";
 const billingLinks: Record<string, string> = { vercel: "https://vercel.com/dashboard", supabase: "https://supabase.com/dashboard", resend: "https://resend.com/overview" };
 
 function Meter({ metric, factor = 1, unlimited = false }: { metric: UsageMetric; factor?: number; unlimited?: boolean }) {

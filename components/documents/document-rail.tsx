@@ -36,7 +36,7 @@ export function DocumentRail({
   return (
     /* Negative margin so the rail bleeds to the edge of the content region:
        a scroll area that stops short of the edge looks like it has ended. */
-    <div className="-mx-1 overflow-x-auto px-1 pb-2">
+    <div className="-mx-2 overflow-x-auto px-2 pb-3">
       <ol className="flex w-max items-start gap-3">
         {documents.map((document) => (
           <li key={`${document.kind}-${document.id}`} className="w-[168px] shrink-0">
@@ -45,7 +45,7 @@ export function DocumentRail({
               <span className="text-muted-foreground font-label text-[10px] uppercase">
                 {document.documentType}
               </span>
-              <span className="text-muted-foreground/70 text-[10px] tabular-nums">
+              <span className="text-muted-foreground text-[10px] tabular-nums">
                 {when(document.at)}
               </span>
             </div>

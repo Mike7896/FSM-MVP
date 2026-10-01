@@ -22,7 +22,14 @@ import { getReleases } from "./releases";
  */
 
 export type FoundingOffer =
-  | { eligible: true; retained: boolean; remaining: number | null; closesAt: Date | null }
+  | {
+      eligible: true;
+      retained: boolean;
+      remaining: number | null;
+      closesAt: Date | null;
+      /** Promised by an admin on invite: open or not, full or not, it's theirs. */
+      guaranteed?: boolean;
+    }
   | { eligible: false; reason: "off" | "closed" | "full" | "reversed" | "lapsed" };
 
 async function seatsTaken(now: Date, excludingOrganizationId?: string) {
@@ -65,6 +72,13 @@ export async function foundingOfferFor(
     }
   }
 
+  // Invited as a founding member: the promise was made to them by name, so it
+  // doesn't wait on the public offer's switch, window or count. They still
+  // take a seat when they pay.
+  if (organizationId && (await foundingGuaranteed(organizationId))) {
+    return { eligible: true, retained: false, remaining: null, closesAt: null, guaranteed: true };
+  }
+
   const releases = await getReleases();
   if (!releases.founding_offer || !releases.foundingLaunchAt) {
     return { eligible: false, reason: "off" };
@@ -86,13 +100,25 @@ export async function foundingOfferFor(
   };
 }
 
+/** The shop's owner was given founding pricing from the admin panel (an invite, or their account page). */
+async function foundingGuaranteed(organizationId: string) {
+  const [row] = await db.execute<{ yes: boolean }>(sql`
+    select exists (
+      select 1 from memberships m join auth.users u on u.id = m.user_id
+      where m.organization_id = ${organizationId} and m.role = 'owner'
+        and coalesce((u.raw_app_meta_data ->> 'founding_member')::boolean, false)
+    ) as yes
+  `);
+  return Boolean(row?.yes);
+}
+
 /**
  * Holds a founding seat for one checkout. Under a lock, so the count it checks
  * is the count it writes against. Returns false when the offer closed or
  * filled in the meantime — the caller then checks out at public prices after
  * telling the shop.
  */
-export async function holdFoundingSeat(organizationId: string, now = new Date()) {
+export async function holdFoundingSeat(organizationId: string, now = new Date(), { guaranteed = false } = {}) {
   return db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended('founding-seats', 7))`);
 
@@ -108,7 +134,7 @@ export async function holdFoundingSeat(organizationId: string, now = new Date())
           ne(billingAccounts.organizationId, organizationId)
         )
       );
-    if ((row?.n ?? 0) >= POLICY.foundingCap) return false;
+    if (!guaranteed && (row?.n ?? 0) >= POLICY.foundingCap) return false;
 
     const holdUntil = new Date(now.getTime() + POLICY.foundingHoldMinutes * 60_000);
     await tx

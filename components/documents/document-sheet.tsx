@@ -47,15 +47,19 @@ export function DocumentSheet({
         // width — the miniature is narrow on a wide screen.
         "document-paper @container mx-auto flex w-full flex-col",
         // A hairline and a whisper of shadow: enough to read as a sheet lying
-        // on the desk behind it, not enough to read as a card in an app.
-        "border-paper-rule border shadow-[0_1px_3px_rgb(22_32_42/0.08)]",
+        // on the desk behind it, not enough to read as a card in an app. The
+        // hairline is the paper's edge, not its rule — the rule's #e3e3e3
+        // all but vanished into the desk in the light theme.
+        "border-paper-edge border shadow-[0_1px_3px_rgb(22_32_42/0.12)]",
         size === "page"
           ? // 8.5in × 11in, one-inch margins — and on a phone, where an inch
             // of margin is a third of the screen, the page keeps its
             // proportions but not its indulgence. Nor its length: eleven
             // inches of a four-line quote on a phone is a screen and a half
             // of blank paper between her and the button under it.
-            "w-[8.5in] max-w-full p-7 sm:min-h-[11in] sm:p-[1in]"
+            // Edge to edge on a phone, where side borders would only draw
+            // lines down the screen's own edges.
+            "w-[8.5in] max-w-full p-7 max-sm:border-x-0 sm:min-h-[11in] sm:p-[1in]"
           : // The same page at side-column width: Letter's shape, Letter's
             // margin ratio, and type scaled with it so the measure still
             // reads. `aspect-ratio` holds the page's shape while the document
@@ -105,8 +109,12 @@ export function DocumentDesk({
   return (
     <div
       className={cn(
-        "bg-muted/40 flex justify-center px-0 py-0 sm:px-6 sm:py-8",
-        "print:bg-transparent print:p-0",
+        // The full muted step in light: at 40% the desk was #fbfbfc, too
+        // close to white to be the contrast this is here for. Dark paper
+        // needs no help.
+        "bg-muted dark:bg-muted/40 flex justify-center px-0 py-0 sm:px-6 sm:py-8",
+        // Important, so the dark theme's desk can't outrank it on paper.
+        "print:bg-transparent! print:p-0",
         className
       )}
     >

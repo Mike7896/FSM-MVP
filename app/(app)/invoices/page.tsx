@@ -98,7 +98,7 @@ export default async function InvoicesPage() {
           </EmptyContent>
         </Empty>
       ) : (
-        <div className="overflow-x-auto rounded-lg border">
+        <div className="overflow-x-auto rounded-lg border bg-card">
           <Table>
             <TableHeader>
               <TableRow>

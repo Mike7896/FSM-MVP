@@ -81,7 +81,10 @@ export function ThemePicker() {
       {OPTIONS.map((option) => (
         <Label
           key={option.value}
-          className="hover:bg-muted/50 flex cursor-pointer items-start gap-3 rounded-lg border p-4 font-normal"
+          // A card's fill in dark, where an outline alone barely leaves the
+          // page. The hover is full strength there: a 50% tint replaces the
+          // fill and lands on the page, darker than the card it should lift.
+          className="bg-card hover:bg-muted/50 dark:hover:bg-muted flex cursor-pointer items-start gap-3 rounded-lg border p-4 font-normal"
         >
           <RadioGroupItem value={option.value} className="mt-0.5" />
           <option.icon className="text-muted-foreground mt-0.5 size-4 shrink-0" />

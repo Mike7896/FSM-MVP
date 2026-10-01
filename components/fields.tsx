@@ -40,9 +40,9 @@ export function EditableText({
     <Input
       {...props}
       className={cn(
-        "h-auto min-h-10 rounded-lg border border-input bg-muted/25 px-3 py-2 shadow-none dark:bg-input/30",
-        "transition-colors hover:border-muted-foreground/60 hover:bg-muted/40",
-        "focus-visible:bg-background focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 dark:focus-visible:bg-input/40",
+        "h-auto min-h-10 rounded-lg border border-input bg-muted/25 px-3 py-2 shadow-none dark:bg-input/12",
+        "transition-colors hover:border-muted-foreground hover:bg-muted/40",
+        "focus-visible:bg-background focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 dark:focus-visible:bg-input/15",
         tone === "title" && "text-base font-semibold @lg:text-lg",
         tone === "body" && "text-sm md:text-sm",
         tone === "muted" && "text-muted-foreground text-sm md:text-sm",
@@ -64,9 +64,9 @@ export function EditableParagraph({
     <Textarea
       {...props}
       className={cn(
-        "min-h-20 resize-y rounded-lg border border-input bg-muted/25 px-3 py-2.5 shadow-none dark:bg-input/30",
-        "leading-relaxed transition-colors hover:border-muted-foreground/60 hover:bg-muted/40",
-        "focus-visible:bg-background focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 dark:focus-visible:bg-input/40",
+        "min-h-20 resize-y rounded-lg border border-input bg-muted/25 px-3 py-2.5 shadow-none dark:bg-input/12",
+        "leading-relaxed transition-colors hover:border-muted-foreground hover:bg-muted/40",
+        "focus-visible:bg-background focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 dark:focus-visible:bg-input/15",
         tone === "body" && "text-sm md:text-sm",
         tone === "muted" && "text-muted-foreground text-sm md:text-sm",
         className,

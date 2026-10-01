@@ -105,7 +105,7 @@ export function IdentityForm({
       {/* Use the panel's width: the app and Office sidebars also take space. */}
       <div className="grid min-w-0 gap-6 @4xl/identity:grid-cols-[minmax(0,1fr)_480px]">
         <div className="@container/fields flex min-w-0 flex-col gap-5">
-          <div className="flex flex-col gap-6 rounded-xl border p-5 sm:p-6 [&_input]:h-10">
+          <div className="flex flex-col gap-6 rounded-xl border bg-card p-5 sm:p-6 [&_input]:h-10">
             <div className="grid gap-2">
               <Label htmlFor="name">Business name</Label>
               <Input id="name" {...form.register("name")} />
@@ -166,7 +166,7 @@ export function IdentityForm({
               placement belong to other pages in the Office, so they are links
               carrying their live value rather than duplicated controls — the
               header preview is where they visibly converge. */}
-          <div className="rounded-xl border">
+          <div className="rounded-xl border bg-card">
             <p className="text-muted-foreground border-b px-5 py-4 text-sm font-semibold">
               What else goes in the header
             </p>

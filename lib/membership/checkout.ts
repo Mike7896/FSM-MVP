@@ -81,7 +81,7 @@ async function startCheckoutLocked(request: CheckoutRequest) {
   const offer = await foundingOfferFor(organizationId, now);
   let founding = offer.eligible;
   if (offer.eligible && !offer.retained) {
-    founding = await holdFoundingSeat(organizationId, now);
+    founding = await holdFoundingSeat(organizationId, now, { guaranteed: offer.guaranteed });
     if (!founding) throw new DomainError("The founding offer has filled since you viewed it. Review the current price before continuing.", "conflict");
   }
 

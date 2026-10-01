@@ -117,7 +117,7 @@ export function ReleaseNotesNews() {
   return (
     <Link
       href={RELEASE_NOTES_ROUTE}
-      className="hover:bg-muted/50 flex items-center justify-between gap-3 rounded-lg border px-4 py-3 transition-colors"
+      className="bg-card hover:bg-muted/50 dark:hover:bg-muted flex items-center justify-between gap-3 rounded-lg border px-4 py-3 transition-colors"
     >
       <span className="min-w-0 text-sm">
         <span className="font-medium">{RELEASE_NOTES_TITLE}</span>

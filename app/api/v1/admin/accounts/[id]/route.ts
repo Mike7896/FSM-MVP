@@ -1,5 +1,6 @@
 import { requireAdminCaller } from "@/lib/admin/access";
 import { getAccount, updatePolicy } from "@/lib/admin/accounts";
+import { setFoundingMember } from "@/lib/admin/invites";
 import { accountId } from "@/lib/admin/ids";
 import { handlerWithParams, readJson } from "@/lib/api/handler";
 import { ApiError, noContent, ok } from "@/lib/api/response";
@@ -16,7 +17,8 @@ export const GET = handlerWithParams<{ id: string }>(async (request, { id }) => 
 
 export const PATCH = handlerWithParams<{ id: string }>(async (request, { id }) => {
   const admin = await requireAdminCaller(request);
-  const change = await readJson(request, updateAccountPolicySchema);
-  await updatePolicy(admin, accountId(id), change);
+  const { foundingMember, ...change } = await readJson(request, updateAccountPolicySchema);
+  if (foundingMember !== undefined) await setFoundingMember(admin, accountId(id), foundingMember);
+  if (Object.keys(change).length) await updatePolicy(admin, accountId(id), change);
   return noContent();
 });

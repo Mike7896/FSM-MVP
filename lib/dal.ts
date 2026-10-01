@@ -76,7 +76,9 @@ export async function signedInByEmailLinkRecently(accessToken?: string) {
   return amr.some(
     (entry) =>
       typeof entry === "object" &&
-      (entry.method === "otp" || entry.method === "recovery") &&
+      // An invite signs in with a one-off magic link, which may record either
+      // of its own names too.
+      ["otp", "recovery", "magiclink", "invite"].includes(entry.method) &&
       entry.timestamp >= cutoff
   );
 }
