@@ -42,6 +42,8 @@ export type IncomingScopeNode = {
   sellPriceCents: number;
   taxable: boolean;
   optional: boolean;
+  /** Groups and assemblies only. Absent or null follows the quote's setting. */
+  breakdown?: (typeof scopeNodes.breakdown.enumValues)[number] | null;
   position: number;
   source: (typeof scopeNodes.source.enumValues)[number];
 };
@@ -60,15 +62,24 @@ type Owner = { documentId: string; organizationId: string };
  * new rather than as an update that quietly matches nothing. That happens when
  * a quote was edited in two tabs, and the alternative is a row the contractor
  * can see that never reaches the database.
+ *
+ * **So is an id sent twice.** Only its first row keeps it; a second row
+ * claiming the same id would otherwise be written over the first, and one of
+ * the two rows the contractor can see would be gone from the database.
  */
 export function resolveScopeNodes(
   owner: Owner,
   nodes: IncomingScopeNode[],
   existing: Set<string>
 ): { rows: NewScopeNode[]; keep: string[] } {
-  const ids = nodes.map((node) =>
-    node.id && existing.has(node.id) ? node.id : randomUUID()
-  );
+  const claimed = new Set<string>();
+  const ids = nodes.map((node) => {
+    if (node.id && existing.has(node.id) && !claimed.has(node.id)) {
+      claimed.add(node.id);
+      return node.id;
+    }
+    return randomUUID();
+  });
 
   const keep: string[] = [];
 
@@ -87,6 +98,12 @@ export function resolveScopeNodes(
       nodeType: node.nodeType,
       section: node.section,
       optional: node.optional,
+      // Only a group or an assembly has rows inside to show or hide; the
+      // database refuses it anywhere else.
+      breakdown:
+        node.nodeType === "group" || node.nodeType === "assembly"
+          ? (node.breakdown ?? null)
+          : null,
       description: node.description,
       // `numeric` takes a string; a float is how a quantity ends up stored as
       // 2.0000000000000004.

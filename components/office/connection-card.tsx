@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useState, useTransition, type ReactNode } from "react";
 import { AlertTriangle, Check, ChevronDown, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -34,7 +34,14 @@ import { cn } from "@/lib/utils";
  * the contractor can take: `needs_reauth` asks them to reconnect, `degraded`
  * says we are retrying, `error` says it is ours.
  */
-export function ConnectionCard({ row }: { row: ConnectionRow }) {
+export function ConnectionCard({
+  row,
+  extra,
+}: {
+  row: ConnectionRow;
+  /** Something this connector needs said up front — what card payments cost. */
+  extra?: ReactNode;
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
@@ -152,6 +159,8 @@ export function ConnectionCard({ row }: { row: ConnectionRow }) {
         </div>
       </div>
 
+      {extra ? <div className="mt-4">{extra}</div> : null}
+
       {/* Before connecting, not after. */}
       <Collapsible open={open} onOpenChange={setOpen} className="mt-4">
         <CollapsibleTrigger className="text-muted-foreground hover:text-foreground flex items-center gap-1.5 text-xs">
@@ -201,9 +210,20 @@ function StatusBadge({ row }: { row: ConnectionRow }) {
     case "connected":
       return <Badge variant="secondary">Connected</Badge>;
     case "needs_reauth":
-      return <Badge>Needs reconnecting</Badge>;
+      // A hosted account was never connected — its setup is unfinished.
+      return (
+        <Badge>
+          {row.connector.handshake === "hosted"
+            ? "Setup not finished"
+            : "Needs reconnecting"}
+        </Badge>
+      );
     case "degraded":
-      return <Badge variant="outline">Retrying</Badge>;
+      return (
+        <Badge variant="outline">
+          {row.connector.handshake === "hosted" ? "Verifying" : "Retrying"}
+        </Badge>
+      );
     case "error":
       return <Badge variant="destructive">Not working</Badge>;
     case "revoked":

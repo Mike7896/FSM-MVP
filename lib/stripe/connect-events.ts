@@ -3,6 +3,7 @@ import "server-only";
 import type Stripe from "stripe";
 import { and, eq } from "drizzle-orm";
 
+import { refreshJobStatus } from "@/lib/billing/status";
 import { db } from "@/lib/db";
 import { connectedAccounts, documents, jobs } from "@/lib/db/schema";
 import { recordEntry, type PaymentMethod } from "@/lib/ledger";
@@ -174,6 +175,12 @@ export async function onChargeSucceeded(
       organizationId: context.organizationId,
       ledgerEntryId: payment.id,
     });
+  }
+
+  // Money in can finish a job: the last of what was agreed makes it paid.
+  // Forward-only, so a replay or an early payment never moves it back.
+  if (where.jobId) {
+    await refreshJobStatus(where.jobId, context.organizationId);
   }
 
   // Fees are shop money: they come out of the contractor's Stripe balance and

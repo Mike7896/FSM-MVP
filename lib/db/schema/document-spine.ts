@@ -35,6 +35,8 @@ import {
   priceStructureEnum,
   pricingMethodEnum,
   progressBillingEnum,
+  scopeBreakdownEnum,
+  scopeDetailEnum,
   scopeReferenceKindEnum,
   signatureAuthMethodEnum,
   signatureKindEnum,
@@ -253,6 +255,12 @@ export const quoteDetails = pgTable("quote_details", {
   pricingMethod: pricingMethodEnum("pricing_method"),
   // Decision 3 — the shape she sees, independent of how it was computed.
   priceStructure: priceStructureEnum("price_structure"),
+  /**
+   * On an itemised quote, how deep she sees: the top-level rows, or every row.
+   * A group can override it for itself — `scope_nodes.breakdown`. Null reads
+   * as `top`, which is how every quote looked before this existed.
+   */
+  scopeDetail: scopeDetailEnum("scope_detail"),
   // Decision 4 — who absorbs the difference when reality moves.
   contractType: contractTypeEnum("contract_type"),
   /** Set where the contract type carries a ceiling — T&M with a cap, GMP. */
@@ -441,6 +449,11 @@ export const scopeNodes = pgTable(
     section: lineItemSectionEnum("section"),
     /** A priced row she may add or leave off. Inherited by children. */
     optional: boolean("optional").notNull().default(false),
+    /**
+     * On a group or assembly: whether she sees the rows inside (`show`) or one
+     * line with its total (`hide`). Null follows the quote's `scope_detail`.
+     */
+    breakdown: scopeBreakdownEnum("breakdown"),
 
     description: text("description").notNull(),
     quantity: numeric("quantity", { precision: 12, scale: 3 })

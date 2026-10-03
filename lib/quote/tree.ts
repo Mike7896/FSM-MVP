@@ -90,21 +90,25 @@ export type ScopeNode = {
   taxable: boolean;
   /** The customer may add this row or leave it off. Inherited by descendants. */
   optional: boolean;
+  /**
+   * Groups and assemblies only: whether the customer sees the rows inside
+   * (`show`) or one line with its total (`hide`). Null or absent follows the
+   * quote's own setting — see `disclosure.ts`.
+   */
+  breakdown?: Breakdown | null;
   source: LineSource;
   children: ScopeNode[];
 };
+
+export type Breakdown = "show" | "hide";
 
 /* ── The registry ─────────────────────────────────────────────────────── */
 
 /**
  * A door in the "Add to scope" picker.
  *
- * **The model's word is never the label.** An electrician does not add an
- * allowance node — he puts a number in he'll fix later. `order` is frequency,
- * not model importance: a priced line is the overwhelming majority of every
- * quote and sits first; group sits fifth even though the model treats it as
- * structurally central, because organising is something he does after the rows
- * exist.
+ * `order` is how often each kind gets added: a line item is most of every
+ * quote and sits first.
  */
 export type NodeDoor = {
   title: string;
@@ -119,7 +123,7 @@ export type NodeSpec = {
    * ordinary case and a badge would label every row on the quote.
    */
   badge: string | null;
-  /** How this kind of row is referred to in a sentence, in the trade's words. */
+  /** The kind's name, as a noun — "Line item", "Group". */
   label: string;
   /** Holds children, and takes its money from them. */
   container: boolean;
@@ -130,9 +134,8 @@ export type NodeSpec = {
   defaultSection: LineSection | null;
   /**
    * Its own door in the picker. Null where the type is reached through another
-   * type's door — `assumption` shares `note`'s, because the difference between
-   * them is whether the sentence is a condition, decided by what he writes
-   * rather than by which button he pressed.
+   * type's door — `assumption` shares `note`'s, and the row menu changes one
+   * into the other.
    */
   door: NodeDoor | null;
   /** The heading the homeowner reads over this row's kind of unpriced text. */
@@ -143,16 +146,16 @@ export const NODE_SPEC: Record<NodeType, NodeSpec> = {
   item: {
     type: "item",
     badge: null,
-    label: "A priced line",
+    label: "Line item",
     container: false,
     priced: true,
     bucketed: true,
     defaultSection: "material",
     door: {
       order: 1,
-      title: "A priced line",
+      title: "Line item",
       blurb:
-        "Material, labor, equipment or a permit fee. From your price book or typed.",
+        "One priced line — material, labor, equipment or a permit fee. You set the quantity, unit and price, and it adds into the total.",
     },
     heading: null,
   },
@@ -160,16 +163,16 @@ export const NODE_SPEC: Record<NodeType, NodeSpec> = {
   assembly: {
     type: "assembly",
     badge: "ASSY",
-    label: "An assembly",
+    label: "Assembly",
     container: true,
     priced: false,
     bucketed: false,
     defaultSection: null,
     door: {
       order: 2,
-      title: "An assembly",
+      title: "Assembly",
       blurb:
-        "A bundle you've priced before — parts and labor together. One row here, its pieces underneath.",
+        "Several parts and labor sold as one line. Your customer sees a single row and price; you see the pieces it's built from.",
     },
     heading: null,
   },
@@ -177,16 +180,16 @@ export const NODE_SPEC: Record<NodeType, NodeSpec> = {
   exclusion: {
     type: "exclusion",
     badge: "EXCL",
-    label: "Something not included",
+    label: "Exclusion",
     container: false,
     priced: false,
     bucketed: false,
     defaultSection: null,
     door: {
       order: 3,
-      title: "Something not included",
+      title: "Exclusion",
       blurb:
-        "Say what you're not doing, so it doesn't become free work later.",
+        "Work this price doesn't cover, in writing, so it can't turn into free work later. Listed under “Not included”, with no price.",
     },
     heading: "Not included",
   },
@@ -194,16 +197,16 @@ export const NODE_SPEC: Record<NodeType, NodeSpec> = {
   allowance: {
     type: "allowance",
     badge: "ALLOWANCE",
-    label: "A price to be settled later",
+    label: "Allowance",
     container: false,
     priced: true,
     bucketed: true,
     defaultSection: "material",
     door: {
       order: 4,
-      title: "A price to be settled later",
+      title: "Allowance",
       blurb:
-        "An allowance — you put a number in now and true it up when she picks.",
+        "A budget for something not settled yet. It counts in the total now and gets adjusted to the real cost once that's known.",
     },
     heading: null,
   },
@@ -211,16 +214,16 @@ export const NODE_SPEC: Record<NodeType, NodeSpec> = {
   group: {
     type: "group",
     badge: "GROUP",
-    label: "A heading with a subtotal",
+    label: "Group",
     container: true,
     priced: false,
     bucketed: false,
     defaultSection: null,
     door: {
       order: 5,
-      title: "A heading with a subtotal",
+      title: "Group",
       blurb:
-        "Group rows together — by room, by phase, by whatever you'd read out loud.",
+        "A heading that holds related rows — by room, phase or area. The rows sit under it, and it shows their subtotal.",
     },
     heading: null,
   },
@@ -228,16 +231,16 @@ export const NODE_SPEC: Record<NodeType, NodeSpec> = {
   note: {
     type: "note",
     badge: "NOTE",
-    label: "A note",
+    label: "Note",
     container: false,
     priced: false,
     bucketed: false,
     defaultSection: null,
     door: {
       order: 6,
-      title: "A note or a condition",
+      title: "Note or condition",
       blurb:
-        "Text with no price. A condition the price depends on — access, existing wiring, her being home.",
+        "Text your customer reads, with no price — a note, or a condition the price depends on, like access or existing wiring.",
     },
     heading: "Please note",
   },
@@ -245,15 +248,13 @@ export const NODE_SPEC: Record<NodeType, NodeSpec> = {
   assumption: {
     type: "assumption",
     badge: "ASSUM",
-    label: "A condition the price depends on",
+    label: "Condition",
     container: false,
     priced: false,
     bucketed: false,
     defaultSection: null,
-    // Reached through the note door. An assumption is a condition the price
-    // depends on; an exclusion is work the price does not cover. They carry
-    // real contractual weight and are not the same sentence — which is why the
-    // type exists even though it has no door of its own.
+    // Reached through the note door: a condition the price depends on, where
+    // an exclusion is work the price does not cover.
     door: null,
     heading: "Conditions the price assumes",
   },
@@ -488,6 +489,61 @@ export function moveNode(
   }
 
   return step(nodes);
+}
+
+/** A place a row can be moved to with "Move to": a group or assembly, or the top level. */
+export type MoveTarget = {
+  /** The container's key, or null for the top level of the quote. */
+  key: string | null;
+  label: string;
+  /** How far in it sits, for indenting the list. */
+  depth: number;
+};
+
+/**
+ * Where a row can go: every group and assembly except itself, anything inside
+ * it, and the one it's already in — plus the top level when it isn't there.
+ * A container too deep to take the row is left out rather than offered and
+ * then refused.
+ */
+export function moveTargets(nodes: ScopeNode[], key: string): MoveTarget[] {
+  const node = findNode(nodes, key);
+  if (!node) return [];
+
+  const inside = new Set(allNodes([node]).map((entry) => entry.key));
+  const parent = findParent(nodes, key);
+  const targets: MoveTarget[] = parent
+    ? [{ key: null, label: "Top level of the quote", depth: 0 }]
+    : [];
+
+  walk(nodes, ({ node: candidate, depth }) => {
+    if (!isContainer(candidate) || inside.has(candidate.key)) return;
+    if (candidate.key === parent?.key) return;
+    if (!fitsUnder(depth + 1, node)) return;
+    targets.push({
+      key: candidate.key,
+      label:
+        candidate.description.trim() ||
+        (candidate.type === "group" ? "Untitled group" : "Untitled assembly"),
+      depth,
+    });
+  });
+
+  return targets;
+}
+
+/** Moves a row, and everything in it, to the end of another container or of the top level. */
+export function reparentNode(
+  nodes: ScopeNode[],
+  key: string,
+  parentKey: string | null
+): ScopeNode[] {
+  const node = findNode(nodes, key);
+  if (!node) return nodes;
+  if (!moveTargets(nodes, key).some((target) => target.key === parentKey)) {
+    return nodes;
+  }
+  return insertNode(removeNode(nodes, key), node, parentKey, null);
 }
 
 /**

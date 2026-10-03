@@ -66,7 +66,7 @@ export function JobPicker({
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className={cn("h-auto min-h-9 justify-between py-1.5 text-left font-normal", className)}
+          className={cn("border-input dark:border-input h-auto min-h-9 justify-between py-1.5 text-left font-normal", className)}
         >
           {value ? (
             <span className="min-w-0">

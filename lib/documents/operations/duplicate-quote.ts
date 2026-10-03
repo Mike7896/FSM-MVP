@@ -137,6 +137,7 @@ export async function duplicateQuote({
       licenseId: source.licenseId,
       contractType: source.contractType as never,
       priceStructure: source.priceStructure as never,
+      scopeDetail: source.scopeDetail as never,
       pricingMethod: source.pricingMethod as never,
       estimatingMethod: source.estimatingMethod as never,
       estimateClass: source.estimateClass as never,
@@ -171,6 +172,7 @@ export async function duplicateQuote({
       sellPriceCents: node.sellPriceCents,
       taxable: node.taxable,
       optional: node.optional,
+      breakdown: node.breakdown,
       position: node.position,
       source: "duplicated",
     }));

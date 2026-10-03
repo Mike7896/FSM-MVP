@@ -2,11 +2,11 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import type Stripe from "stripe";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, isNotNull, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { withOperationLock } from "@/lib/db/operation-lock";
-import { ledgerEntries, paymentAttempts, type PaymentAttempt } from "@/lib/db/schema";
+import { documents, ledgerEntries, paymentAttempts, type PaymentAttempt } from "@/lib/db/schema";
 import { DomainError } from "@/lib/errors";
 import { recordEntry } from "@/lib/ledger";
 import { withActivation } from "@/lib/membership/activation";
@@ -16,7 +16,7 @@ import { resolvePayableInvoice } from "@/lib/queries/share";
 import { formatMoney } from "@/lib/quote/money";
 
 import { getConnectedAccount, railsFor } from "./connect";
-import type { EventContext } from "./connect-events";
+import { onChargeSucceeded, type EventContext } from "./connect-events";
 import { stripe } from "./server";
 
 /**
@@ -315,4 +315,120 @@ async function returnFee(charge: Stripe.Charge, attempt: PaymentAttempt, target:
     await db.update(paymentAttempts).set({ feeRefundedCents: returned, updatedAt: new Date() })
       .where(eq(paymentAttempts.id, attempt.id));
   });
+}
+
+/**
+ * Asks Stripe about online payments on these invoices that haven't settled,
+ * and records what it says.
+ *
+ * **The webhook is how a payment normally arrives; this is the backstop** for
+ * when it doesn't — a delivery that failed, or a laptop with no `stripe listen`
+ * running, where the card goes through and the app never hears. It runs the
+ * webhook's own handlers, and those are idempotent (a payment is keyed on its
+ * `ch_…` id), so this and a late webhook can't record the same money twice.
+ *
+ * Pages that show an invoice's money call it before they read. Only recent,
+ * unsettled attempts are checked, a handful at most, and a Stripe error leaves
+ * the page as it was rather than breaking it.
+ *
+ * Returns whether anything was checked, so a caller knows to read again.
+ */
+export async function reconcileOpenPayments(invoiceIds: string[]): Promise<boolean> {
+  if (invoiceIds.length === 0) return false;
+
+  const open = await db
+    .select()
+    .from(paymentAttempts)
+    .where(
+      and(
+        inArray(paymentAttempts.invoiceId, invoiceIds),
+        inArray(paymentAttempts.status, ["awaiting", "processing"]),
+        isNotNull(paymentAttempts.paymentIntentId),
+        gte(paymentAttempts.createdAt, new Date(Date.now() - 30 * 86_400_000))
+      )
+    )
+    .limit(10);
+
+  // A form opened and abandoned stays "awaiting" — asked about at most once a
+  // minute, so a page full of them doesn't wait on Stripe every load.
+  const now = Date.now();
+  const due = open.filter(
+    (attempt) => now - (lastChecked.get(attempt.id) ?? 0) > RECHECK_MS
+  );
+  for (const attempt of due) lastChecked.set(attempt.id, now);
+
+  await Promise.all(due.map(checkAttempt));
+  return due.length > 0;
+}
+
+const RECHECK_MS = 60_000;
+const lastChecked = new Map<string, number>();
+
+async function checkAttempt(attempt: PaymentAttempt) {
+  const context: EventContext = {
+    organizationId: attempt.organizationId,
+    stripeAccountId: attempt.stripeAccountId,
+  };
+  try {
+    const intent = await stripe().paymentIntents.retrieve(
+      attempt.paymentIntentId!,
+      {},
+      { stripeAccount: attempt.stripeAccountId }
+    );
+    await onPaymentIntentEvent(intent, context);
+
+    if (intent.status === "succeeded" && intent.latest_charge) {
+      const chargeId =
+        typeof intent.latest_charge === "string"
+          ? intent.latest_charge
+          : intent.latest_charge.id;
+      const charge = await stripe().charges.retrieve(
+        chargeId,
+        {},
+        { stripeAccount: attempt.stripeAccountId }
+      );
+      await onChargeSucceeded(charge, context);
+    }
+  } catch (error) {
+    console.warn(
+      `[collect] Couldn't check ${attempt.paymentIntentId} with Stripe.`,
+      error
+    );
+  }
+}
+
+/** The same check for every invoice on a job — the job page's backstop. */
+export async function reconcileJobPayments(
+  jobId: string,
+  organizationId: string
+): Promise<boolean> {
+  const invoices = await db
+    .select({ id: documents.id })
+    .from(documents)
+    .where(
+      and(
+        eq(documents.jobId, jobId),
+        eq(documents.organizationId, organizationId),
+        eq(documents.type, "invoice")
+      )
+    );
+  return reconcileOpenPayments(invoices.map((invoice) => invoice.id));
+}
+
+/** The same check across the shop — for the lists that show many jobs' money. */
+export async function reconcileOrganizationPayments(
+  organizationId: string
+): Promise<boolean> {
+  const open = await db
+    .select({ invoiceId: paymentAttempts.invoiceId })
+    .from(paymentAttempts)
+    .where(
+      and(
+        eq(paymentAttempts.organizationId, organizationId),
+        inArray(paymentAttempts.status, ["awaiting", "processing"]),
+        gte(paymentAttempts.createdAt, new Date(Date.now() - 30 * 86_400_000))
+      )
+    )
+    .limit(10);
+  return reconcileOpenPayments([...new Set(open.map((row) => row.invoiceId))]);
 }

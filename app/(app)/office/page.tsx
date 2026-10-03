@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { IdentityForm } from "@/components/office/identity-form";
 import { PageHeader } from "@/components/page-header";
 import { requireActiveOrganization } from "@/lib/dal";
+import { getAccess } from "@/lib/membership/access";
 import { getOffice, getOfficeDefaults, getOfficeIdentity } from "@/lib/queries/office";
 import { presetLabel } from "@/lib/branding";
 
@@ -27,10 +28,11 @@ export default async function OfficePage() {
   // The two rows that point out at other Office pages carry their live value,
   // and the header preview shows the number a document would actually go out
   // with — so both are read here rather than described.
-  const [office, identity, defaults] = await Promise.all([
+  const [office, identity, defaults, access] = await Promise.all([
     getOffice(org.id),
     getOfficeIdentity(org.id),
     getOfficeDefaults(org.id),
+    getAccess(org.id),
   ]);
 
   if (!office) {
@@ -49,6 +51,7 @@ export default async function OfficePage() {
         office={office}
         license={identity.license}
         presetName={presetLabel(defaults?.documentPreset ?? null)}
+        logoOnDocuments={access.features.branding}
       />
     </div>
   );

@@ -11,6 +11,8 @@ export * from "./enums";
 
 // The Office — changed rarely, deliberately, from the Office.
 export * from "./office";
+// What the Office has saved to build Scope from, and each job's own settings for it.
+export * from "./library";
 
 // The job — changed constantly, from the work.
 export * from "./jobs";

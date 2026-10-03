@@ -6,18 +6,15 @@ import { usePathname, useSearchParams } from "next/navigation";
 import {
   saveTourProgress,
   useTours,
-  type TourSession,
 } from "@/components/tours/context";
+import { resolveCurrentTour } from "@/components/tours/current";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 import {
   TOURS,
-  findTour,
   onTourEvent,
-  resumeAt,
   type TourDefinition,
   type TourId,
-  type TourProgress,
   type TourStep,
 } from "@/lib/tours";
 
@@ -43,7 +40,7 @@ export function TourHost() {
   const pathname = usePathname();
   const requested = useSearchParams().get("tour");
 
-  const current = resolveCurrent(session, progress, pathname, requested);
+  const current = resolveCurrentTour(session, progress, pathname, requested);
   const tour = current ? TOURS[current.tourId] : null;
 
   const present = useSyncExternalStore(
@@ -234,37 +231,6 @@ function TourCard({
 }
 
 /* ── Choosing ─────────────────────────────────────────────────────────── */
-
-type Current = { tourId: TourId; stepId: string };
-
-function resolveCurrent(
-  session: TourSession,
-  progress: Partial<Record<TourId, TourProgress>>,
-  pathname: string,
-  requested: string | null
-): Current | null {
-  if (session.state === "running") {
-    return { tourId: session.tourId, stepId: session.stepId };
-  }
-  if (session.state === "closed") return null;
-
-  const asked = requested ? findTour(requested) : null;
-  if (asked) {
-    return { tourId: asked.id, stepId: resumeAt(asked, progress[asked.id]) };
-  }
-
-  for (const tour of Object.values(TOURS)) {
-    if (tour.trigger.type !== "route" || tour.trigger.pathname !== pathname) {
-      continue;
-    }
-    const saved = progress[tour.id];
-    if (!saved || saved.status === "in_progress") {
-      return { tourId: tour.id, stepId: resumeAt(tour, saved) };
-    }
-  }
-
-  return null;
-}
 
 /** The current step's place among the steps shown — or the next one that is. */
 function visibleIndexFrom(

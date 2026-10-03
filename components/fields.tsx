@@ -115,45 +115,6 @@ export function MoneyInput({
   );
 }
 
-/** A quantity. Centred and tabular, so a column of them reads as a column. */
-export function NumberInput({
-  className,
-  size = "md",
-  ...props
-}: FieldProps) {
-  return (
-    <Input
-      inputMode="decimal"
-      {...props}
-      className={cn(
-        CONTROL[size],
-        "shrink-0 px-1 text-center tabular-nums",
-        size === "sm" ? "w-12" : "w-16",
-        className,
-      )}
-    />
-  );
-}
-
-/** A unit of measure — "ea", "hr", "ft". Quieter than the number it follows. */
-export function UnitInput({
-  className,
-  size = "md",
-  ...props
-}: FieldProps) {
-  return (
-    <Input
-      {...props}
-      className={cn(
-        CONTROL[size],
-        "text-muted-foreground shrink-0 px-1 text-center",
-        size === "sm" ? "w-12" : "w-14",
-        className,
-      )}
-    />
-  );
-}
-
 /* ── Small typographic pieces the editor repeats ──────────────────────── */
 
 /** A section's name. Mono, tracked, small — the document's own labelling. */

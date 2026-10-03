@@ -168,6 +168,7 @@ export async function acceptQuote(
           nodeType: node.nodeType,
           section: node.section,
           optional: node.optional,
+          breakdown: node.breakdown,
           description: node.description,
           quantity: node.quantity,
           unit: node.unit,

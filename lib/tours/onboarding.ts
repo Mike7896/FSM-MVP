@@ -10,12 +10,17 @@ import type { TourDefinition } from "./types";
  *
  * Steps that explain move on with Next. Steps that ask for something wait for
  * the editor to report it done, so the lesson and doing it are the same act.
+ *
+ * Optional steps are about parts that only exist on some screens, and are
+ * passed over where their part isn't there: the tool panel and the margin
+ * at desk width, the Capture button below it, and the Library once there's
+ * an Office for it to belong to.
  */
 export const onboardingTour: TourDefinition = {
   id: "onboarding",
   title: "Your first quote",
   summary:
-    "Where everything on a quote lives, and how to add your own work and prices.",
+    "Where everything on a quote lives, how to add your own work and prices, and how much of it your customer sees.",
   trigger: { type: "route", pathname: "/welcome/quote" },
   href: "/quotes/new",
   steps: [
@@ -27,41 +32,63 @@ export const onboardingTour: TourDefinition = {
       advance: { type: "continue" },
     },
     {
-      id: "capture",
-      anchor: "quote.capture",
-      title: "Keep site details close",
-      body: "Add site photos, notes, and measurements here to refer to while you write. Use the arrow to collapse this panel.",
-      advance: { type: "continue" },
-      // Optional, so it is passed over on a phone, where capture is the job's
-      // own screen rather than a column beside the document.
-      optional: true,
-    },
-    {
       id: "scope",
       anchor: "quote.scope",
       title: "Describe the scope",
-      body: "This is the part you fill in: one row for each thing you'll do or supply. Your customer reads every row.",
+      body: "This is the part you fill in: one row for each thing you'll do or supply. Group rows by room or phase if that's how you price.",
       advance: { type: "continue" },
     },
     {
       id: "add-row",
       anchor: "quote.add-row",
       title: "Add your first row",
-      body: "Click Add to scope and choose a line with a price.",
+      body: "Click Add to scope and choose Line item.",
       advance: { type: "action", event: "quote.priced-row-added" },
     },
     {
       id: "price",
       anchor: "quote.row-price",
       title: "Set the quantity and price",
-      body: "Describe the row, set the quantity, and type your price per unit. The line total updates automatically.",
+      body: "Describe the row, set the quantity, and type your price per unit. The line total updates by itself.",
       advance: { type: "action", event: "quote.price-entered" },
+    },
+    {
+      id: "customer-detail",
+      anchor: "quote.customer-detail",
+      title: "Choose what your customer sees",
+      body: "One total, each top-level row, or every row. To show or hide the rows inside a single group, use that group's ••• menu.",
+      advance: { type: "continue" },
+      optional: true,
+    },
+    {
+      id: "tools",
+      anchor: "quote.tools",
+      title: "Your tools, on the right",
+      body: "Money holds pricing, terms and your private margin. Library holds rows you've saved. Capture holds site photos and notes. Your total stays at the top, and the arrow folds the panel away.",
+      advance: { type: "continue" },
+      optional: true,
+    },
+    {
+      id: "library",
+      anchor: "quote.library",
+      title: "Save rows to use again",
+      body: "On any row, group or assembly, open the ••• menu and choose Save to library. On your next quote, drag it from the Library into Scope, or tap it to add it.",
+      advance: { type: "continue" },
+      optional: true,
+    },
+    {
+      id: "capture",
+      anchor: "quote.capture",
+      title: "Keep site details close",
+      body: "Photos, notes and measurements from the visit open from here, so you can check them while you write.",
+      advance: { type: "continue" },
+      optional: true,
     },
     {
       id: "margin",
       anchor: "quote.margin",
       title: "Check your margin",
-      body: "Click “Add your cost” on a row and to compare your cost with your selling price. It never appears on your customer's copy.",
+      body: "Open “Your cost & markup” on a row to compare what it costs you with what you charge. Only you see this. It's never on your customer's copy.",
       advance: { type: "continue" },
       optional: true,
     },
@@ -69,7 +96,7 @@ export const onboardingTour: TourDefinition = {
       id: "pricing",
       anchor: "quote.pricing",
       title: "The total",
-      body: "Pricing adds up your rows, so you never type a total. Click “How you get paid” under the total to set a deposit, if you take one.",
+      body: "Pricing adds up your rows, so you never type a total. To take a deposit, click “Set a deposit and how you get paid”.",
       advance: { type: "continue" },
     },
     {

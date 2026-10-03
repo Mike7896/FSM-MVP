@@ -1,15 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import {
-  Camera,
-  Mic,
-  PanelLeftClose,
-  PanelLeftOpen,
-  Ruler,
-  Search,
-  StickyNote,
-} from "lucide-react";
+import { Camera, Mic, Ruler, Search, StickyNote } from "lucide-react";
 
 import { CaptureAdd } from "@/components/quote-editor/capture-add";
 import { Input } from "@/components/ui/input";
@@ -17,23 +9,12 @@ import type { CaptureItem } from "@/lib/queries/captures";
 import { cn } from "@/lib/utils";
 
 /**
- * From the visit — the left column of the desk frame.
+ * From the visit — what was recorded on site, in the editor's Capture tab and
+ * on the job's own capture page.
  *
- * **This is what the desk width is for.** The walkthrough on one side and the
- * quote on the other, permanently — not a modal, not a tab, not a drawer. He
- * cross-references what she said against what he is typing continuously for
- * twenty minutes, and that adjacency *is* the desk mode. Without it the desk
- * layout is the phone layout with more whitespace, which is the one failure the
- * second platform cannot afford.
- *
- * Ordered by when things were captured rather than grouped by kind, because the
- * panel is a record of a walkthrough: grouping the photos away from the note
- * taken thirty seconds later is what stops it answering "what did she say about
- * the hallway".
- *
- * Search is the feature the panel exists to serve — finding her words is how an
- * exclusion gets written in *her* terms, which is the difference between
- * "hallway excluded" and a line she recognises as the thing she asked for.
+ * Ordered by when things were captured rather than grouped by kind, so a photo
+ * and the note taken thirty seconds after it stay together. Search finds the
+ * customer's own words, for writing an exclusion in her terms.
  */
 
 const ICON = {
@@ -46,8 +27,6 @@ const ICON = {
 export function CapturePanel({
   captures,
   jobId,
-  collapsed = false,
-  onCollapsedChange,
   className,
 }: {
   captures: CaptureItem[];
@@ -57,9 +36,6 @@ export function CapturePanel({
    * belongs to a Job and there is nowhere to put one.
    */
   jobId?: string | null;
-  /** Folded to a spine. The column is still there; it is just not open. */
-  collapsed?: boolean;
-  onCollapsedChange?: (next: boolean) => void;
   className?: string;
 }) {
   const [query, setQuery] = useState("");
@@ -74,39 +50,8 @@ export function CapturePanel({
     );
   }, [captures, query]);
 
-  if (collapsed) {
-    return (
-      <div
-        data-tour="quote.capture"
-        className={cn("flex flex-col items-center gap-3 py-3", className)}
-      >
-        <button
-          type="button"
-          onClick={() => onCollapsedChange?.(false)}
-          title="Open what was captured on site"
-          className="text-muted-foreground hover:text-foreground hover:bg-muted flex size-8 items-center justify-center rounded-md transition-colors"
-        >
-          <PanelLeftOpen className="size-4" />
-          <span className="sr-only">Open the visit</span>
-        </button>
-
-        {/* The count is the reason to open it, so it is the one thing the
-            spine carries. */}
-        {captures.length > 0 ? (
-          <span className="text-muted-foreground text-[11px] tabular-nums">
-            {captures.length}
-          </span>
-        ) : null}
-
-        <span className="text-muted-foreground font-label [writing-mode:vertical-rl] text-[10px] uppercase">
-          From the visit
-        </span>
-      </div>
-    );
-  }
-
   return (
-    <div data-tour="quote.capture" className={cn("flex flex-col", className)}>
+    <div className={cn("flex flex-col", className)}>
       <div className="flex items-center justify-between gap-2 border-b px-4 py-3">
         <span
           data-tour-heading
@@ -120,17 +65,6 @@ export function CapturePanel({
               ? "Nothing yet"
               : `${captures.length} item${captures.length === 1 ? "" : "s"}`}
           </span>
-          {onCollapsedChange ? (
-            <button
-              type="button"
-              onClick={() => onCollapsedChange(true)}
-              title="Fold this away"
-              className="text-muted-foreground hover:text-foreground hover:bg-muted flex size-6 items-center justify-center rounded transition-colors"
-            >
-              <PanelLeftClose className="size-3.5" />
-              <span className="sr-only">Fold the visit away</span>
-            </button>
-          ) : null}
         </span>
       </div>
 

@@ -3,32 +3,53 @@
 import styles from "./scope.module.css";
 
 import { useState, type ComponentType } from "react";
-import { ChevronDown, MoreHorizontal } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  ChevronDown,
+  Copy,
+  Lock,
+  MoreHorizontal,
+  Trash2,
+} from "lucide-react";
 
 import {
   EditableParagraph,
   EditableText,
   MoneyInput,
-  NumberInput,
   Tag,
-  UnitInput,
 } from "@/components/fields";
 import { useScopeActions } from "@/components/quote-editor/scope/actions";
 import { NodeRow } from "@/components/quote-editor/scope/node-row";
+import { QuantityStepper } from "@/components/quote-editor/scope/quantity-stepper";
+import { UnitPicker } from "@/components/quote-editor/scope/unit-picker";
+import { Keys } from "@/components/shortcuts/keys";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
+  DropdownMenuShortcut,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   COST_BUCKETS,
+  CUSTOMER_DETAILS,
   NODE_SPEC,
   bucket,
   formatMoney,
@@ -36,12 +57,12 @@ import {
   markupFromSell,
   moneyInputValue,
   parseMoney,
-  parseQuantity,
   sellFromCost,
   type LineSection,
   type NodeType,
   type ScopeNode,
 } from "@/lib/quote";
+import { ROW_KEYS, type KeyName } from "@/lib/shortcuts";
 import { emitTourEvent } from "@/lib/tours";
 import { cn } from "@/lib/utils";
 
@@ -90,7 +111,6 @@ function PricedBody({ node }: BodyProps) {
   // Money is held as text while focused so a half-typed "12." is not
   // round-tripped through the parser into "$12.00" under the cursor.
   const [sellText, setSellText] = useState<string | null>(null);
-  const [qtyText, setQtyText] = useState<string | null>(null);
   const [costOpen, setCostOpen] = useState(false);
 
   /** Any edit to the numbers is the contractor taking ownership of the row. */
@@ -106,7 +126,7 @@ function PricedBody({ node }: BodyProps) {
         node={node}
         onActivate={() => open(node.key)}
         lead={
-          <span className="min-w-0 truncate text-sm">
+          <span className={cn(styles.readName, "text-sm")}>
             {node.description || "Untitled row"}
             {perUnit ? (
               <span className="text-muted-foreground">
@@ -133,9 +153,10 @@ function PricedBody({ node }: BodyProps) {
     <>
       <NodeRow
         node={node}
-        trailing={<NodeMenu node={node} />}
+        trailing={<RowActions node={node} />}
         lead={
           <EditableText
+            data-row-field="description"
             value={node.description}
             placeholder="What is it?"
             aria-label="Description"
@@ -148,29 +169,18 @@ function PricedBody({ node }: BodyProps) {
         detail={
           <div className={styles.pricingControls}>
             <label className={styles.control}><span>Qty</span>
-              <NumberInput
-                size="sm"
-                aria-label="Quantity"
-                value={qtyText ?? formatQuantity(node.quantity)}
-                onChange={(event) => {
-                  setQtyText(event.target.value);
-                  const parsed = parseQuantity(event.target.value);
-                  if (parsed !== null) own({ quantity: parsed });
-                }}
-                onBlur={() => setQtyText(null)}
+              <QuantityStepper
+                value={node.quantity}
+                onChange={(quantity) => own({ quantity })}
               />
             </label>
-            <label className={styles.control}><span>Unit</span>
-              <UnitInput
-                size="sm"
-                aria-label="Unit"
-                value={node.unit ?? ""}
-                placeholder="unit"
-                onChange={(event) =>
-                  patch(node.key, { unit: event.target.value || null })
-                }
+            <div className={styles.control}><span>Unit</span>
+              <UnitPicker
+                value={node.unit}
+                section={node.section}
+                onChange={(unit) => patch(node.key, { unit })}
               />
-            </label>
+            </div>
             <label className={styles.control}><span>Unit price</span>
               <MoneyInput
                 size="sm"
@@ -210,15 +220,20 @@ function PricedBody({ node }: BodyProps) {
               onClick={() => setCostOpen((value) => !value)}
               className="text-muted-foreground hover:text-foreground hover:bg-muted/60 -mx-1 flex items-center gap-1 rounded px-1 py-0.5 transition-colors"
             >
+              <Lock className="size-3" />
+              {node.unitCostCents === null
+                ? "Your cost & markup"
+                : `Costs you ${formatMoney(node.unitCostCents)}${
+                    node.markupPercent !== null
+                      ? ` · ${Number(node.markupPercent.toFixed(1))}% markup`
+                      : ""
+                  }`}
               <ChevronDown
                 className={cn(
                   "size-3 transition-transform",
                   costOpen && "rotate-180"
                 )}
               />
-              {node.unitCostCents === null
-                ? "Add your cost"
-                : `Costs you ${formatMoney(node.unitCostCents)}`}
             </button>
             </span>
           </div>
@@ -233,6 +248,10 @@ function PricedBody({ node }: BodyProps) {
 /**
  * Cost and markup — folded away because they are the shop's business, and
  * looking at them is a separate act from pricing the job.
+ *
+ * What it does, said in the panel: cost × markup sets the unit price, the
+ * pair feeds "Your margin", and it's kept on this quote's row only — there is
+ * no price book to save it to yet.
  */
 function CostFields({ node }: { node: ScopeNode }) {
   const { patch } = useScopeActions();
@@ -242,6 +261,12 @@ function CostFields({ node }: { node: ScopeNode }) {
     // Inset by the section's padding, so its edges line up with the row
     // text above it rather than floating 8px to one side.
     <div className={styles.costFields}>
+      <p className={cn(styles.costNote, "text-muted-foreground text-xs leading-relaxed")}>
+        <strong className="text-foreground font-medium">Only you see this.</strong>{" "}
+        Enter what this costs you and your markup, and the unit price is worked
+        out for you. It also feeds Your margin. Saved on this quote only — not
+        to a price book.
+      </p>
       <div className="grid gap-1.5">
         <Label className="text-muted-foreground text-xs">
           Your cost per {node.unit ?? "unit"}
@@ -337,12 +362,15 @@ function BucketPicker({ node }: { node: ScopeNode }) {
             onSelect={() =>
               patch(node.key, {
                 section: option.id as LineSection,
-                // The bucket decides the default, and changing bucket on a row
-                // whose tax setting is still the old bucket's default should
-                // follow it. A row he has deliberately toggled keeps his answer
-                // — but there is no flag for "he toggled it", so the honest
-                // version is to leave taxable alone and let him see the switch.
-                unit: node.unit ?? option.defaultUnit,
+                // The unit follows the category while it's still the old
+                // category's default — a new line is "ea" because it starts as
+                // material, and Labor should make that "hr". A unit he picked
+                // himself stays. Taxable is left alone: there's no telling a
+                // default from a choice there, so he sees the switch instead.
+                unit:
+                  !node.unit || node.unit === current.defaultUnit
+                    ? option.defaultUnit
+                    : node.unit,
               })
             }
           >
@@ -364,11 +392,12 @@ function ContainerBody({ node }: BodyProps) {
 
   const lead =
     mode === "read" ? (
-      <span className="min-w-0 truncate text-sm font-medium">
+      <span className={cn(styles.readName, "text-sm font-semibold")}>
         {node.description || (node.type === "group" ? "Untitled group" : "Assembly")}
       </span>
     ) : (
       <EditableText
+        data-row-field="description"
         value={node.description}
         placeholder={
           node.type === "group"
@@ -388,7 +417,7 @@ function ContainerBody({ node }: BodyProps) {
       <NodeRow
         node={node}
         onActivate={mode === "read" ? () => open(node.key) : undefined}
-        trailing={mode === "edit" ? <NodeMenu node={node} /> : undefined}
+        trailing={mode === "edit" ? <RowActions node={node} /> : undefined}
         lead={lead}
         detail={
           node.type === "assembly" && node.children.length ? (
@@ -430,9 +459,10 @@ function TextBody({ node }: BodyProps) {
   return (
     <NodeRow
       node={node}
-      trailing={<NodeMenu node={node} />}
+      trailing={<RowActions node={node} />}
       lead={
         <EditableParagraph
+          data-row-field="description"
           rows={1}
           tone="muted"
           value={node.description}
@@ -462,19 +492,127 @@ const PLACEHOLDER: Record<TextType, string> = {
   assumption: "Something you're taking as given.",
 };
 
+/* ── The row's buttons ────────────────────────────────────────────────── */
+
+/**
+ * Move up, move down, duplicate and delete as buttons on the row — the things
+ * done most often — and everything else behind the menu.
+ */
+function RowActions({ node }: { node: ScopeNode }) {
+  const { move, remove, duplicate, position } = useScopeActions();
+  const { first, last } = position(node.key);
+  const name = NODE_SPEC[node.type].label.toLowerCase();
+
+  return (
+    <div className={cn("flex shrink-0 items-center", styles.rowActions)}>
+      {/* The arrows give way first in a narrow column; the menu has them too. */}
+      <span className={cn("flex items-center", styles.moveActions)}>
+        <IconAction
+          label="Move up"
+          keys={ROW_KEYS.moveUp}
+          disabled={first}
+          onClick={() => move(node.key, -1)}
+        >
+          <ArrowUp />
+        </IconAction>
+        <IconAction
+          label="Move down"
+          keys={ROW_KEYS.moveDown}
+          disabled={last}
+          onClick={() => move(node.key, 1)}
+        >
+          <ArrowDown />
+        </IconAction>
+      </span>
+      <IconAction
+        label={`Duplicate ${name}`}
+        keys={ROW_KEYS.duplicate}
+        onClick={() => duplicate(node.key)}
+      >
+        <Copy />
+      </IconAction>
+      <IconAction
+        label={`Delete ${name}`}
+        keys={ROW_KEYS.remove}
+        destructive
+        onClick={() => remove(node.key)}
+      >
+        <Trash2 />
+      </IconAction>
+      <NodeMenu node={node} />
+    </div>
+  );
+}
+
+function IconAction({
+  label,
+  keys,
+  disabled,
+  destructive,
+  onClick,
+  children,
+}: {
+  label: string;
+  keys: KeyName[];
+  disabled?: boolean;
+  destructive?: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          aria-label={label}
+          aria-keyshortcuts={keys.join("+")}
+          // Out of the Tab order: Tab from a description goes straight to its
+          // quantity, and the keyboard has these as shortcuts.
+          tabIndex={-1}
+          disabled={disabled}
+          onClick={onClick}
+          className={cn(
+            "text-muted-foreground hover:text-foreground size-8 disabled:opacity-30",
+            destructive && "hover:text-destructive hover:bg-destructive/10"
+          )}
+        >
+          {children}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>
+        {label}
+        <Keys keys={keys} />
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
 /* ── The per-row menu ─────────────────────────────────────────────────── */
 
 /**
- * What can be done to one row.
- *
- * **Optional is here rather than in the picker**, because it is a flag on a row
- * he has already added, not a kind of row. Retyping is here too: the picker's
- * six doors cover writing, and this is the correction — a note that turns out
- * to be an exclusion keeps its words and its place in the tree.
+ * Everything that can be done to one row — the buttons beside it are
+ * shortcuts to the commonest three.
  */
 function NodeMenu({ node }: { node: ScopeNode }) {
-  const { patch, remove, move, dissolve, group, retype } = useScopeActions();
+  const {
+    patch,
+    remove,
+    move,
+    position,
+    dissolve,
+    group,
+    retype,
+    duplicate,
+    moveTargets,
+    moveTo,
+    saveToLibrary,
+    customerDetail,
+  } = useScopeActions();
   const spec = NODE_SPEC[node.type];
+  const { first, last } = position(node.key);
+  const targets = moveTargets(node.key);
 
   return (
     <DropdownMenu>
@@ -482,26 +620,54 @@ function NodeMenu({ node }: { node: ScopeNode }) {
         <Button
           variant="ghost"
           size="icon"
-          // Discoverable at rest; full emphasis on hover and keyboard focus.
-          className={cn(
-            "text-muted-foreground size-8 shrink-0 transition-opacity", styles.menu,
-            "group-hover/row:opacity-100 group-focus-within/row:opacity-100",
-            "focus-visible:opacity-100 data-[state=open]:opacity-100"
-          )}
-          aria-label={`Options for ${node.description || spec.label}`}
+          className="text-muted-foreground hover:text-foreground size-8 shrink-0"
+          aria-label={`More for ${node.description || spec.label}`}
         >
           <MoreHorizontal className="size-4" />
         </Button>
       </DropdownMenuTrigger>
 
-      <DropdownMenuContent align="end" className="w-72">
-        <DropdownMenuLabel>Row actions</DropdownMenuLabel>
-        <DropdownMenuItem onSelect={() => move(node.key, -1)}>
+      <DropdownMenuContent align="end" className="w-80">
+        <DropdownMenuLabel>{spec.label}</DropdownMenuLabel>
+        <DropdownMenuItem disabled={first} onSelect={() => move(node.key, -1)}>
           Move up
+          <DropdownMenuShortcut>
+            <Keys keys={ROW_KEYS.moveUp} />
+          </DropdownMenuShortcut>
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => move(node.key, 1)}>
+        <DropdownMenuItem disabled={last} onSelect={() => move(node.key, 1)}>
           Move down
+          <DropdownMenuShortcut>
+            <Keys keys={ROW_KEYS.moveDown} />
+          </DropdownMenuShortcut>
         </DropdownMenuItem>
+        {targets.length ? (
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>Move to</DropdownMenuSubTrigger>
+            <DropdownMenuSubContent className="w-64">
+              {targets.map((target) => (
+                <DropdownMenuItem
+                  key={target.key ?? "top"}
+                  onSelect={() => moveTo(node.key, target.key)}
+                  style={{ paddingLeft: `${0.5 + target.depth * 0.75}rem` }}
+                >
+                  <span className="min-w-0 truncate">{target.label}</span>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+        ) : null}
+        <DropdownMenuItem onSelect={() => duplicate(node.key)}>
+          Duplicate
+          <DropdownMenuShortcut>
+            <Keys keys={ROW_KEYS.duplicate} />
+          </DropdownMenuShortcut>
+        </DropdownMenuItem>
+        {saveToLibrary ? (
+          <DropdownMenuItem onSelect={() => saveToLibrary(node.key)}>
+            Save to library
+          </DropdownMenuItem>
+        ) : null}
 
         <DropdownMenuSeparator />
 
@@ -532,6 +698,43 @@ function NodeMenu({ node }: { node: ScopeNode }) {
           </DropdownMenuItem>
         ) : null}
 
+        {/* What the customer sees of this group: its rows, or one line. The
+            quote sets it for every group; this sets it for this one. */}
+        {spec.container ? (
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>Your customer sees</DropdownMenuSubTrigger>
+            <DropdownMenuSubContent className="w-72">
+              {customerDetail === "total" ? (
+                <DropdownMenuLabel className="text-muted-foreground text-xs leading-snug font-normal">
+                  This quote shows one total, so no rows are shown. This
+                  applies if you switch it back.
+                </DropdownMenuLabel>
+              ) : null}
+              <DropdownMenuRadioGroup
+                value={node.breakdown ?? "quote"}
+                onValueChange={(value) =>
+                  patch(node.key, {
+                    breakdown: value === "quote" ? null : (value as "show" | "hide"),
+                  })
+                }
+              >
+                <DropdownMenuRadioItem value="show">
+                  The rows inside, with their prices
+                </DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="hide">
+                  One line with its total
+                </DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="quote">
+                  Same as the quote (
+                  {CUSTOMER_DETAILS.find((option) => option.value === customerDetail)
+                    ?.label.toLowerCase()}
+                  )
+                </DropdownMenuRadioItem>
+              </DropdownMenuRadioGroup>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+        ) : null}
+
         {/* Retyping only within a body kind. Turning a note into a priced row
             would ask what it costs at the moment he is writing a sentence, and
             turning a group into a line would orphan everything inside it. */}
@@ -542,7 +745,7 @@ function NodeMenu({ node }: { node: ScopeNode }) {
               key={type}
               onSelect={() => retype(node.key, type)}
             >
-              Make it {NODE_SPEC[type].label.toLowerCase()}
+              Change to {NODE_SPEC[type].label.toLowerCase()}
             </DropdownMenuItem>
           ))}
 
@@ -553,11 +756,14 @@ function NodeMenu({ node }: { node: ScopeNode }) {
           onSelect={() => remove(node.key)}
         >
           <span className="grid min-w-0 gap-1">
-            <span>Delete {spec.container ? "group" : "row"}</span>
+            <span>Delete {spec.label.toLowerCase()}</span>
             {spec.container && node.children.length > 0 ? (
               <span className="text-xs leading-relaxed">Also deletes the {node.children.length} rows inside.</span>
             ) : null}
           </span>
+          <DropdownMenuShortcut>
+            <Keys keys={ROW_KEYS.remove} />
+          </DropdownMenuShortcut>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

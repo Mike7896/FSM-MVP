@@ -267,8 +267,12 @@ export function SchedulePlanner({
       else if (key === "c") setSheet({ mode: "create" });
       else {
         const picked = VIEWS.find((entry) => entry.key === key);
-        if (picked) setView(picked.view);
+        if (!picked) return;
+        setView(picked.view);
       }
+      // Handled here, so the app-wide shortcuts leave it alone — C is a new
+      // visit on this page, not a new quote.
+      event.preventDefault();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);

@@ -20,6 +20,7 @@ import {
   baseTotal, describeScope, dissolveNode, draftFromSeed, emptyDraft, flatten,
   insertNode, makeNode, margin, moveNode, nodeTotal, optionalTotal, parseSeed,
   retypeNode, shapeOf, toSavePayload, totals, buildTree, applyOfficeDefaults,
+  idsByKey, withIds, customerLines, customerDetail, withCustomerDetail, overridesQuote, DEFAULT_TERMS,
   type ScopeNode,
 } from "@/lib/quote";
 
@@ -207,6 +208,69 @@ const dup = applyOfficeDefaults(
   SHOP_DEFAULTS
 );
 is("existing wording is left alone", dup.scope.map((n) => n.description), ["Its own"]);
+
+/* — what the customer sees: one total, the top-level rows, or every row, overridable per group */
+{
+  const walls = makeNode("item", { section: "labor", description: "Walls", sellPriceCents: 30_000 });
+  const ceiling = makeNode("item", { section: "labor", description: "Ceiling", sellPriceCents: 20_000 });
+  const extra = makeNode("item", { section: "labor", description: "Closet", sellPriceCents: 9_000, optional: true });
+  const note = makeNode("note", { description: "Owner moves furniture" });
+  const bedroom = makeNode("group", { description: "Master bedroom", children: [walls, ceiling, extra, note] });
+  const permit = makeNode("item", { section: "permit", description: "Permit", sellPriceCents: 5_000 });
+  const scope = [bedroom, permit];
+  const shown = (lines: ReturnType<typeof customerLines>) =>
+    lines.map((l) => `${"  ".repeat(l.depth)}${l.node.description} ${l.amountCents}`);
+
+  is("top-level rows: a group is one line", shown(customerLines(scope, "top")), [
+    "Master bedroom 50000", "Permit 5000",
+  ]);
+  is("every row: the group's rows under it, optional and notes left out", shown(customerLines(scope, "all")), [
+    "Master bedroom 50000", "  Walls 30000", "  Ceiling 20000", "Permit 5000",
+  ]);
+  is("one total: no rows", customerLines(scope, "total").length, 0);
+
+  const showing = [{ ...bedroom, breakdown: "show" as const }, permit];
+  is("a group can show its rows on a top-level quote", shown(customerLines(showing, "top")).length, 4);
+  is("…and is marked as differing from the quote", overridesQuote(showing[0], "top"), true);
+  const hiding = [{ ...bedroom, breakdown: "hide" as const }, permit];
+  is("a group can stay one line on an every-row quote", shown(customerLines(hiding, "all")), [
+    "Master bedroom 50000", "Permit 5000",
+  ]);
+  is("an override that matches the quote isn't flagged", overridesQuote(showing[0], "all"), false);
+
+  is("one total ↔ single-total price structure", customerDetail(withCustomerDetail(DEFAULT_TERMS, "total")), "total");
+  is("back to every row restores itemised", withCustomerDetail(withCustomerDetail(DEFAULT_TERMS, "total"), "all").priceStructure, "itemized");
+
+  const saved = toSavePayload(emptyDraft({ scope: showing })).scope;
+  is("a group's choice is saved", saved[0].breakdown, "show");
+  is("rows that aren't groups never carry one", saved.slice(1).every((row) => row.breakdown === null), true);
+  is("retyping a group to a line drops it", retypeNode(makeNode("group", { breakdown: "show" }), "item").breakdown, null);
+}
+
+/* — autosave: ids come back by key, so rows added while a save is out keep their own */
+{
+  const a = makeNode("item", { description: "A", sellPriceCents: 100, id: "id-a" });
+  const b = makeNode("item", { description: "B", sellPriceCents: 200, id: "id-b" });
+  const c = makeNode("item", { description: "C", sellPriceCents: 300 });
+  const sent = [a, b, c];
+  // The server echoes the rows in the order sent, giving C its new id.
+  const returned = [{ ...a }, { ...b }, { ...c, id: "id-c" }];
+  const ids = idsByKey(sent, returned);
+
+  // While that save was out, N was typed in above B, and B was moved into a group.
+  const n = makeNode("item", { description: "N", sellPriceCents: 999 });
+  const g = makeNode("group", { description: "G", children: [b] });
+  const live = withIds([a, n, c, g], ids);
+  const next = toSavePayload(emptyDraft({ scope: live })).scope;
+
+  is("each row keeps its own id", next.map((row) => `${row.description}:${row.id}`), [
+    "A:id-a", "N:null", "C:id-c", "G:null", "B:id-b",
+  ]);
+  const sentIds = next.map((row) => row.id).filter(Boolean);
+  is("no id is sent twice", sentIds.length, new Set(sentIds).size);
+  is("a mismatched echo adopts nothing", idsByKey(sent, returned.slice(1)).size, 0);
+  is("blank rows are skipped on both sides", idsByKey([a, makeNode("item"), b], [{ ...a }, { ...b }]).get(b.key), "id-b");
+}
 
 console.log(failures === 0 ? "\nAll checks passed." : `\n${failures} FAILED`);
 process.exit(failures === 0 ? 0 : 1);

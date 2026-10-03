@@ -472,6 +472,20 @@ export const depositBasisEnum = pgEnum("deposit_basis", [
 ]);
 
 /**
+ * A group's or assembly's own choice about what the customer sees of it: the
+ * rows inside (`show`), or one line with its total (`hide`). Null follows the
+ * quote's setting (`scope_detail`).
+ */
+export const scopeBreakdownEnum = pgEnum("scope_breakdown", ["show", "hide"]);
+
+/**
+ * How much of an itemised quote's Scope the customer sees: the top-level rows
+ * (`top`) or every row (`all`). A single-total quote shows none, whatever this
+ * says — that is `price_structure`.
+ */
+export const scopeDetailEnum = pgEnum("scope_detail", ["top", "all"]);
+
+/**
  * What a change-order node does to the contracted node it points at —
  * Documents §4.
  *

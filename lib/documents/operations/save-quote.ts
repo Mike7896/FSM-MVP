@@ -35,6 +35,7 @@ import { writeScopeTree } from "../scope-write";
 const TERM_KEYS = [
   "contractType",
   "priceStructure",
+  "scopeDetail",
   "pricingMethod",
   "estimatingMethod",
   "estimateClass",

@@ -20,9 +20,6 @@ import {
   IntegrityNote,
   SignatureLine,
   Timeline,
-  activitySteps,
-  inOrder,
-  type TimelineStep,
 } from "@/components/documents/standing";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -44,6 +41,7 @@ import {
 } from "@/lib/queries/contracts";
 import { listJobDocuments } from "@/lib/queries/job-documents";
 import { getJobHub } from "@/lib/queries/job-hub";
+import { jobTimeline, type JobEvent } from "@/lib/queries/job-timeline";
 import { formatChange, formatMoney } from "@/lib/quote";
 import {
   certificateFor,
@@ -115,10 +113,11 @@ export default async function ContractPage({
     );
   }
 
-  const [standing, certificate, documents] = await Promise.all([
+  const [standing, certificate, documents, events] = await Promise.all([
     getContractStanding(contract.id, org.id),
     certificateFor(contract.id, org.id),
     listJobDocuments(id, org.id),
+    jobTimeline(id, org.id),
   ]);
   if (!standing || !certificate) notFound();
 
@@ -270,12 +269,7 @@ export default async function ContractPage({
             recordHref={`/jobs/${id}/contract/certificate`}
           />
 
-          <History
-            contract={contract}
-            standing={standing}
-            signatures={certificate.signatures}
-            first={first}
-          />
+          <History events={events} />
 
           <Changes
             jobId={id}
@@ -382,76 +376,15 @@ function Signatures({
 /* ── What's happened ───────────────────────────────────────────────────── */
 
 /**
- * The contract's story since it was drawn up, oldest first — each step read
- * from the record that proves it. Steps still to come stay on the list, quiet,
- * so the shape of what's left is visible before it has happened.
+ * The whole job's story, oldest first — quote, contract, change orders, bills
+ * and payments — then what's still to come, quiet, so the shape of what's
+ * left is visible before it has happened.
  */
-function History({
-  contract,
-  standing,
-  signatures,
-  first,
-}: {
-  contract: ContractView;
-  standing: ContractStanding;
-  signatures: SignatureRecord[];
-  first: string;
-}) {
-  const contractor = signatures.find((entry) => entry.party === "contractor");
-  const customer = signatures.find((entry) => entry.party === "customer");
-  const depositCents = standing.depositCents ?? 0;
-  const depositPaid =
-    standing.deposit !== null &&
-    standing.deposit.paidCents >= standing.deposit.amountDueCents;
-
-  // The acceptance is where the story starts, even when the business's
-  // signature was applied a moment before its row was written — so it leads,
-  // and everything after it is in the order it happened.
-  const origin: TimelineStep[] = [];
-  const done: TimelineStep[] = [];
-  if (standing.acceptedAt) {
-    origin.push({
-      at: standing.acceptedAt,
-      label: contract.sourceQuoteNumber
-        ? `${first} accepted quote ${contract.sourceQuoteNumber}`
-        : `${first} accepted the quote`,
-      detail: "This contract was drawn up from it",
-    });
-  }
-  if (contractor) {
-    done.push({ at: contractor.signedAt, label: "You signed" });
-  }
-  done.push(
-    ...activitySteps({
-      sends: standing.sends,
-      visits: standing.visits,
-      who: first,
-    })
-  );
-  if (customer) {
-    done.push({ at: customer.signedAt, label: `${first} signed` });
-  }
-  if (depositPaid && standing.deposit?.paidAt) {
-    done.push({
-      at: standing.deposit.paidAt,
-      label: "Deposit paid",
-      detail: formatMoney(standing.deposit.amountDueCents),
-    });
-  }
-  const ahead: TimelineStep[] = [];
-  if (!contractor) ahead.push({ at: null, label: "Your signature" });
-  if (!customer) ahead.push({ at: null, label: `${first}'s signature` });
-  if (depositCents > 0 && !depositPaid) {
-    ahead.push({
-      at: null,
-      label: `The ${formatMoney(depositCents)} deposit`,
-    });
-  }
-
+function History({ events }: { events: JobEvent[] }) {
   return (
     <section className={styles.panel}>
       <SectionLabel>What&apos;s happened</SectionLabel>
-      <Timeline steps={[...origin, ...inOrder(done), ...ahead]} />
+      <Timeline steps={events} />
     </section>
   );
 }

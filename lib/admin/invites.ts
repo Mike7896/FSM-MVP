@@ -11,6 +11,7 @@ import { DomainError } from "@/lib/errors";
 import { createAdminClient } from "@/lib/supabase/server";
 
 import { log } from "./accounts";
+import { inviteOrigin } from "./invite-origin";
 import { INVITE_DAYS, inviteToken, newNonce, readInviteToken } from "./invite-token";
 import type { Admin } from "./owners";
 
@@ -65,6 +66,7 @@ export async function inviteAccount(
   },
   origin: string
 ) {
+  origin = inviteOrigin(origin, process.env.NEXT_PUBLIC_SITE_URL, input.send);
   const email = input.email.trim().toLowerCase();
   const [existing] = await db.execute<{ id: string }>(sql`select id from auth.users where lower(email) = ${email} limit 1`);
   if (existing) {
@@ -119,6 +121,7 @@ export async function inviteAccount(
 
 /** A new link for someone who hasn't accepted yet — the old one stops working. */
 export async function resendInvite(admin: Admin, userId: string, send: boolean, origin: string) {
+  origin = inviteOrigin(origin, process.env.NEXT_PUBLIC_SITE_URL, send);
   const user = await authUser(userId);
   if (!user?.email) throw new DomainError("No account with that id.", "not_found");
   if (user.last_sign_in_at) {
@@ -188,7 +191,11 @@ async function mailInvite(admin: Admin, userId: string, link: string) {
     return { emailed: true, emailError: null };
   } catch (error) {
     console.error("[invites] Email failed", userId, error);
-    return { emailed: false, emailError: error instanceof Error ? error.message : "The email didn't send." };
+    const message = error instanceof Error ? error.message : "The email didn't send.";
+    const emailError = /not authorized to send emails from/i.test(message)
+      ? "Resend rejected the sender domain. Set EMAIL_FROM to an address on the exact verified domain allowed by RESEND_API_KEY, or replace that key with one authorized for the sender domain. Then open this account and send a new invite."
+      : message;
+    return { emailed: false, emailError };
   }
 }
 

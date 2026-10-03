@@ -7,7 +7,11 @@ import {
   DocumentFooter,
   DocumentSheet,
 } from "@/components/documents/document-sheet";
-import { QuoteProjection } from "@/components/quote/projection";
+import {
+  QuoteProjection,
+  approveLabel,
+  signLabel,
+} from "@/components/quote/projection";
 import {
   ResponsiveDialog,
   ResponsiveDialogBody,
@@ -15,6 +19,7 @@ import {
   ResponsiveDialogFooter,
   ResponsiveDialogHeader,
 } from "@/components/responsive-dialog";
+import { ResponsePanel } from "@/components/share/frame";
 import { Button } from "@/components/ui/button";
 import {
   formatMoney,
@@ -31,18 +36,17 @@ import {
 /**
  * Screen 7 · the preview · the only screen serving two people at once.
  *
- * **Her page, not his.** The live share projection, capped at phone width
- * because she is always on a phone, with his controls outside the frame. Nothing
- * inside the document is editable — mixing edit affordances into the customer's
- * view is how it stops reading as hers.
+ * **Her page, exactly as her link draws it.** The same sheet of Letter paper
+ * on the same desk, with nothing on the page that wouldn't print — and the
+ * button she presses in a panel *under* the sheet, where her link puts it.
+ * Nothing inside the document is editable.
  *
- * **The gate is behind the preview.** On a first quote the business name and
- * license render as gaps in his own letterhead, and the gaps are the way to
- * fill them (7c). Send stays live; with gaps it opens the fill instead of
- * refusing.
+ * **The gate is behind the preview.** With no business name, the letterhead
+ * shows a gap and the gap is the way to fill it. Send stays live; with the gap
+ * it opens the fill instead of refusing. A license is optional and never gates.
  *
- * **Width buys checking, not a different document** (7e): a short list of
- * what he is about to send, each with a way back to that part of the quote.
+ * Beside the page, a short list of what he's about to send, each with a way
+ * back to that part of the quote.
  */
 export function QuotePreviewSheet({
   open,
@@ -73,7 +77,7 @@ export function QuotePreviewSheet({
   const firstName = draft.customerName.trim().split(/\s+/)[0] || "your customer";
   const sums = totals(draft);
   const { exclusions } = unpricedRows(draft);
-  const gaps = !office.businessName || !office.license;
+  const signing = signsOnQuote(draft, office.signature);
 
   const review = [
     {
@@ -109,54 +113,76 @@ export function QuotePreviewSheet({
 
   return (
     <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
-      <ResponsiveDialogContent desktopClassName="sm:max-w-3xl">
+      <ResponsiveDialogContent desktopClassName="sm:max-w-[min(74rem,calc(100vw-2rem))]">
         <ResponsiveDialogHeader
           title={
             <span className="flex items-center gap-2">
-              <span className="text-muted-foreground font-label text-[11px] uppercase">
+              <span>
                 What {demo ? "a customer would see" : `${firstName} sees`}
               </span>
               {demo ? <DemoChip /> : null}
             </span>
           }
+          description={`${demo ? "A customer's" : `${capitalize(firstName)}'s`} link as it opens: the page, and under it what they can do.`}
         />
 
-        <ResponsiveDialogBody className="bg-muted/30 grid items-start gap-4 p-3 md:grid-cols-[minmax(0,28rem)_minmax(0,1fr)]">
-          <DocumentSheet
-            size="note"
-            footer={
-              <DocumentFooter
-                businessName={office.businessName}
-                number={draft.number}
-              />
-            }
-          >
-            <QuoteProjection
-              draft={draft}
-              businessName={office.businessName}
-              license={office.license}
-              phone={office.phone}
-              logoUrl={office.logoUrl}
-              demo={demo}
-              onGap={onFillHeader}
-              // Her lines as she will see them: the business's signature on
-              // its line where the Office applies one, hers still to give.
-              signatures={{
-                contractor: appliedSignature(office.signature),
-                customer: null,
-              }}
-              signaturePrompt={
-                signsOnQuote(draft, office.signature) ? "Sign here to accept" : null
+        <ResponsiveDialogBody className="bg-muted dark:bg-muted/40 grid items-start gap-5 p-0 sm:p-6 lg:grid-cols-[minmax(0,1fr)_17rem]">
+          {/* The desk: the page, then the panel her link puts under it. */}
+          <div className="flex min-w-0 flex-col gap-5 pb-4 sm:pb-0">
+            <DocumentSheet
+              footer={
+                <DocumentFooter
+                  businessName={office.businessName}
+                  number={draft.number}
+                />
               }
-            />
-          </DocumentSheet>
+            >
+              <QuoteProjection
+                draft={draft}
+                businessName={office.businessName}
+                license={office.license}
+                phone={office.phone}
+                logoUrl={office.logoUrl}
+                demo={demo}
+                onGap={onFillHeader}
+                action={null}
+                documentLabel="Quote"
+                // Her lines as she will see them: the business's signature on
+                // its line where the Office applies one, hers still to give.
+                signatures={{
+                  contractor: appliedSignature(office.signature),
+                  customer: null,
+                }}
+                signaturePrompt={signing ? "Sign below to accept" : null}
+              />
+            </DocumentSheet>
 
-          <div className="flex flex-col gap-3">
-            {gaps ? (
+            {/* What she presses — shown, not pressable, in the preview. */}
+            <div className="mx-auto flex w-full max-w-[8.5in] flex-col">
+              <ResponsePanel
+                title={signing ? "Sign to accept" : "Ready to go ahead?"}
+                description={
+                  signing
+                    ? "No account needed. Sign with a finger, or type your name."
+                    : "Approving brings up the contract to sign. No account needed."
+                }
+              >
+                <div
+                  aria-hidden
+                  className="bg-primary text-primary-foreground flex h-12 items-center justify-center rounded-lg text-base font-medium select-none"
+                >
+                  {signing ? signLabel(draft) : approveLabel(draft)}
+                </div>
+              </ResponsePanel>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-3 px-4 pb-4 sm:px-0 sm:pb-0 lg:sticky lg:top-24">
+            {!office.businessName ? (
               <div className="bg-background flex flex-col gap-2.5 rounded-lg border p-4">
                 <p className="text-sm">
                   {demo ? "A customer would see" : `${capitalize(firstName)} sees`}{" "}
-                  blanks where your name and license go.
+                  a blank where your business name goes.
                 </p>
                 <Button
                   size="sm"
@@ -164,13 +190,13 @@ export function QuotePreviewSheet({
                   className="self-start"
                   onClick={onFillHeader}
                 >
-                  Fill them in
+                  Add it
                 </Button>
               </div>
             ) : null}
 
             <div className="bg-background rounded-lg border">
-              <p className="text-muted-foreground px-4 pt-3 pb-2 font-label text-[10px] uppercase">
+              <p className="px-4 pt-3 pb-2 text-sm font-semibold">
                 Check before you send
               </p>
               {review.map((row) => (
@@ -197,15 +223,11 @@ export function QuotePreviewSheet({
         </ResponsiveDialogBody>
 
         {/* Pinned, so the primary action never sits below a long document. */}
-        <ResponsiveDialogFooter className="flex gap-2">
-          <Button
-            variant="outline"
-            className="flex-1"
-            onClick={() => onOpenChange(false)}
-          >
+        <ResponsiveDialogFooter className="flex justify-end gap-2">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
             Keep editing
           </Button>
-          <Button className="flex-1" onClick={onSend} disabled={preparing}>
+          <Button onClick={onSend} disabled={preparing}>
             {preparing ? <Loader2 className="animate-spin" /> : null}
             {/* The next step is the email, so the button says so. */}
             {demo

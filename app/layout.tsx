@@ -41,7 +41,13 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       suppressHydrationWarning
       className={`${inter.variable} ${archivo.variable} h-full antialiased`}
     >
-      <body className="bg-background text-foreground flex min-h-full flex-col">
+      {/* Browser extensions (Grammarly among them) stamp their own attributes
+          on <body> before React hydrates. This ignores attribute differences
+          on this one element only — its children are still checked. */}
+      <body
+        suppressHydrationWarning
+        className="bg-background text-foreground flex min-h-full flex-col"
+      >
         {/*
           Required globally, not optional. `SidebarMenuButton` renders a
           Tooltip whenever it is given a `tooltip` prop — which is how the

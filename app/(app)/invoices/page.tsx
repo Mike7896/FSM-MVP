@@ -114,7 +114,7 @@ export default async function InvoicesPage() {
             </TableHeader>
             <TableBody>
               {invoices.map((invoice) => (
-                <TableRow key={invoice.id}>
+                <TableRow key={invoice.id} className="dark:hover:bg-muted">
                   <TableCell className="text-xs tabular-nums">
                     {invoice.number}
                   </TableCell>

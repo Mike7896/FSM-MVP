@@ -2,6 +2,8 @@
 
 import { Lock } from "lucide-react";
 
+import { cn } from "@/lib/utils";
+
 import {
   COST_BUCKETS,
   formatMoney,
@@ -49,7 +51,7 @@ export function MarginCheck({ draft }: { draft: QuoteDraft }) {
           in the rail that is not part of the document. The numbered cards
           below it are what the customer reads; this never leaves the desk. */}
       <div className="flex items-center justify-between gap-2">
-        <p className="text-foreground/80 font-label text-xs leading-5 uppercase">
+        <p className="text-base leading-6 font-semibold tracking-tight">
           Your margin
         </p>
         <span className="text-muted-foreground flex items-center gap-1 text-[11px]">
@@ -60,15 +62,23 @@ export function MarginCheck({ draft }: { draft: QuoteDraft }) {
 
       {!priced || result.revenueCents === 0 ? (
         <p className="text-muted-foreground mt-2 text-sm leading-relaxed">
-          Click “Add your cost” on a row and your margin shows up here.
+          Open “Your cost &amp; markup” on a row and your margin shows up here.
         </p>
       ) : (
         <>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-semibold tabular-nums">
+          {/* Green while the job makes money, red when it loses it. */}
+          <div
+            className={cn(
+              "mt-2 flex items-baseline gap-2",
+              result.marginCents > 0 && "text-positive",
+              result.marginCents < 0 && "text-negative"
+            )}
+          >
+            <span className="text-[28px] leading-none font-bold tracking-tight tabular-nums">
               {result.marginPercent}%
             </span>
-            <span className="text-muted-foreground tabular-nums">
+            <span className="text-sm font-medium tabular-nums">
+              {result.marginCents > 0 ? "+" : ""}
               {formatMoney(result.marginCents)}
             </span>
           </div>
@@ -103,7 +113,12 @@ export function MarginCheck({ draft }: { draft: QuoteDraft }) {
                     {/* Fixed width and right-aligned, so the amounts before it
                         stack into a column whether this says "61%" or "no
                         cost set". */}
-                    <span className="ml-2 inline-block w-[4.5rem] text-right text-xs">
+                    <span
+                      className={cn(
+                        "ml-2 inline-block w-[4.5rem] text-right text-xs",
+                        bucketMargin !== null && bucketMargin < 0 && "text-negative font-medium"
+                      )}
+                    >
                       {bucketMargin === null
                         ? // A pass-through row is not a margin of zero, and a
                           // permit fee priced at cost is the common case.

@@ -2,6 +2,7 @@
 
 import {
   useCallback,
+  useEffect,
   useImperativeHandle,
   useMemo,
   useRef,
@@ -9,9 +10,36 @@ import {
   type ReactNode,
   type Ref,
 } from "react";
+import { Camera, Library } from "lucide-react";
 
 import { CapturePanel } from "@/components/quote-editor/capture-panel";
-import { useStickyToggle } from "@/hooks/use-sticky-toggle";
+import { LibraryPanel } from "@/components/quote-editor/library/library-panel";
+import { SaveToLibraryDialog } from "@/components/quote-editor/library/save-to-library-dialog";
+import { SavedItemSheet } from "@/components/quote-editor/library/saved-item-sheet";
+import {
+  useJobItemSettings,
+  useLibraryMutations,
+  useSavedItems,
+} from "@/components/quote-editor/library/use-library";
+import {
+  TOOL_TABS,
+  ToolPanel,
+  type ToolTab,
+} from "@/components/quote-editor/tool-panel";
+import { useTourStep } from "@/components/tours/current";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { useStickyChoice, useStickyToggle } from "@/hooks/use-sticky-toggle";
 import {
   AcceptanceSection,
   HeaderSection,
@@ -21,7 +49,11 @@ import {
 } from "@/components/quote-editor/document-sections";
 import { EditorHeader } from "@/components/quote-editor/editor-header";
 import { MarginCheck } from "@/components/quote-editor/margin-check";
-import { ScopeSection } from "@/components/quote-editor/scope/scope-section";
+import {
+  ScopeSection,
+  type DropTarget,
+  type ScopeUpdate,
+} from "@/components/quote-editor/scope/scope-section";
 import {
   ChangeMoneySection,
   ChangeTermsSection,
@@ -41,14 +73,20 @@ import {
 import { Button } from "@/components/ui/button";
 import type { OfficeSignature } from "@/lib/signing/lines";
 import type { CaptureItem } from "@/lib/queries/captures";
+import { expandSavedItem, resolveSettings, type SavedItem } from "@/lib/library";
 import {
+  customerDetail,
+  insertNode,
   totals,
+  withCustomerDetail,
   type ChangeOrderContext,
+  type CustomerDetail,
   type EditorMode,
   type QuoteDraft,
   type QuoteTerms,
   type ScopeNode,
 } from "@/lib/quote";
+import { hasMod } from "@/lib/shortcuts";
 import { emitTourEvent } from "@/lib/tours";
 import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
@@ -61,6 +99,18 @@ import { toast } from "sonner";
  */
 export type QuoteEditorController = {
   saveNow: () => Promise<QuoteDraft | null>;
+};
+
+/**
+ * Tour markers that live in the tool panel, and what a step on one needs: a
+ * tab opened, or just the panel unfolded (`open`).
+ */
+const TOUR_PANEL: Record<string, ToolTab | "open"> = {
+  "quote.tools": "open",
+  "quote.library": "library",
+  "quote.margin": "money",
+  "quote.pricing": "money",
+  "quote.terms": "money",
 };
 
 /**
@@ -79,18 +129,18 @@ export type QuoteEditorController = {
  * is authored, so Scope gets the screen and the other four get a line each
  * until width buys them a rail. That ratio is the design.
  *
- * **Three columns at the desk: capture · quote · numbers** (19a). The desk
- * frame has to carry something real the phone does not — the capture panel
- * beside the sections and the margin view — or it is the phone version with
- * more whitespace, which is the one failure the second platform cannot afford.
- * Nothing moves between the columns and nothing collapses at full width: he
- * learns the geography once.
+ * **At the desk: the document in the centre, the tools on the right.** One
+ * panel with three tabs — Money (pricing, terms, acceptance and the private
+ * margin), Library (saved items to drag into Scope) and Capture (what was
+ * recorded on site) — with the total and margin pinned above the tabs. It folds
+ * to a spine to give the document the full width, and remembers its tab and
+ * whether it was folded, per browser (UX: Saved Items and Job Settings).
  *
- * **Below the desk, one chosen degradation.** The numbers column folds into the
- * centre first, so the capture-beside-editor adjacency — which is the whole
- * point of the desk — survives down to about 768px. Under that it is the phone
- * frame: three sections collapsed to a row each, Scope's rows opening a sheet,
- * running total inline.
+ * **Below the desk the panel isn't docked.** Pricing, Terms and Acceptance come
+ * down into the document, and Library and Capture open as a drawer from the
+ * header — a bottom sheet on a phone, where a saved item is added with a tap
+ * instead of a drag. Under ~768px it is the phone frame: sections collapsed to
+ * a row each, Scope's rows opening a sheet, running total inline.
  *
  * Everything is measured from **this component's own container**, never the
  * viewport: the editor is mounted in a wide page and in a narrow activation
@@ -117,6 +167,7 @@ export function QuoteEditor({
   changeTargets = [],
   changePanels,
   onOfficeChange,
+  onCreated,
 }: {
   /** A loaded quote, or an empty draft for a new one. */
   initial: QuoteDraft;
@@ -152,6 +203,11 @@ export function QuoteEditor({
   demo?: boolean;
   /** Lets the surface flush the draft before it sends. */
   controllerRef?: Ref<QuoteEditorController>;
+  /**
+   * Told once, when the first save gives a new quote its row — so the surface
+   * can put the quote's own address in the bar, and a reload opens it.
+   */
+  onCreated?: (quoteId: string) => void;
   onPreview?: (draft: QuoteDraft) => void | Promise<void>;
   onBack?: () => void;
   previewLabel?: string;
@@ -174,6 +230,15 @@ export function QuoteEditor({
   });
 
   useImperativeHandle(controllerRef, () => ({ saveNow }), [saveNow]);
+
+  const onCreatedRef = useRef(onCreated);
+  useEffect(() => {
+    onCreatedRef.current = onCreated;
+  });
+  const createdId = initial.id ? null : draft.id;
+  useEffect(() => {
+    if (createdId) onCreatedRef.current?.(createdId);
+  }, [createdId]);
 
   const frame = useRef<HTMLDivElement>(null);
   const layout = useLayoutMode(frame);
@@ -203,68 +268,83 @@ export function QuoteEditor({
   const sums = useMemo(() => totals(draft), [draft]);
 
   const compact = layout === "compact";
-  const hasCaptures = captures.length > 0;
 
-  // Remembered per browser: a contractor who folds it away on a small screen
-  // should not have to fold it away again on every quote.
-  const [captureFolded, setCaptureFolded] = useStickyToggle(
-    "quote-editor:capture-folded",
+  /** The tool panel docks beside the document at the desk; below it, drawers. */
+  const docked = layout === "desk";
+  const singleColumn = !docked;
+
+  // Both remembered per browser: a contractor who folds the panel away, or
+  // leaves it on the Library, shouldn't have to do it again on every quote.
+  const [storedTab, setTab] = useStickyChoice<ToolTab>(
+    "quote-editor:tool-tab",
+    TOOL_TABS,
+    "money"
+  );
+  const [storedFolded, setFolded] = useStickyToggle(
+    "quote-editor:tools-folded",
     false
   );
 
-  /**
-   * The Job the captures hang off. Null until the first autosave creates one —
-   * a capture belongs to a Job, so there is nowhere to put one before then.
-   */
-  const captureJobId = draft.jobId ?? jobId ?? null;
+  /** Library or Capture, open as a drawer below the desk. */
+  const [drawer, setDrawer] = useState<"library" | "capture" | null>(null);
+  const isMobile = useIsMobile();
 
   /**
-   * **Capture is part of the editor, so it is always there.** The adjacency —
-   * what happened on site beside the quote written from it — is Mode B, and
-   * the whole argument for a second platform. A panel that appears only once
-   * there is something in it is a feature a contractor never learns they have:
-   * it was hidden on the two occasions they would have met it, a brand-new
-   * quote and an empty one.
-   *
-   * It used to require captures, then a saved Job. Both were the same mistake.
-   * What it needs instead is an honest empty state, which it now has, and a
-   * way to fold it out of the road, which it also now has.
-   *
-   * Only the phone is exempt: three columns do not fit, and capture there is
-   * the job's own screen rather than a column beside a document.
+   * The Job the captures and the job settings hang off. Null until the first
+   * autosave creates one — there is nowhere to put either before then.
    */
-  const showCapture = !compact;
+  const currentJobId = draft.jobId ?? jobId ?? null;
 
-  /**
-   * The numbers column folds first — the chosen degradation, so the capture
-   * adjacency survives to ~768px. With no capture column there is room for it
-   * at tablet width too, so the width still buys something.
-   */
-  const showRail =
-    layout === "desk" || (layout === "tablet" && (captureFolded || !hasCaptures));
+  // The Library is the Office's, so it needs an Office: on while autosave is,
+  // which is false only for the activation quote written before one exists.
+  const libraryAvailable = autosave;
 
-  const singleColumn = compact || (!showCapture && !showRail);
+  // A tour step about part of the panel opens it to that part, so the step
+  // isn't pointing at something behind another tab or a fold. Only where the
+  // part exists — the docked panel, and a Library there's an Office for —
+  // or a step could be left waiting on something that never appears.
+  const tourStep = useTourStep();
+  const tourPanel =
+    docked && tourStep && (tourStep.anchor !== "quote.library" || libraryAvailable)
+      ? TOUR_PANEL[tourStep.anchor]
+      : undefined;
+  const tab: ToolTab = tourPanel && tourPanel !== "open" ? tourPanel : storedTab;
+  const folded = tourPanel ? false : storedFolded;
 
-  // Folded, the column keeps a spine — narrow enough to give the quote the
-  // room, wide enough to say what it is and how many things are in it.
-  //
-  // 280 rather than 19a's 330: at a 1440 laptop the sidebar, this and the rail
-  // left the quote itself ~520px, and Scope's rows wrapped their quantity,
-  // unit and price onto three lines. A capture row is a 56px thumbnail and a
-  // sentence, and it reads fine at 280.
-  const captureWidth = captureFolded
-    ? "44px"
-    : layout === "desk"
-      ? "280px"
-      : "264px";
+  // A panel the tour unfolded stays unfolded — snapping it shut again at the
+  // next step would hide what the tour just pointed at.
+  useEffect(() => {
+    if (tourPanel && storedFolded) setFolded(false);
+  }, [tourPanel, storedFolded, setFolded]);
+  const library = useSavedItems(libraryAvailable);
+  const jobSettings = useJobItemSettings(libraryAvailable ? currentJobId : null);
+  const { recordUse } = useLibraryMutations(currentJobId);
+  const [openItemId, setOpenItemId] = useState<string | null>(null);
+  const openItem = openItemId
+    ? (library.items.find((item) => item.id === openItemId) ?? null)
+    : null;
+  const [savingNode, setSavingNode] = useState<ScopeNode | null>(null);
 
   const setScope = useCallback(
-    (scope: ScopeNode[]) => update((current) => ({ ...current, scope })),
+    (next: ScopeUpdate) =>
+      update((current) => ({
+        ...current,
+        scope: typeof next === "function" ? next(current.scope) : next,
+      })),
     [update]
   );
 
   const setTerms = useCallback(
     (terms: QuoteTerms) => update((current) => ({ ...current, terms })),
+    [update]
+  );
+
+  const setDetail = useCallback(
+    (detail: CustomerDetail) =>
+      update((current) => ({
+        ...current,
+        terms: withCustomerDetail(current.terms, detail),
+      })),
     [update]
   );
 
@@ -291,6 +371,56 @@ export function QuoteEditor({
     (scopeOfWork: string) => update((current) => ({ ...current, scopeOfWork })),
     [update]
   );
+
+  /**
+   * Puts a saved item into Scope as ordinary rows, sized by this job's
+   * settings where it has them and the Office's defaults where it doesn't.
+   */
+  function placeSavedItem(
+    item: SavedItem,
+    target: DropTarget = { parentKey: null, index: null }
+  ) {
+    const { values } = resolveSettings(
+      item.settings,
+      item.defaults,
+      jobSettings[item.id]
+    );
+    const { node, problems } = expandSavedItem(item, values);
+    setScope((scope) => insertNode(scope, node, target.parentKey, target.index));
+    recordUse.mutate(item.id);
+
+    if (problems.length) {
+      toast.warning(`Added ${item.name}, with the saved numbers where a formula couldn't be worked out`, {
+        description: problems.slice(0, 3).join(" · "),
+      });
+    }
+
+    // Brought into view if it landed off screen — after the details panel that
+    // added it has finished closing, since its scroll lock holds the page
+    // still until then.
+    window.setTimeout(() => {
+      const row = document.querySelector(`[data-node-key="${CSS.escape(node.key)}"]`);
+      if (!row) return;
+      const { top, bottom } = row.getBoundingClientRect();
+      if (top >= 80 && bottom <= window.innerHeight) return;
+      const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      row.scrollIntoView({ block: "center", behavior: reduced ? "auto" : "smooth" });
+    }, 350);
+  }
+
+  function dropSavedItem(savedItemId: string, target: DropTarget) {
+    const item = library.items.find((candidate) => candidate.id === savedItemId);
+    if (item) placeSavedItem(item, target);
+  }
+
+  function showLibrary() {
+    if (docked) {
+      setTab("library");
+      setFolded(false);
+    } else {
+      setDrawer("library");
+    }
+  }
 
   /** Flush before handing off, so the preview reads the persisted document. */
   async function preview() {
@@ -319,6 +449,32 @@ export function QuoteEditor({
       setPreparing(false);
     }
   }
+
+  // ⌘S saves now rather than opening the browser's save dialog; ⌘↵ is the
+  // header's primary action. Ctrl on Windows and Linux.
+  const previewRef = useRef(preview);
+  useEffect(() => {
+    previewRef.current = preview;
+  });
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (!hasMod(event) || event.altKey || event.shiftKey) return;
+      if (event.key === "s" || event.key === "S") {
+        event.preventDefault();
+        if (!autosave) return;
+        void saveNow().then((saved) => {
+          if (saved) toast.success("Saved");
+        });
+      } else if (event.key === "Enter") {
+        // Not from inside a dialog — the terms sheet has its own Enter.
+        if ((event.target as HTMLElement).closest?.("[role=dialog]")) return;
+        event.preventDefault();
+        void previewRef.current();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [autosave, saveNow]);
 
   /**
    * Pricing, Terms and Acceptance — the three that move to the rail at the desk
@@ -379,7 +535,12 @@ export function QuoteEditor({
      * scrolls like every other page is worth more than independently scrolling
      * panes.
      */
-    <div ref={frame} className="@container flex flex-1 flex-col">
+    <div
+      ref={frame}
+      // The app's single-letter shortcuts stay off while the editor is open.
+      data-letter-shortcuts="off"
+      className="@container flex flex-1 flex-col"
+    >
       <div className="bg-background flex flex-1 flex-col">
         <EditorHeader
           draft={draft}
@@ -392,6 +553,31 @@ export function QuoteEditor({
           actions={<>
             {headerActions}
             {autosave && mode !== "change-order" && <Button variant="outline" size="sm" disabled={preparing} onClick={openInfoRequest}>Ask for info</Button>}
+            {/* Below the desk the tools have no panel, so they open from here. */}
+            {/* Icons only: the bar is already full at these widths, and the
+                customer's name is the thing it must not squeeze out. On a
+                phone there's no room at all, so they sit above the document. */}
+            {!docked && !compact ? (
+              <>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="ghost" size="sm" data-tour={libraryAvailable ? "quote.library" : undefined} onClick={() => setDrawer("library")} aria-label="Library">
+                      <Library />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Library</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="ghost" size="sm" data-tour="quote.capture" onClick={() => setDrawer("capture")} aria-label="Capture">
+                      <Camera />
+                      {captures.length ? <span className="text-muted-foreground text-xs tabular-nums">{captures.length}</span> : null}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Capture</TooltipContent>
+                </Tooltip>
+              </>
+            ) : null}
           </>}
           demo={demo}
           kind={mode === "change-order" ? "Change order" : undefined}
@@ -413,40 +599,29 @@ export function QuoteEditor({
             singleColumn
               ? undefined
               : {
-                  // 19a's frame. Fixed roles: what happened on site, the quote,
-                  // the money — in that order, whichever of them are present.
-                  gridTemplateColumns: [
-                    showCapture && captureWidth,
-                    "minmax(0,1fr)",
-                    // 300, not 250: the rail's cards carry a name and a line
-                    // saying what they hold, and at 260 that line wrapped
-                    // into a three-line stack beside a squeezed Change link.
-                    showRail && "300px",
-                  ]
-                    .filter(Boolean)
-                    .join(" "),
+                  // 340 open: two columns of Library tiles, and the money cards
+                  // with room for a name and the line saying what they hold.
+                  gridTemplateColumns: `minmax(0,1fr) ${folded ? "48px" : "340px"}`,
                 }
           }
         >
-          {showCapture ? (
-            // The divider runs the column's full height; the panel inside it
-            // sticks under the header like the rail does. Without that its
-            // drop zone sat at the foot of a column as tall as the quote —
-            // two thousand pixels below the empty state that mentions it.
-            <div className="border-r">
-              <CapturePanel
-                captures={captures}
-                jobId={captureJobId}
-                collapsed={captureFolded}
-                onCollapsedChange={setCaptureFolded}
-                className="sticky top-16 max-h-[calc(100svh-4rem)]"
-              />
-            </div>
-          ) : null}
-
           {/* Its own container, so the sections inside pad themselves for the
               width this column actually has rather than the whole editor's. */}
           <div className="@container flex min-w-0 flex-col gap-4 p-3 @2xl:gap-5 @2xl:p-5">
+            {compact ? (
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" className="flex-1" data-tour={libraryAvailable ? "quote.library" : undefined} onClick={() => setDrawer("library")}>
+                  <Library />
+                  Library
+                </Button>
+                <Button variant="outline" size="sm" className="flex-1" data-tour="quote.capture" onClick={() => setDrawer("capture")}>
+                  <Camera />
+                  Capture
+                  {captures.length ? <span className="text-muted-foreground text-xs tabular-nums">{captures.length}</span> : null}
+                </Button>
+              </div>
+            ) : null}
+
             {/* 1 · Header — a lookup. One line on a phone, open at the desk. */}
             <HeaderSection
               draft={draft}
@@ -478,13 +653,18 @@ export function QuoteEditor({
               onNarrative={setNarrative}
               mode={compact ? "read" : "edit"}
               change={mode === "change-order"}
+              onSaveToLibrary={libraryAvailable ? setSavingNode : undefined}
+              detail={customerDetail(draft.terms)}
+              // A change order's page lists what changed, row by row; the
+              // choice is a quote's.
+              onDetail={mode === "change-order" ? undefined : setDetail}
+              onDropSavedItem={docked && libraryAvailable ? dropSavedItem : undefined}
             />
 
-            {/* 3–5 · Pricing, Terms and Acceptance, when the rail has folded.
-                They come down into the document rather than disappearing —
-                the total is the thing he is anxious about and it is never
-                behind a tap. */}
-            {!showRail ? (
+            {/* 3–5 · Pricing, Terms and Acceptance, below the desk. They come
+                down into the document rather than disappearing — the total is
+                never behind a tap. */}
+            {!docked ? (
               <>
                 {moneySections}
                 {compact ? (
@@ -501,26 +681,124 @@ export function QuoteEditor({
             ) : null}
           </div>
 
-          {showRail ? (
-            // A container too: the cards in a 300px rail take the rail's
-            // padding, not the desk-wide padding the editor's width implies.
-            <div className="@container border-l">
-              {/* Sticky *under* the pinned header — the total must not scroll
-                  away on a long quote. The offset clears the header rather
-                  than sliding beneath it. Capped at the screen's height, so a
-                  short window scrolls the rail instead of leaving Acceptance
-                  below the fold for good. */}
-              <div className="sticky top-16 flex max-h-[calc(100svh-4rem)] flex-col gap-4 overflow-y-auto p-4 [scrollbar-width:thin]">
-                {/* Margin leads the rail: it is what he is deliberating over,
-                    and it is the desk's other reason to exist. It is not a
-                    section of the document — she can never reach it. */}
-                <MarginCheck draft={draft} />
-                {moneySections}
-              </div>
+          {docked ? (
+            <div className="border-l">
+              {/* Sticky under the pinned header and capped at the screen's
+                  height, so the totals and tabs never scroll away on a long
+                  quote and each tab scrolls inside the panel. */}
+              <ToolPanel
+                draft={draft}
+                sums={sums}
+                tab={tab}
+                onTab={setTab}
+                collapsed={folded}
+                onCollapsed={setFolded}
+                counts={{
+                  library: library.items.length,
+                  capture: captures.length,
+                }}
+                libraryTour={libraryAvailable}
+                className="bg-background sticky top-16 h-[calc(100svh-4rem)]"
+                money={
+                  <>
+                    {/* Not part of the document — the customer never sees it. */}
+                    <MarginCheck draft={draft} />
+                    {moneySections}
+                  </>
+                }
+                library={
+                  <LibraryPanel
+                    items={library.items}
+                    loading={library.loading}
+                    error={library.error}
+                    available={libraryAvailable}
+                    jobSettings={jobSettings}
+                    draggable
+                    onOpen={(item) => setOpenItemId(item.id)}
+                  />
+                }
+                capture={
+                  <CapturePanel
+                    captures={captures}
+                    jobId={currentJobId}
+                    className="min-h-0 flex-1"
+                  />
+                }
+              />
             </div>
           ) : null}
         </div>
       </div>
+
+      {/* Below the desk: Library and Capture as a drawer — from the right on a
+          tablet, a bottom sheet on a phone. */}
+      {!docked && drawer ? (
+        <Sheet open onOpenChange={(open) => !open && setDrawer(null)}>
+          <SheetContent
+            side={isMobile ? "bottom" : "right"}
+            className={cn(
+              "gap-0 p-0",
+              isMobile ? "h-[85svh]" : "w-full sm:max-w-sm"
+            )}
+            // Not into the search box: on a phone that opens the keyboard
+            // over the tiles before anyone asked to type.
+            onOpenAutoFocus={(event) => event.preventDefault()}
+          >
+            <div className="border-b px-4 py-3 pr-12">
+              <SheetTitle className="text-base">
+                {drawer === "library" ? "Library" : "Capture"}
+              </SheetTitle>
+              <SheetDescription className="text-xs">
+                {drawer === "library"
+                  ? "Tap a saved item to see what it adds and put it in Scope."
+                  : "What was recorded on site."}
+              </SheetDescription>
+            </div>
+            {drawer === "library" ? (
+              <LibraryPanel
+                items={library.items}
+                loading={library.loading}
+                error={library.error}
+                available={libraryAvailable}
+                jobSettings={jobSettings}
+                draggable={false}
+                onOpen={(item) => {
+                  setDrawer(null);
+                  setOpenItemId(item.id);
+                }}
+              />
+            ) : (
+              <CapturePanel
+                captures={captures}
+                jobId={currentJobId}
+                className="min-h-0 flex-1 overflow-y-auto"
+              />
+            )}
+          </SheetContent>
+        </Sheet>
+      ) : null}
+
+      {openItem ? (
+        <SavedItemSheet
+          item={openItem}
+          jobId={currentJobId}
+          jobValues={jobSettings[openItem.id] ?? null}
+          onOpenChange={(open) => !open && setOpenItemId(null)}
+          onAdd={(item) => placeSavedItem(item)}
+        />
+      ) : null}
+
+      {savingNode ? (
+        <SaveToLibraryDialog
+          node={savingNode}
+          onOpenChange={(open) => !open && setSavingNode(null)}
+          onSaved={() =>
+            toast.success("Saved to your library", {
+              action: { label: "Show", onClick: showLibrary },
+            })
+          }
+        />
+      ) : null}
 
       {/* Mounted only while open, so each opening re-seeds its own copy of the
           terms from the draft without an effect to synchronise them. */}

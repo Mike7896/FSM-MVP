@@ -90,6 +90,8 @@ export const quoteTermsSchema = z.object({
       "two_part",
     ])
     .nullable(),
+  /** On an itemised quote: the top-level rows, or every row. */
+  scopeDetail: z.enum(["top", "all"]).nullable(),
   pricingMethod: z
     .enum(["cost_based", "competition_based", "value_based"])
     .nullable(),
@@ -152,6 +154,8 @@ export const scopeNodeSchema = z.object({
   sellPriceCents: z.number().int().min(0),
   taxable: z.boolean(),
   optional: z.boolean(),
+  /** Groups and assemblies: show the customer the rows inside, or one line. */
+  breakdown: z.enum(["show", "hide"]).nullable().optional(),
   position: z.number().int().min(0),
   source: lineSourceSchema,
 });
@@ -185,6 +189,14 @@ export const scopeTreeSchema = z
             message: "Only a group or an assembly can hold rows.",
           });
         }
+      }
+
+      if (row.breakdown && !CONTAINERS.has(row.nodeType)) {
+        ctx.addIssue({
+          code: "custom",
+          path: [index, "breakdown"],
+          message: "Only a group or an assembly has rows inside to show.",
+        });
       }
 
       // Type and cost bucket are orthogonal, but not independent: a priced leaf

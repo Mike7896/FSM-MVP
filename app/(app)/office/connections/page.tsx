@@ -1,10 +1,13 @@
 import type { Metadata } from "next";
 
 import { ConnectionCard } from "@/components/office/connection-card";
+import { PaymentFees } from "@/components/payments/payment-fees";
 import { PageHeader } from "@/components/page-header";
 import { KIND_LABELS, KIND_ORDER } from "@/lib/connectors";
 import { requireActiveOrganization } from "@/lib/dal";
+import { getReleases } from "@/lib/membership/releases";
 import { listConnections } from "@/lib/queries/connections";
+import { refreshConnectedAccount } from "@/lib/stripe/connect";
 
 export const metadata: Metadata = { title: "Connections" };
 
@@ -43,7 +46,13 @@ export const metadata: Metadata = { title: "Connections" };
  */
 export default async function ConnectionsPage() {
   const org = await requireActiveOrganization();
-  const rows = await listConnections(org.id);
+  // Coming back from Stripe's form, or any visit before payments are live:
+  // read the account from Stripe first, so the card says where it stands now.
+  await refreshConnectedAccount(org.id);
+  const [rows, releases] = await Promise.all([
+    listConnections(org.id),
+    getReleases(),
+  ]);
 
   return (
     <div className="flex flex-col gap-8">
@@ -70,7 +79,18 @@ export default async function ConnectionsPage() {
             </div>
 
             {inKind.map((row) => (
-              <ConnectionCard key={row.connector.id} row={row} />
+              <ConnectionCard
+                key={row.connector.id}
+                row={row}
+                extra={
+                  // The cost of taking a payment, before he signs up for it.
+                  row.connector.id === "stripe_connect" &&
+                  row.availability !== "planned" &&
+                  row.availability !== "unconfigured" ? (
+                    <PaymentFees oursOn={releases.ach_application_fee} />
+                  ) : undefined
+                }
+              />
             ))}
 
             {/* The honest note under the processor slot, and the reason the

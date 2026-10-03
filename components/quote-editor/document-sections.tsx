@@ -5,13 +5,13 @@ import { ChevronRight } from "lucide-react";
 
 import { EditableText } from "@/components/fields";
 import {
+  EYEBROW,
   FIELD_LABEL,
   SectionCard,
   SectionNumber,
 } from "@/components/quote-editor/section-heading";
 import { SignatureMark } from "@/components/signing/signature-mark";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import {
   appliedSignature,
@@ -20,6 +20,7 @@ import {
 } from "@/lib/signing/lines";
 import {
   documentSection,
+  formatChange,
   formatMoney,
   termsSentence,
   type ChangeOrderContext,
@@ -60,18 +61,13 @@ export type OfficeIdentity = {
 /**
  * Parties, address, number, and the document type word.
  *
- * **The document type word is a legal fact rather than a label.** In several
- * jurisdictions "quote", "estimate" and "bid" attach different statutory
- * tolerances and authorisation duties, and it sits here because this is where
- * the customer reads it.
- *
- * Customer and work title use labelled fields so their purpose stays visible
- * after a value has been entered.
+ * Two sides, the way the paper sets them: **For** — the customer and the
+ * work, the two things typed here — and **From** — the business, read from
+ * the Office and never edited on a quote.
  *
  * A value the shop has not given us is **drawn as a gap — never invented, and
- * never silently dropped.** A plausible placeholder hides that the license
- * number is missing, and so does leaving its slot out; a dashed "License
- * number" where it will go is the version he actually notices.
+ * never silently dropped**: a dashed "License number" where it will go is the
+ * version he actually notices.
  */
 export function HeaderSection({
   draft,
@@ -109,89 +105,118 @@ export function HeaderSection({
     return <CollapsedRow id="header" detail={summary} onClick={onExpand} />;
   }
 
-  const missing = [
-    office.businessName ? null : "business name",
-    office.license ? null : "license number",
-  ].filter((gap): gap is string => gap !== null);
 
   return (
     <SectionCard
       id="header"
       hint={!draft.customerName.trim() && !draft.title.trim()}
     >
-      <div className="grid gap-4">
-        {changeOrder ? (
-          <div className="grid gap-1.5">
-            <span className={FIELD_LABEL}>Customer</span>
-            <p className="text-lg font-semibold tracking-tight">
-              {draft.customerName || "The customer"}
-            </p>
+      <div className="grid gap-x-8 gap-y-6 @3xl:grid-cols-[minmax(0,1fr)_17rem]">
+        {/* For — the two things typed here, side by side once there's room. */}
+        <div className="grid content-start gap-4">
+          <p className={EYEBROW}>For</p>
+          <div className="grid gap-4 @lg:grid-cols-2">
+            {changeOrder ? (
+              <div className="grid content-start gap-1.5">
+                <span className={FIELD_LABEL}>Customer</span>
+                <p className="flex min-h-10 items-center text-[15px] font-medium">
+                  {draft.customerName || "The customer"}
+                </p>
+              </div>
+            ) : (
+              <label className="grid content-start gap-1.5">
+                <span className={FIELD_LABEL}>Customer</span>
+                <EditableText
+                  className="text-[15px] md:text-[15px]"
+                  value={draft.customerName}
+                  placeholder="Who is this for?"
+                  aria-label="Customer"
+                  onChange={(event) =>
+                    onChange({ customerName: event.target.value })
+                  }
+                />
+              </label>
+            )}
+            <label className="grid content-start gap-1.5">
+              <span className={FIELD_LABEL}>
+                {changeOrder ? "The change" : "Work title"}
+              </span>
+              <EditableText
+                className="text-[15px] md:text-[15px]"
+                value={draft.title}
+                placeholder={changeOrder ? "Name the change" : "What's the work?"}
+                aria-label={changeOrder ? "The change" : "The work"}
+                onChange={(event) => onChange({ title: event.target.value })}
+              />
+            </label>
           </div>
-        ) : (
-          <label className="grid gap-1.5">
-            <span className={FIELD_LABEL}>Customer name</span>
-            <EditableText
-              tone="title"
-              value={draft.customerName}
-              placeholder="Who is this for?"
-              aria-label="Customer"
-              onChange={(event) => onChange({ customerName: event.target.value })}
-            />
-          </label>
-        )}
-        <label className="grid gap-1.5">
-          <span className={FIELD_LABEL}>
-            {changeOrder ? "The change" : "Work title"}
-          </span>
-          <EditableText
-            value={draft.title}
-            placeholder={changeOrder ? "Name the change" : "What's the work?"}
-            aria-label={changeOrder ? "The change" : "The work"}
-            onChange={(event) => onChange({ title: event.target.value })}
-          />
-        </label>
+          {address ? (
+            <div className="grid gap-1">
+              <span className={FIELD_LABEL}>Job address</span>
+              <p className="text-muted-foreground text-sm">{address}</p>
+            </div>
+          ) : null}
+        </div>
+
+        {/* From — the Office's, read-only here. */}
+        <div className="bg-muted/40 grid content-start gap-3 rounded-lg border p-4">
+          <p className={EYEBROW}>From</p>
+          <dl className="grid gap-2.5 text-sm">
+            <FromLine label="Business">
+              {office.businessName ? (
+                <span className="font-medium">{office.businessName}</span>
+              ) : (
+                <Gap>Your business name</Gap>
+              )}
+            </FromLine>
+            <FromLine label="License">
+              {office.license ? (
+                `#${office.license}`
+              ) : (
+                <span className="text-muted-foreground">None — optional</span>
+              )}
+            </FromLine>
+            {office.phone ? (
+              <FromLine label="Phone">{office.phone}</FromLine>
+            ) : null}
+            <FromLine label={`${word} no.`}>
+              {draft.number ?? (
+                <span className="text-muted-foreground">On first save</span>
+              )}
+              {changeOrder?.contractNumber ? (
+                <span className="text-muted-foreground">
+                  {" "}
+                  · amends {changeOrder.contractNumber}
+                </span>
+              ) : null}
+            </FromLine>
+          </dl>
+          {office.businessName ? null : (
+            // Stated, not nagged about, and never blocking.
+            <p className="text-muted-foreground border-t pt-3 text-[13px] leading-snug">
+              Add your business name in the Office — it heads every quote you
+              send.
+            </p>
+          )}
+        </div>
       </div>
-
-      <p className="text-muted-foreground mt-5 border-t pt-4 text-xs leading-relaxed">
-        {office.businessName ? (
-          <span className="text-foreground font-medium">
-            {office.businessName}
-          </span>
-        ) : (
-          <Gap>Your business name</Gap>
-        )}
-        {" · "}
-        {draft.number ?? word}
-        {changeOrder?.contractNumber
-          ? ` · amends ${changeOrder.contractNumber}`
-          : null}
-        {address ? ` · ${address}` : null}
-        {" · "}
-        {office.license ? (
-          `License #${office.license}`
-        ) : (
-          <Gap>License number</Gap>
-        )}
-      </p>
-
-      {missing.length ? (
-        // Stated, not nagged about, and never blocking. Homeowners look for
-        // both, and seeing the hole is worth more to him than a tidy header.
-        <p className="text-muted-foreground mt-1.5 text-xs">
-          {missing.length === 2
-            ? "Add your business name and license number"
-            : `Add your ${missing[0]}`}{" "}
-          — they head every quote you send.
-        </p>
-      ) : null}
     </SectionCard>
+  );
+}
+
+function FromLine({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-baseline gap-2">
+      <dt className="text-muted-foreground text-[13px]">{label}</dt>
+      <dd className="min-w-0 [overflow-wrap:anywhere]">{children}</dd>
+    </div>
   );
 }
 
 /** A slot the shop has not filled yet, drawn as a slot. */
 function Gap({ children }: { children: ReactNode }) {
   return (
-    <span className="border-muted-foreground/50 border-b border-dashed">
+    <span className="text-muted-foreground border-muted-foreground/50 border-b border-dashed">
       {children}
     </span>
   );
@@ -202,21 +227,12 @@ function Gap({ children }: { children: ReactNode }) {
 /**
  * The arithmetic — **always visible, never behind a tap.**
  *
- * The anxiety this screen fights is specific: *am I going to lose money on this
- * number, and am I about to look like an amateur.* A total that has to be
- * opened is a total that gets guessed at, so it is on the page at every width.
- * Only its home moves: at the desk it heads the rail, and when the rail folds
- * it comes down into the document rather than disappearing.
+ * At the desk it heads the rail; when the rail folds it comes down into the
+ * document rather than disappearing. Three tiers, so the eye lands in order:
+ * the lines that make the total, the total, and how it gets paid.
  *
- * **Cost buckets are not here.** Material, labor, equipment and permit are
- * where a priced row lands, not how the document is organised — they surface in
- * the margin view and the price book. Pricing holds subtotal, tax, total,
- * deposit and the schedule, which is what this section is for.
- *
- * **The optional row sits below the total, framed.** Because it is not in it.
- * Above the total it would be a number a reader adds in and gets the wrong
- * answer — an itemised page whose lines disagree with its own total is the one
- * thing this cannot do.
+ * **The optional rows sit below the total, framed,** because they are not in
+ * it — above the total they'd read as part of the sum.
  */
 export function PricingSection({
   draft,
@@ -230,91 +246,143 @@ export function PricingSection({
   /** Set in delta mode: the agreed amount this change is measured against. */
   changeOrder?: { agreedPriceCents: number };
 }) {
-  const { depositCents } = sums;
+  const { depositCents, balanceCents } = sums;
   const rate = draft.taxRate;
 
   return (
-    // Once there are numbers, the numbers explain the section.
-    <SectionCard id="pricing" hint={sums.totalCents === 0}>
-      <button
-        type="button"
-        onClick={onOpenTerms}
-        // Wider than the column by its own padding, so the hover fill bleeds
-        // and "Change" lands on the same right edge as the numbers below.
-        className="text-muted-foreground hover:bg-muted/60 -mx-1.5 mb-3 flex w-[calc(100%+0.75rem)] items-baseline justify-between gap-3 rounded-md px-1.5 py-1 text-left text-xs leading-snug transition-colors"
-      >
-        {/* Wraps rather than truncates: "itemised · 30% deposit" is the part
-            that got cut off, and it is the part he opens the sheet to check. */}
-        <span className="min-w-0">{describeDecisions(draft)}</span>
-        <span className="text-primary-ink shrink-0 underline underline-offset-4">
+    <SectionCard
+      id="pricing"
+      hint={false}
+      aside={
+        <button
+          type="button"
+          onClick={onOpenTerms}
+          className="text-primary-ink underline underline-offset-4"
+        >
           Change
-        </span>
-      </button>
+        </button>
+      }
+    >
+      {/* How it's priced, in one line — what "Change" opens. */}
+      <p className="text-muted-foreground text-[13px] leading-snug">
+        {describeDecisions(draft)}
+      </p>
 
-      <Row label="Subtotal" value={formatMoney(sums.subtotalCents)} />
-      <Row
-        label={rate !== null ? `Tax · ${(rate * 100).toFixed(2)}%` : "Tax"}
-        // No rate is not a zero rate. "$0" reads as a decision somebody made,
-        // and on a first quote nobody has.
-        value={rate !== null ? formatMoney(sums.taxCents) : "No rate set"}
-      />
+      <dl className="mt-4 grid gap-2">
+        <MoneyLine label="Subtotal" cents={sums.subtotalCents} />
+        <div className="flex items-baseline justify-between gap-3 text-sm">
+          <dt className="text-muted-foreground">
+            Tax{rate !== null ? ` (${formatRate(rate)})` : ""}
+          </dt>
+          <dd className="tabular-nums">
+            {rate !== null ? (
+              <span className={toneOf(sums.taxCents)}>
+                {formatMoney(sums.taxCents)}
+              </span>
+            ) : (
+              // No rate is not a zero rate — and it's worth a second look.
+              <button
+                type="button"
+                onClick={onOpenTerms}
+                className="text-primary-ink text-[13px] font-medium underline underline-offset-4"
+              >
+                No rate set
+              </button>
+            )}
+          </dd>
+        </div>
+      </dl>
 
-      <Separator className="my-3" />
-
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="font-label text-xs uppercase">
+      <div className="mt-3 flex items-baseline justify-between gap-3 border-t pt-3">
+        <span className="text-[15px] font-semibold">
           {changeOrder ? "This change" : "Total"}
         </span>
-        <span className="text-2xl font-semibold tabular-nums">
-          {formatMoney(sums.totalCents)}
+        <span
+          className={cn(
+            "text-[28px] leading-none font-bold tracking-tight tabular-nums",
+            changeOrder ? changeTone(sums.totalCents) : toneOf(sums.totalCents)
+          )}
+        >
+          {changeOrder
+            ? formatChange(sums.totalCents)
+            : formatMoney(sums.totalCents)}
         </span>
       </div>
 
       {changeOrder ? (
-        <p className="text-muted-foreground mt-2 text-xs">
-          Agreed after{" "}
-          {formatMoney(changeOrder.agreedPriceCents + sums.totalCents)}
+        <p className="text-muted-foreground mt-2 text-right text-[13px]">
+          Contract after this change{" "}
+          <span className="text-foreground font-medium tabular-nums">
+            {formatMoney(changeOrder.agreedPriceCents + sums.totalCents)}
+          </span>
         </p>
       ) : null}
 
       {sums.optionalCents > 0 ? (
-        <p className="text-muted-foreground border-muted-foreground/30 mt-3 rounded-md border border-dashed px-2.5 py-2 text-xs leading-relaxed">
-          She can add {formatMoney(sums.optionalCents)} more if she wants the
-          optional rows. Not in the total above.
+        <p className="text-muted-foreground border-muted-foreground/30 mt-3 rounded-md border border-dashed px-3 py-2 text-[13px] leading-snug">
+          <span className="text-foreground font-medium tabular-nums">
+            +{formatMoney(sums.optionalCents)}
+          </span>{" "}
+          in optional rows if your customer adds them. Not in the total.
         </p>
       ) : null}
 
-      {/* The rule is its own element rather than the button's top border: on
-          a rounded button a border-top curls up at both ends. */}
-      <Separator className="mt-4 mb-2" />
-
-      <button
-        type="button"
-        onClick={onOpenTerms}
-        className="hover:bg-muted/60 -mx-1.5 flex w-[calc(100%+0.75rem)] flex-wrap items-baseline justify-between gap-x-3 gap-y-1 rounded-md px-1.5 py-1.5 text-left transition-colors"
-      >
+      {/* How it gets paid. */}
+      <div className="bg-muted/50 mt-4 rounded-lg px-3 py-3">
         {depositCents === null ? (
-          <span className="text-primary-ink text-sm underline underline-offset-4">
-            How you get paid
-          </span>
+          <button
+            type="button"
+            onClick={onOpenTerms}
+            className="text-primary-ink w-full text-left text-sm font-medium underline underline-offset-4"
+          >
+            Set a deposit and how you get paid
+          </button>
         ) : (
-          <>
-            <span className="text-muted-foreground text-sm">
-              Deposit — {draft.terms.depositPercent}%
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="font-medium tabular-nums">
+          <dl className="grid gap-2">
+            <div className="flex items-baseline justify-between gap-3 text-sm">
+              <dt className="font-medium">
+                Deposit{" "}
+                <span className="text-muted-foreground font-normal">
+                  ({draft.terms.depositPercent}%)
+                </span>
+              </dt>
+              <dd className="font-semibold tabular-nums">
                 {formatMoney(depositCents)}
-              </span>
-              <span className="text-primary-ink text-xs underline underline-offset-4">
-                Change
-              </span>
-            </span>
-          </>
+              </dd>
+            </div>
+            <MoneyLine label="Balance after deposit" cents={balanceCents} />
+          </dl>
         )}
-      </button>
+      </div>
     </SectionCard>
   );
+}
+
+/** A label and an amount, quiet — the lines that make up a bigger number. */
+function MoneyLine({ label, cents }: { label: string; cents: number }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3 text-sm">
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className={cn("tabular-nums", toneOf(cents))}>{formatMoney(cents)}</dd>
+    </div>
+  );
+}
+
+/** Red for a negative amount — a credit, or a total that has gone below zero. */
+function toneOf(cents: number): string | undefined {
+  return cents < 0 ? "text-negative" : undefined;
+}
+
+/** A change order's difference: green when it adds, red when it takes away. */
+function changeTone(cents: number): string | undefined {
+  if (cents > 0) return "text-positive";
+  if (cents < 0) return "text-negative";
+  return undefined;
+}
+
+/** 0.0825 → "8.25%", 0.06 → "6%". */
+function formatRate(rate: number): string {
+  return `${Number((rate * 100).toFixed(3))}%`;
 }
 
 /**
@@ -335,8 +403,9 @@ function describeDecisions(draft: QuoteDraft): string {
   else if (contractType === "gmp") words.push("Guaranteed maximum");
   else if (contractType === "flat_rate_menu") words.push("Flat rate");
 
-  if (priceStructure === "itemized") words.push("itemised");
-  else if (priceStructure === "single_total") words.push("one number");
+  if (priceStructure === "itemized") {
+    words.push(draft.terms.scopeDetail === "all" ? "every row shown" : "itemised");
+  } else if (priceStructure === "single_total") words.push("one number");
   else if (priceStructure === "partitioned") words.push("base plus fees");
   else if (priceStructure === "tiered") words.push("options");
 
@@ -545,7 +614,7 @@ function CollapsedRow({
     <div className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left">
       <span className="flex shrink-0 items-center gap-2.5">
         <SectionNumber id={id} />
-        <span className="font-label text-xs uppercase">
+        <span className="text-base font-semibold tracking-tight">
           {section.label}
         </span>
       </span>
@@ -579,15 +648,6 @@ function CollapsedRow({
     >
       {content}
     </button>
-  );
-}
-
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="text-muted-foreground flex justify-between gap-2 py-1 text-sm">
-      <span className="truncate">{label}</span>
-      <span className="tabular-nums">{value}</span>
-    </div>
   );
 }
 
