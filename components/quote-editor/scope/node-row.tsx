@@ -70,6 +70,7 @@ export function NodeRow({
 
   const row = (
     <div
+      data-node-key={node.key}
       data-kind={spec.container ? "container" : spec.priced ? "priced" : "text"}
       data-optional={node.optional || undefined}
       className={cn(
@@ -133,6 +134,8 @@ export function NodeRow({
                 "text-right text-sm tabular-nums",
                 spec.container ? "font-semibold" : "font-medium",
                 amount === 0 && "text-muted-foreground font-normal",
+                // A credit — a line a change order takes out.
+                amount < 0 && "text-negative",
                 node.optional && "text-muted-foreground font-normal",
                 estimated &&
                   "decoration-muted-foreground/60 underline decoration-dashed underline-offset-4"

@@ -5,6 +5,7 @@ import type { Metadata } from "next";
 import { ArrowRight, BriefcaseBusiness, Check, ChevronRight, Circle, Clock, Lock, MapPin, ShieldCheck } from "lucide-react";
 
 import { DemoChip } from "@/components/demo-chip";
+import { StagePill } from "@/components/jobs/stage-pill";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { requireActiveOrganization, requireSession } from "@/lib/dal";
@@ -20,6 +21,7 @@ import { listJobDocuments } from "@/lib/queries/job-documents";
 import { getJobHub, type StageRow } from "@/lib/queries/job-hub";
 import { getOfficeIdentity } from "@/lib/queries/office";
 import { formatMoney } from "@/lib/quote";
+import { reconcileJobPayments } from "@/lib/stripe/collect";
 import { cn } from "@/lib/utils";
 
 import styles from "../jobs.module.css";
@@ -30,6 +32,10 @@ export const metadata: Metadata = { title: "Job" };
 export default async function JobPage({ params }: PageProps<"/jobs/[id]">) {
   const org = await requireActiveOrganization();
   const { id } = await params;
+
+  // A payment Stripe has taken but the webhook hasn't delivered is recorded
+  // before the hub reads its money.
+  await reconcileJobPayments(id, org.id).catch(() => false);
 
   const job = await getJobHub(id, org.id);
   if (!job) notFound();
@@ -68,9 +74,14 @@ export default async function JobPage({ params }: PageProps<"/jobs/[id]">) {
           </div>
           <div className={styles.jobIdentity}>
             <span className={styles.jobIcon} aria-hidden="true"><BriefcaseBusiness size={25} strokeWidth={1.5} /></span>
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              {job.demo ? <DemoChip /> : null}
-              <Badge variant="secondary" className={styles.status}>{job.status.replace(/_/g, " ")}</Badge>
+            <div className="flex flex-col items-end gap-1.5">
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                {job.demo ? <DemoChip /> : null}
+                <StagePill label={job.stage.label} tone={job.stage.tone} size="md" />
+              </div>
+              {job.stage.detail ? (
+                <p className="text-muted-foreground max-w-xs text-right text-xs">{job.stage.detail}</p>
+              ) : null}
             </div>
           </div>
         </header>

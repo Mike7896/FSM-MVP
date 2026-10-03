@@ -7,7 +7,9 @@ import { and, count, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { customers, jobs, permits } from "@/lib/db/schema";
 import { collectedForJob } from "@/lib/ledger";
+import { jobStage, type JobStage } from "@/lib/billing/stage";
 import { openGates, type Gate } from "@/lib/queries/gates";
+import { listInvoices } from "@/lib/queries/invoices";
 
 /**
  * The Job's money state, derived rather than stored.
@@ -189,6 +191,8 @@ export type JobListItem = {
   name: string | null;
   address: string | null;
   status: (typeof jobs.status.enumValues)[number];
+  /** Where it stands in words — the status, read with its invoices and money. */
+  stage: JobStage;
   customerName: string;
   money: JobMoney;
   /** Set when a gate has opened recently — the triage band above the list. */
@@ -282,23 +286,38 @@ export async function listJobs(
 
   // Two extra round trips rather than one enormous join: the money query is
   // already written and correct, and gates are shared with the dashboard.
-  const [money, gates] = await Promise.all([
+  const [money, gates, invoices] = await Promise.all([
     jobMoney(rows.map((row) => row.id)),
     openGates(organizationId),
+    listInvoices(organizationId, {
+      jobIds: rows.map((row) => row.id),
+      limit: 1000,
+    }),
   ]);
 
-  return rows.map((row) => ({
-    ...row,
-    money: money.get(row.id) ?? {
+  return rows.map((row) => {
+    const jobMoneyRow = money.get(row.id) ?? {
       jobId: row.id,
       totalCents: 0,
       billedCents: 0,
       collectedCents: 0,
       spentCents: 0,
       remainingCents: 0,
-    },
-    gate: gates.get(row.id) ?? null,
-  }));
+    };
+    return {
+      ...row,
+      // The same words as the job's own page. The list doesn't read each
+      // job's payment plan, so "every phase done" waits for the final bill.
+      stage: jobStage({
+        status: row.status,
+        agreedCents: jobMoneyRow.totalCents,
+        collectedCents: jobMoneyRow.collectedCents,
+        invoices: invoices.filter((invoice) => invoice.jobId === row.id),
+      }),
+      money: jobMoneyRow,
+      gate: gates.get(row.id) ?? null,
+    };
+  });
 }
 
 /* ── The materials budget ─────────────────────────────────────────────── */

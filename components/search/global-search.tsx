@@ -23,6 +23,7 @@ import {
   type SearchKind,
   type SearchPage,
 } from "@/lib/search/kinds";
+import { isPlainKey, isTypingTarget } from "@/lib/shortcuts";
 
 /**
  * One search over everything the shop has, in two shapes that share a mind.
@@ -66,6 +67,21 @@ export function GlobalSearch() {
         event.preventDefault();
         setDropdown(false);
         setPalette((open) => !open);
+        return;
+      }
+
+      // `/` puts the cursor in the header field, or opens the palette where
+      // there is no field. A page with its own `/` (Tasks) handles it first.
+      if (
+        event.key === "/" &&
+        !event.defaultPrevented &&
+        isPlainKey(event) &&
+        !isTypingTarget(event.target)
+      ) {
+        event.preventDefault();
+        const input = field.current?.querySelector("input");
+        if (input && input.offsetParent !== null) input.focus();
+        else setPalette(true);
       }
     }
     window.addEventListener("keydown", onKey);

@@ -36,6 +36,8 @@
   --color-input: var(--input);
   --color-border: var(--border);
   --color-destructive: var(--destructive);
+  --color-positive: var(--positive);
+  --color-negative: var(--negative);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
@@ -119,6 +121,10 @@
   /* Success, warning and danger are still open in the kit — a separate
      system from the brand. Destructive stays as shipped until they land. */
   --destructive: oklch(0.577 0.245 27.325);
+  /* Money that's in your favour, and money that isn't — margins, credits.
+     Text colours, held to 4.5:1 on white (emerald 700, red 600). */
+  --positive: oklch(0.508 0.118 165.612);
+  --negative: oklch(0.577 0.245 27.325);
   --border: var(--brand-neutral-300);
   /* A field's edge is how a field is found, so it is held to 3:1 (WCAG
      1.4.11) on every ground a field sits on: 3.3:1 on white, 3.0 on the
@@ -193,6 +199,9 @@
      old red fell to 4.2:1 on a hovered row and 3.8 on raised fills. This is
      4.6:1 or better on every dark ground, and 4.8 in its own /10 tint. */
   --destructive: oklch(0.77 0.17 22.216);
+  /* Emerald 400 and the dark red above: both clear 4.5:1 on the dark cards. */
+  --positive: oklch(0.765 0.177 163.223);
+  --negative: oklch(0.77 0.17 22.216);
   /* 12%, not 10%: most dark panels are told apart from the page by their
      outline alone, and at 10% it was a whisper (1.34:1 on the ground). */
   --border: oklch(1 0 0 / 12%);

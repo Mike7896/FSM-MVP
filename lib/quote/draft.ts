@@ -117,6 +117,24 @@ export function makeNode(
 }
 
 /**
+ * A copy of a row and everything inside it — Duplicate.
+ *
+ * Fresh keys and no saved ids, so the copy is new rows rather than a second
+ * pointer at the same ones. A change-order line that removes or settles a
+ * contract line acts on it once, so the copy drops that link.
+ */
+export function cloneNode(node: ScopeNode): ScopeNode {
+  return {
+    ...node,
+    key: newNodeKey(),
+    id: null,
+    referencesNodeId: null,
+    referenceKind: null,
+    children: node.children.map(cloneNode),
+  };
+}
+
+/**
  * Retypes a node in place, keeping its identity, its words and its position.
  *
  * The picker's six doors cover the common case; this is the correction. A

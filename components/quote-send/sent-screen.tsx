@@ -65,7 +65,7 @@ export function SentScreen({
   /** The one teach beat — a first real send, once in the whole product. */
   teach: boolean;
   /** The offers that apply to this quote, or null once he's said no thanks. */
-  offers: { logo: boolean; deposit: boolean } | null;
+  offers: { logo: boolean; deposit: boolean; feeLine: string } | null;
 }) {
   const router = useRouter();
   const { quote, customer, url, opens, contract, depositPaidAt } = timeline;
@@ -170,6 +170,7 @@ export function SentScreen({
         first={first}
         logo={offers.logo}
         deposit={offers.deposit && deposit !== null}
+        feeLine={offers.feeLine}
         onDismiss={() => {
           setOffersOpen(false);
           void patchProfile({ offersDismissed: true });
@@ -488,11 +489,14 @@ function Offers({
   first,
   logo,
   deposit,
+  feeLine,
   onDismiss,
 }: {
   first: string;
   logo: boolean;
   deposit: boolean;
+  /** What online payments cost, for the deposit offer. */
+  feeLine: string;
   onDismiss: () => void;
 }) {
   const input = useRef<HTMLInputElement>(null);
@@ -591,7 +595,7 @@ function Offers({
       {deposit ? (
         <Offer
           title={`Let ${first} pay the deposit`}
-          detail="Connect your payment account to accept deposits online."
+          detail={`Connect your payment account to accept deposits online. ${feeLine}`}
           action={
             <Button asChild size="sm" variant="outline">
               <Link href="/office/connections">Set up</Link>

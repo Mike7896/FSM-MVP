@@ -6,14 +6,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 
 /**
- * The foot of a settings form.
- *
- * **Settings save on a button, and the quote editor saves on a keystroke.**
- * That difference is deliberate rather than an inconsistency: the editor is a
- * contractor with one hand on a phone in someone's kitchen, where a Save button
- * is a thing to forget; this is a quarterly sit-down where the numbers he is
- * changing govern every future document, and a change that commits as he tabs
- * through the fields is a change he cannot review before it lands.
+ * The foot of a settings form that saves on a button. (Business identity and
+ * document branding save themselves instead — see `SaveStatus`.)
  *
  * Save stays enabled until there is nothing to save. A disabled primary button
  * makes a contractor hunt for the field he has not filled in, so validation

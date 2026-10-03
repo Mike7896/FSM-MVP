@@ -193,10 +193,7 @@ export function ChangeMoneySection({
   onTaxRate: (rate: number | null) => void;
 }) {
   return (
-    <EditorCard
-      label="The change"
-      hint="Adds itself up from Scope. You never type a total."
-    >
+    <EditorCard label="The change">
       <div className="grid gap-2 text-sm">
         <Line label="Contract now" value={formatMoney(agreedPriceCents)} />
         {sums.taxCents > 0 ? (
@@ -212,6 +209,13 @@ export function ChangeMoneySection({
           label="This change"
           value={formatChange(sums.totalCents)}
           strong
+          tone={
+            sums.totalCents > 0
+              ? "text-positive"
+              : sums.totalCents < 0
+                ? "text-negative"
+                : undefined
+          }
         />
       </div>
 
@@ -268,10 +272,13 @@ function Line({
   label,
   value,
   strong = false,
+  tone,
 }: {
   label: string;
   value: string;
   strong?: boolean;
+  /** Green or red, for an amount that adds or takes away. */
+  tone?: string;
 }) {
   return (
     <div
@@ -281,7 +288,7 @@ function Line({
       )}
     >
       <span>{label}</span>
-      <span className="tabular-nums">{value}</span>
+      <span className={cn("tabular-nums", tone)}>{value}</span>
     </div>
   );
 }

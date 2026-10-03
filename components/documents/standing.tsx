@@ -104,34 +104,35 @@ export function SignatureLine({
   signature: SignatureRecord | undefined;
   pending: ReactNode;
 }) {
+  // Laid out the way the paper does it: the mark on its own line, then the
+  // printed name and the evidence under it. Beside the name, a typed name in
+  // a script face ran wider than its box and wrapped out of the panel.
   return (
-    <div className="flex items-center justify-between gap-4 border-t py-4">
-      <div className="min-w-0">
-        <p className="text-muted-foreground font-label text-[10px] uppercase">
-          {label}
-        </p>
-        {signature ? (
-          <>
-            <p className="mt-1 text-sm font-medium">{signature.printedName}</p>
-            <p className="text-muted-foreground mt-0.5 text-xs leading-relaxed">
-              <LocalTime iso={signature.signedAt.toISOString()} /> ·{" "}
-              {signature.mark.kind === "drawn" ? "Drawn" : "Typed"} ·{" "}
-              {signature.authMethod === "share_link"
-                ? "through their private link"
-                : "signed in to ServiceClerk"}
-              {signature.consentedAt ? " · agreed to sign electronically" : ""}
-            </p>
-          </>
-        ) : (
-          <p className="text-muted-foreground mt-1 text-sm">{pending}</p>
-        )}
-      </div>
+    <div className="min-w-0 border-t py-4">
+      <p className="text-muted-foreground font-label text-[10px] uppercase">
+        {label}
+      </p>
       {signature ? (
-        <SignatureMark
-          value={signature.mark.value}
-          className="h-9 w-auto max-w-36 shrink-0"
-        />
-      ) : null}
+        <>
+          <div className="border-muted-foreground/40 mt-2 flex h-12 max-w-sm min-w-0 items-end overflow-hidden border-b pb-1">
+            <SignatureMark
+              value={signature.mark.value}
+              className="h-10 max-w-full truncate text-[26px] leading-none"
+            />
+          </div>
+          <p className="mt-2 text-sm font-medium">{signature.printedName}</p>
+          <p className="text-muted-foreground mt-0.5 text-xs leading-relaxed">
+            <LocalTime iso={signature.signedAt.toISOString()} /> ·{" "}
+            {signature.mark.kind === "drawn" ? "Drawn" : "Typed"} ·{" "}
+            {signature.authMethod === "share_link"
+              ? "through their private link"
+              : "signed in to ServiceClerk"}
+            {signature.consentedAt ? " · agreed to sign electronically" : ""}
+          </p>
+        </>
+      ) : (
+        <p className="text-muted-foreground mt-1 text-sm">{pending}</p>
+      )}
     </div>
   );
 }

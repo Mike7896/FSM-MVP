@@ -34,16 +34,21 @@ import { US_STATES } from "@/lib/us-states";
  * rest is there when he wants it. A walkthrough of the whole Office here is the
  * settings wall arriving late.
  *
- * Business name and license number are the only hard gates. Contact comes from
- * the sign-in and the logo waits until after the send. What he types is written
- * to the Office behind him — and the first time, that creates it.
+ * **The business name is the only thing it requires.** A license number is
+ * optional — a lot of work doesn't need one — and its state is asked for only
+ * once a number is typed. Contact comes from the sign-in and the logo waits
+ * until after the send. What he types is written to the Office behind him —
+ * and the first time, that creates it.
+ *
+ * Nothing is disabled to make a point: Save is always pressable, and a missing
+ * field says so on the field itself.
  */
 
 export type IntroReason = "gap" | "send";
 
 export type HeaderSlice = {
   businessName: string;
-  license: string;
+  license: string | null;
 };
 
 export function OfficeIntro({
@@ -83,14 +88,17 @@ export function OfficeIntro({
   const [number, setNumber] = useState(license ?? "");
   const [state, setState] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [tried, setTried] = useState(false);
   const [pending, startTransition] = useTransition();
 
   // A license already on file doesn't need its state asked for again.
   const newLicense = number.trim() !== "" && number.trim() !== (license ?? "");
-  const ready =
-    name.trim() !== "" && number.trim() !== "" && (!newLicense || state !== "");
+  const nameMissing = name.trim() === "";
+  const stateMissing = newLicense && state === "";
 
   function save() {
+    setTried(true);
+    if (nameMissing || stateMissing) return;
     setError(null);
     startTransition(async () => {
       try {
@@ -102,7 +110,10 @@ export function OfficeIntro({
             US_STATES.find((entry) => entry.code === state)?.name ?? state;
           await saveLicense(number.trim(), jurisdiction);
         }
-        await onSaved({ businessName: name.trim(), license: number.trim() });
+        await onSaved({
+          businessName: name.trim(),
+          license: number.trim() || null,
+        });
       } catch (cause) {
         setError(
           cause instanceof Error ? cause.message : "Couldn't save that. Try again."
@@ -120,10 +131,10 @@ export function OfficeIntro({
       : `Before this goes to ${firstName}.`;
 
   const description = !sending
-    ? "It holds the business side — your name, your license, how your documents look. Fill these two in once and every quote after this one comes out with them on it."
+    ? "It holds the business side — your name, your license, how your documents look. Fill these in once and every quote after this one comes out with them on it."
     : demo
-      ? "A customer checks who it's from and that you're licensed. Two fields, then it goes to you — and they're yours from here on."
-      : `${capitalize(firstName)} needs to know who it's from and that you're licensed. Two fields, then it sends — and they're yours from here on.`;
+      ? "A customer needs to know who it's from. Add your business name and it goes to you — it's on every quote from here on."
+      : `${capitalize(firstName)} needs to know who it's from. Add your business name and it sends — it's on every quote from here on.`;
 
   const action = !sending
     ? "Save & continue"
@@ -152,7 +163,7 @@ export function OfficeIntro({
             className="flex flex-col gap-4"
             onSubmit={(event) => {
               event.preventDefault();
-              if (ready && !pending) save();
+              if (!pending) save();
             }}
           >
             <div className="grid gap-2">
@@ -162,13 +173,25 @@ export function OfficeIntro({
                 autoFocus
                 autoComplete="organization"
                 value={name}
+                aria-invalid={tried && nameMissing}
+                aria-describedby={tried && nameMissing ? "intro-name-error" : undefined}
                 onChange={(event) => setName(event.target.value)}
               />
+              {tried && nameMissing ? (
+                <p id="intro-name-error" className="text-destructive text-xs">
+                  Your customer sees this at the top of the quote.
+                </p>
+              ) : null}
             </div>
 
             <div className="grid grid-cols-[minmax(0,1fr)_7rem] gap-3">
               <div className="grid gap-2">
-                <Label htmlFor="intro-license">License #</Label>
+                <Label htmlFor="intro-license">
+                  License #{" "}
+                  <span className="text-muted-foreground font-normal">
+                    (optional)
+                  </span>
+                </Label>
                 <Input
                   id="intro-license"
                   autoComplete="off"
@@ -179,7 +202,11 @@ export function OfficeIntro({
               <div className="grid gap-2">
                 <Label htmlFor="intro-state">State</Label>
                 <Select value={state} onValueChange={setState} disabled={!newLicense}>
-                  <SelectTrigger id="intro-state" className="w-full">
+                  <SelectTrigger
+                    id="intro-state"
+                    className="w-full"
+                    aria-invalid={tried && stateMissing}
+                  >
                     <SelectValue placeholder="—" />
                   </SelectTrigger>
                   <SelectContent>
@@ -192,6 +219,11 @@ export function OfficeIntro({
                 </Select>
               </div>
             </div>
+            {tried && stateMissing ? (
+              <p className="text-destructive -mt-2 text-xs">
+                Which state is that license from?
+              </p>
+            ) : null}
           </form>
 
           <div className="text-muted-foreground flex flex-col gap-1 text-xs">
@@ -220,7 +252,7 @@ export function OfficeIntro({
             type="submit"
             form="office-intro"
             className="flex-1"
-            disabled={!ready || pending}
+            disabled={pending}
           >
             {pending ? <Loader2 className="animate-spin" /> : null}
             {action}

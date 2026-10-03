@@ -75,7 +75,9 @@ export function SendFlow({
   const [sending, setSending] = useState<QuoteDraft | null>(null);
   const [preparing, setPreparing] = useState(false);
 
-  const gaps = !office.businessName || !office.license;
+  // The business name is the one thing a quote can't go out without. A
+  // license is shown when there is one; plenty of work doesn't need one.
+  const gaps = !office.businessName;
 
   /** Flush the draft, then open the send on the row that was written. */
   async function openSend(draft: QuoteDraft) {

@@ -152,18 +152,12 @@ export function QuoteProjection({
             Your business name
           </Gap>
         )}
+        {/* A license is optional — plenty of work doesn't need one — so no
+            license is no line, not a blank to fill. */}
         {license ? (
           <p className="text-muted-foreground mt-1 flex items-center gap-1.5 text-xs">
             <ShieldCheck className="size-3" />
             LIC #{license}
-          </p>
-        ) : onGap ? (
-          <p className="text-muted-foreground mt-1.5 flex items-center gap-1.5 text-xs">
-            <ShieldCheck className="size-3" />
-            LIC #
-            <Gap small onClick={() => onGap("license")}>
-              License number
-            </Gap>
           </p>
         ) : null}
         {phone ? (

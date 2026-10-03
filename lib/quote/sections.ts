@@ -42,11 +42,10 @@ export type DocumentSection = {
   /** What fills it in. The reason it gets the space it gets. */
   origin: "lookup" | "authored" | "computed" | "derived" | "state";
   /**
-   * One line under the section's name, in the contractor's words: what it
-   * holds, and whether it is his to fill in. The second half is the part a
-   * first-time contractor cannot guess — that Pricing is not a form.
+   * One line under the section's name while it's empty, where what goes in it
+   * isn't obvious. Null where the section explains itself.
    */
-  hint: string;
+  hint: string | null;
 };
 
 export const DOCUMENT_SECTIONS: DocumentSection[] = [
@@ -66,7 +65,7 @@ export const DOCUMENT_SECTIONS: DocumentSection[] = [
     id: "pricing",
     label: "Pricing",
     origin: "computed",
-    hint: "Adds itself up from Scope. You never type a total.",
+    hint: null,
   },
   {
     id: "terms",

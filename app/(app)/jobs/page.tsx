@@ -6,6 +6,7 @@ import type { Metadata } from "next";
 import { ArrowUpRight, BriefcaseBusiness, Plus, Search, ShieldCheck } from "lucide-react";
 
 import { DemoChip } from "@/components/demo-chip";
+import { StagePill } from "@/components/jobs/stage-pill";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { requireActiveOrganization } from "@/lib/dal";
 import { listJobs } from "@/lib/queries/jobs";
+import { reconcileOrganizationPayments } from "@/lib/stripe/collect";
 import { formatMoney } from "@/lib/quote";
 
 import styles from "./jobs.module.css";
@@ -46,6 +48,9 @@ export default async function JobsPage({
   const { q } = await searchParams;
   const search = typeof q === "string" && q.trim() ? q.trim() : undefined;
 
+  // Payments Stripe has taken that the webhook hasn't delivered, recorded
+  // before the list reads anyone's money.
+  await reconcileOrganizationPayments(org.id).catch(() => false);
   const jobs = await listJobs(org.id, { ...filters, q: search });
   const gated = jobs.filter((job) => job.gate);
 
@@ -154,9 +159,7 @@ export default async function JobsPage({
                     {job.demo ? (
                       <DemoChip />
                     ) : (
-                      <Badge variant="secondary" className="capitalize">
-                        {job.status.replace(/_/g, " ")}
-                      </Badge>
+                      <StagePill label={job.stage.label} tone={job.stage.tone} />
                     )}
                     {job.permitStatus ? (
                       <Badge variant="outline" className="capitalize">

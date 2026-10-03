@@ -2,16 +2,16 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useTransition } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { toast } from "sonner";
 
-import { SaveBar } from "@/components/save-bar";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DocumentFooter } from "@/components/documents/document-sheet";
+import { LogoField } from "@/components/office/logo-field";
 import { OfficeDocumentPreview } from "@/components/office/document-preview";
+import { SaveStatus, type SaveState } from "@/components/office/save-status";
 import { QuoteProjection } from "@/components/quote/projection";
 import { emptyDraft } from "@/lib/quote";
 import type { Office } from "@/lib/queries/office";
@@ -25,87 +25,196 @@ import {
  *
  * Everything drawn on it is his — the name, phone and license he has entered,
  * and visible gaps where he hasn't. No invented customer, job or price sits
- * around them: a made-up line on the page he is filling in reads as his own.
+ * around them.
  */
 const EMPTY_QUOTE = emptyDraft();
+
+/** How long after the last keystroke a change is saved. */
+const SAVE_AFTER_MS = 800;
+
+type Fields = Omit<OfficeFormValues, "logoUrl">;
 
 /**
  * Screen 27 · the Office's own attributes · job O2.
  *
- * **Consequence first.** The reason to fill this in is not that we need it —
- * it is that the customer is about to read it, so the form sits beside a live
- * projection of the document rather than beside an explanation of one. The
- * miniature fills in as he types, which is the same mechanism the activation
- * flow's profile gap uses and the reason that gap converts: he sees the
- * document get more professional before he commits.
+ * The form sits beside a live projection of the document, because the reason
+ * to fill it in is that the customer is about to read it. The projection is
+ * the **real** one — the same component the homeowner's page renders.
  *
- * The projection is the **real** one — the same component the homeowner's page
- * renders — so it cannot drift from what she will actually see.
+ * **It saves itself.** A pause in typing, or leaving a field, saves; the
+ * status line above the fields says when it has. An invalid field (a blank
+ * business name, a malformed email) is shown and not saved.
  */
 export function IdentityForm({
   office,
   license,
   presetName,
+  logoOnDocuments,
 }: {
   office: Office;
   /** The number a document would carry today, from the License Manager. */
   license: string | null;
   /** What document branding is currently set to. */
   presetName: string;
+  /** Whether the plan puts the logo on documents (Pro). */
+  logoOnDocuments: boolean;
 }) {
   const router = useRouter();
-  const [pending, startTransition] = useTransition();
+  const [state, setState] = useState<SaveState>("idle");
+  const [error, setError] = useState<string | null>(null);
+  const [logoUrl, setLogoUrl] = useState(office.logoUrl ?? null);
 
-  const form = useForm<OfficeFormValues>({
-    resolver: zodResolver(updateOfficeSchema),
+  const form = useForm<Fields>({
+    resolver: zodResolver(updateOfficeSchema.omit({ logoUrl: true })),
+    mode: "onChange",
     defaultValues: {
       name: office.name ?? "",
       phone: office.phone ?? "",
       email: office.email ?? "",
       address: office.address ?? "",
       website: office.website ?? "",
-      logoUrl: office.logoUrl ?? "",
     },
   });
 
   // `useWatch` rather than `form.watch()`: the latter returns a function the
-  // React Compiler cannot memoize, so it bails out of compiling the whole
-  // component. This subscribes to the fields the preview actually reads.
+  // React Compiler cannot memoize. This subscribes to what the preview reads.
   const values = useWatch({ control: form.control });
 
-  const onSubmit = form.handleSubmit((raw) => {
-    startTransition(async () => {
-      const response = await fetch("/api/v1/office", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(raw),
-      });
+  const timer = useRef<number | null>(null);
+  const running = useRef<Promise<void> | null>(null);
+  const lastSaved = useRef(JSON.stringify(form.getValues()));
 
-      const body = (await response.json().catch(() => null)) as {
+  /** One save. Says how it went, so the caller knows whether to go again. */
+  const persist = useCallback(async (): Promise<SaveState> => {
+    const snapshot = form.getValues();
+    const serialized = JSON.stringify(snapshot);
+    if (serialized === lastSaved.current) {
+      setState("saved");
+      return "saved";
+    }
+    if (!(await form.trigger())) {
+      setState("invalid");
+      return "invalid";
+    }
+
+    setState("saving");
+    const response = await fetch("/api/v1/office", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: serialized,
+    }).catch(() => null);
+
+    if (!response?.ok) {
+      const body = (await response?.json().catch(() => null)) as {
         error?: { message?: string };
       } | null;
+      setError(body?.error?.message ?? "Couldn't save.");
+      setState("error");
+      return "error";
+    }
 
-      if (!response.ok) {
-        form.setError("root", {
-          message: body?.error?.message ?? "Couldn't save. Try again.",
-        });
-        return;
-      }
+    lastSaved.current = serialized;
+    // Typing that landed while this was in flight goes in the next save.
+    if (JSON.stringify(form.getValues()) !== serialized) {
+      setState("pending");
+      return "pending";
+    }
+    setState("saved");
+    // The header, the editor and every projection read this.
+    router.refresh();
+    return "saved";
+  }, [form, router]);
 
-      toast.success("Saved. New documents go out under this.");
-      form.reset(raw);
-      // The header, the editor and every projection read this — refresh the
-      // server tree rather than patching four caches by hand.
-      router.refresh();
-    });
-  });
+  // The latest `flush`, for the timer to call — it outlives the render that
+  // set it.
+  const flushRef = useRef<() => Promise<void>>(async () => {});
+
+  const schedule = useCallback(() => {
+    if (timer.current !== null) window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(
+      () => void flushRef.current(),
+      SAVE_AFTER_MS
+    );
+  }, []);
+
+  const flush = useCallback(async () => {
+    if (timer.current !== null) window.clearTimeout(timer.current);
+    timer.current = null;
+    // One save at a time, in order.
+    while (running.current) await running.current;
+    const run = persist();
+    running.current = run.then(() => undefined);
+    const outcome = await run;
+    running.current = null;
+    if (outcome === "pending") schedule();
+  }, [persist, schedule]);
+
+  useEffect(() => {
+    flushRef.current = flush;
+  }, [flush]);
+
+  // A change starts the clock; another change restarts it.
+  useEffect(
+    () =>
+      form.subscribe({
+        formState: { values: true },
+        callback: ({ type }) => {
+          if (type !== "change") return;
+          setState("pending");
+          schedule();
+        },
+      }),
+    [form, schedule]
+  );
+
+  // Leaving the page with a change still waiting sends it anyway.
+  useEffect(
+    () => () => {
+      if (timer.current === null) return;
+      window.clearTimeout(timer.current);
+      const snapshot = JSON.stringify(form.getValues());
+      if (snapshot === lastSaved.current) return;
+      void fetch("/api/v1/office", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: snapshot,
+        keepalive: true,
+      });
+    },
+    [form]
+  );
+
+  function changeLogo(next: string | null) {
+    setLogoUrl(next);
+    setState("saved");
+    router.refresh();
+  }
 
   return (
-    <form onSubmit={onSubmit} className="w-full max-w-6xl @container/identity flex min-w-0 flex-col gap-6">
+    <form
+      onSubmit={(event) => {
+        event.preventDefault();
+        void flush();
+      }}
+      // Leaving a field saves it now rather than after the pause.
+      onBlur={() => {
+        if (timer.current !== null) void flush();
+      }}
+      className="w-full max-w-6xl @container/identity flex min-w-0 flex-col gap-6"
+    >
       {/* Use the panel's width: the app and Office sidebars also take space. */}
       <div className="grid min-w-0 gap-6 @4xl/identity:grid-cols-[minmax(0,1fr)_480px]">
         <div className="@container/fields flex min-w-0 flex-col gap-5">
           <div className="flex flex-col gap-6 rounded-xl border bg-card p-5 sm:p-6 [&_input]:h-10">
+            <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b pb-4">
+              <h2 className="text-base font-semibold">Business details</h2>
+              <SaveStatus
+                state={state}
+                error={error}
+                onRetry={() => void flush()}
+              />
+            </div>
+
             <div className="grid gap-2">
               <Label htmlFor="name">Business name</Label>
               <Input id="name" {...form.register("name")} />
@@ -118,8 +227,6 @@ export function IdentityForm({
               <Label htmlFor="address">Address</Label>
               <Input id="address" {...form.register("address")} />
               <FieldNote error={form.formState.errors.address?.message}>
-                {/* Not the job address — a Job carries its own, because the same
-                    customer&apos;s second job may be somewhere else entirely. */}
                 Where the business is, not where the work is.
               </FieldNote>
             </div>
@@ -150,22 +257,26 @@ export function IdentityForm({
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="logoUrl">Logo</Label>
-              <Input id="logoUrl" {...form.register("logoUrl")} />
-              <FieldNote error={form.formState.errors.logoUrl?.message}>
-                {/* Honest about what this is today. Uploading needs a storage
-                    bucket and a signed-URL route; a link works now and a quote
-                    without one still looks professional. */}
-                A link to an image. Optional — a quote without one still looks
-                professional.
-              </FieldNote>
+              <Label>Logo</Label>
+              <LogoField logoUrl={logoUrl} onChange={changeLogo} />
+              {logoOnDocuments ? null : (
+                <p className="text-muted-foreground text-xs">
+                  Your logo goes on documents with{" "}
+                  <Link
+                    href="/account/billing/plan"
+                    className="text-primary-ink underline underline-offset-4"
+                  >
+                    Pro
+                  </Link>
+                  . Upload it now and it appears once you&apos;re on Pro.
+                </p>
+              )}
             </div>
           </div>
 
           {/* Two rows that point out rather than in. License number and logo
               placement belong to other pages in the Office, so they are links
-              carrying their live value rather than duplicated controls — the
-              header preview is where they visibly converge. */}
+              carrying their live value rather than duplicated controls. */}
           <div className="rounded-xl border bg-card">
             <p className="text-muted-foreground border-b px-5 py-4 text-sm font-semibold">
               What else goes in the header
@@ -215,6 +326,7 @@ export function IdentityForm({
               businessName={values.name?.trim() || null}
               license={license}
               phone={values.phone?.trim() || null}
+              logoUrl={logoOnDocuments ? logoUrl : null}
               action={null}
             />
           </OfficeDocumentPreview>
@@ -247,17 +359,6 @@ export function IdentityForm({
           </p>
         </div>
       </div>
-
-      <SaveBar
-        dirty={form.formState.isDirty}
-        pending={pending}
-        error={form.formState.errors.root?.message}
-        note={
-          form.formState.isDirty
-            ? "Unsaved changes. Documents already sent keep the name they went out under."
-            : undefined
-        }
-      />
     </form>
   );
 }

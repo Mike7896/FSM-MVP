@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, desc, eq, isNull, lt, notInArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, lt, notInArray, sql, inArray } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import {
@@ -93,6 +93,8 @@ export async function listInvoices(
   organizationId: string,
   options?: {
     jobId?: string;
+    /** Several jobs at once — the jobs list reads every row's bills in one go. */
+    jobIds?: string[];
     status?: InvoiceStatus;
     type?: InvoiceType;
     overdue?: boolean;
@@ -107,6 +109,10 @@ export async function listInvoices(
   ];
 
   if (options?.jobId) filters.push(eq(documents.jobId, options.jobId));
+  if (options?.jobIds) {
+    if (options.jobIds.length === 0) return [];
+    filters.push(inArray(documents.jobId, options.jobIds));
+  }
   if (options?.status) filters.push(eq(documents.status, options.status));
   if (options?.type) filters.push(eq(invoiceDetails.invoiceType, options.type));
   if (options?.overdue) {
@@ -152,6 +158,8 @@ export async function listInvoices(
 
 export type InvoiceDetail = InvoiceListItem & {
   jobName: string | null;
+  /** `1` — the job's number, for "Job #1". */
+  jobNumber: number;
   customerId: string;
   /** Where a send would go, when the customer has an address on file. */
   customerEmail: string | null;
@@ -194,6 +202,7 @@ export async function getInvoice(
       number: documents.number,
       jobId: documents.jobId,
       jobName: jobs.name,
+      jobNumber: jobs.number,
       customerId: customers.id,
       customerName: customers.name,
       customerEmail: customers.email,
@@ -255,12 +264,13 @@ export async function getInvoice(
       .limit(1),
   ]);
 
-  const { gateMetAt, sourceDocumentId, jobName, customerId, customerEmail, ...rest } =
+  const { gateMetAt, sourceDocumentId, jobName, jobNumber, customerId, customerEmail, ...rest } =
     row;
 
   return {
     ...decorate(rest, today),
     jobName,
+    jobNumber,
     customerId,
     customerEmail,
     sourceDocumentId,

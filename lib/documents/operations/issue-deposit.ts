@@ -58,12 +58,12 @@ export async function issueDepositInvoice({
     )
     .limit(1);
 
-  if (
-    !contract ||
-    contract.status !== "signed" ||
-    !contract.depositCents ||
-    contract.depositCents <= 0
-  ) {
+  if (!contract || contract.status !== "signed") return null;
+
+  if (!contract.depositCents || contract.depositCents <= 0) {
+    // Signed with nothing to collect up front. There's no bill to issue, but
+    // the agreement still moves the job on from quoting.
+    await refreshJobStatus(contract.jobId, organizationId);
     return null;
   }
 

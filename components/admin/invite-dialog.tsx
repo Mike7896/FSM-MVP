@@ -89,7 +89,7 @@ export function InviteDialog({ onClose, onInvited }: { onClose: () => void; onIn
             {sent
               ? sent.emailed
                 ? `It's in ${sent.email}'s inbox. They accept, choose a password and set up their business.`
-                : "Send them this link yourself — by text is fine. It signs them straight in."
+                : sent.emailError ? "The account was created, but the invite email was not sent." : "The account was created. Share the invite link so they can finish setting it up."
               : "A real account for a contractor, emailed to them. They accept, choose a password and set up their business."}
           </DialogDescription>
         </DialogHeader>
@@ -207,6 +207,7 @@ export function InviteDialog({ onClose, onInvited }: { onClose: () => void; onIn
 /** The link, and a message around it to paste into a text. */
 export function InviteSent({ sent }: { sent: Pick<Sent, "userId" | "email" | "link" | "expiresAt" | "emailed" | "emailError"> }) {
   const [copied, setCopied] = useState<"link" | "text" | null>(null);
+  const localLink = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(?=[:/])/i.test(sent.link);
   const text = `Here's your invite to ServiceClerk — tap to set up your account:\n${sent.link}`;
   const copy = (what: "link" | "text", value: string) =>
     void navigator.clipboard.writeText(value).then(() => {
@@ -218,9 +219,10 @@ export function InviteSent({ sent }: { sent: Pick<Sent, "userId" | "email" | "li
     <div className="flex flex-col gap-3">
       {sent.emailError ? (
         <p role="alert" className="text-destructive rounded-md border border-current/30 p-2.5 text-sm">
-          The email didn&apos;t go out: {sent.emailError} The account is made — send the link below yourself.
+          Email not sent. {sent.emailError} The account is saved; you don’t need to create it again.
         </p>
       ) : null}
+      {localLink && <p role="alert" className="text-destructive text-sm">This is a local development link. It will not work on the recipient’s device. Configure the public app URL and generate a new invite before sharing it.</p>}
       <pre className="bg-muted rounded-md p-3 text-xs break-all whitespace-pre-wrap">{sent.link}</pre>
       <p className="text-muted-foreground text-xs">
         Works once, until {longDate(sent.expiresAt.slice(0, 10))}. Sending a new one from their account stops this one.

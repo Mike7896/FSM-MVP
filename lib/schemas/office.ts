@@ -5,15 +5,13 @@ import { DOCUMENT_PRESET_IDS } from "@/lib/branding";
 /**
  * The Office's write surface — identity, licenses, defaults, packs.
  *
- * These are the things a contractor changes **rarely and deliberately**, which
- * is the opposite of the quote editor's autosave-everything posture. So every
- * schema here is a full, explicit patch rather than a partial merge: an Office
+ * Every schema here is a full, explicit patch rather than a partial merge: a
  * form knows what all of its fields are, and a "leave this one alone" that only
  * exists because a field was omitted is how a blank input silently keeps an old
  * value.
  *
- * The one exception is the license patch, where a partial genuinely means
- * "correct this one field".
+ * The exceptions are the license patch, where a partial genuinely means
+ * "correct this one field", and the logo, which is uploaded on its own route.
  */
 
 /* ── Business identity ────────────────────────────────────────────────── */
@@ -48,7 +46,11 @@ export const updateOfficeSchema = z.object({
   /** One field, not a normalised set — there is no Property object here either. */
   address: blankToNull(300),
   website: blankToNull(300),
-  logoUrl: blankToNull(2000),
+  /**
+   * Optional: the logo is uploaded and removed through `/api/v1/office/logo`,
+   * so the identity form leaves it out and leaving it out keeps it.
+   */
+  logoUrl: blankToNull(2000).optional(),
 });
 
 export type UpdateOfficeInput = z.infer<typeof updateOfficeSchema>;

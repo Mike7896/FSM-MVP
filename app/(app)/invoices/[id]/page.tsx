@@ -1,14 +1,20 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { ExternalLink } from "lucide-react";
+import { ChevronLeft, ExternalLink } from "lucide-react";
 
 import { InvoiceSend } from "@/components/invoices/invoice-send";
+import { StagePill } from "@/components/jobs/stage-pill";
+import { PaymentFees } from "@/components/payments/payment-fees";
 import { PageHeader } from "@/components/page-header";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { jobSettlement } from "@/lib/billing";
+import { invoiceStage } from "@/lib/billing/stage";
+import { getReleases } from "@/lib/membership/releases";
+import { BANK_PERCENT, CARD_FIXED_CENTS, CARD_PERCENT } from "@/lib/payments/fees";
+import { canAcceptPayments, getConnectedAccount } from "@/lib/stripe/connect";
+import { reconcileOpenPayments } from "@/lib/stripe/collect";
 import { requireActiveOrganization } from "@/lib/dal";
 import { emailConfigured } from "@/lib/email/send";
 import { getInvoice, type InvoiceDetail } from "@/lib/queries/invoices";
@@ -23,12 +29,26 @@ export default async function InvoicePage({
   const org = await requireActiveOrganization();
   const { id } = await params;
 
+  // A card payment Stripe has taken but the webhook hasn't delivered is
+  // recorded before the page reads its money.
+  await reconcileOpenPayments([id]).catch(() => false);
+
   const invoice = await getInvoice(id, org.id);
   if (!invoice) notFound();
 
   const firstName = invoice.customerName.split(/\s+/)[0];
   const partlyPaid =
     invoice.paidCents > 0 && invoice.outstandingCents > 0;
+  const paid = invoice.effectiveStatus === "paid";
+  const stage = invoiceStage(invoice, firstName, formatMoney);
+
+  // What paying online would cost him — only where the pay button exists.
+  const owedOnline =
+    !paid && invoice.effectiveStatus !== "void" && invoice.outstandingCents > 0;
+  const [account, releases] = owedOnline
+    ? await Promise.all([getConnectedAccount(org.id), getReleases()])
+    : [null, null];
+  const showFees = owedOnline && canAcceptPayments(account);
 
   // The final bill carries the whole settlement — contract, every approved
   // change order, everything billed and paid. Only it needs the arithmetic.
@@ -39,6 +59,16 @@ export default async function InvoicePage({
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-8">
+      {/* Back to the job it bills — where the rest of its money is. */}
+      <Link
+        href={`/jobs/${invoice.jobId}`}
+        className="text-muted-foreground hover:text-foreground -mb-4 flex w-fit items-center gap-1 text-sm transition-colors"
+      >
+        <ChevronLeft className="size-4" />
+        Job #{invoice.jobNumber}
+        {invoice.jobName ? ` · ${invoice.jobName}` : ` · ${invoice.customerName}`}
+      </Link>
+
       <PageHeader
         title={`Invoice ${invoice.number}`}
         description={[invoice.customerName, invoice.covers]
@@ -74,23 +104,28 @@ export default async function InvoicePage({
       ) : null}
 
       <div className="rounded-lg border p-6">
-        <div className="flex flex-wrap items-baseline justify-between gap-4">
-          <div>
-            <Badge variant="secondary" className="capitalize">
-              {invoice.type.replace(/_/g, " ")}
-            </Badge>
-            {invoice.covers ? (
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          {/* Where it stands, before anything else. */}
+          <div className="min-w-0">
+            <StagePill label={stage.label} tone={stage.tone} size="md" />
+            {stage.detail ? (
               <p className="text-muted-foreground mt-2 text-sm">
-                {invoice.covers}
+                {stage.detail}
               </p>
             ) : null}
           </div>
           <div className="text-right">
             <p className="text-muted-foreground font-label text-[10px] uppercase">
-              {partlyPaid ? "Still owed" : "Amount due"}
+              {paid ? "Paid" : partlyPaid ? "Still owed" : "Amount due"}
             </p>
-            <p className="text-3xl font-semibold tabular-nums">
-              {formatMoney(invoice.outstandingCents)}
+            <p
+              className={
+                paid
+                  ? "text-positive text-3xl font-semibold tabular-nums"
+                  : "text-3xl font-semibold tabular-nums"
+              }
+            >
+              {formatMoney(paid ? invoice.amountDueCents : invoice.outstandingCents)}
             </p>
             {partlyPaid ? (
               <p className="text-muted-foreground mt-1 text-xs tabular-nums">
@@ -104,16 +139,20 @@ export default async function InvoicePage({
         <Separator className="my-5" />
 
         <div className="grid gap-3 text-sm sm:grid-cols-2">
-          <Field label="Status">
-            <span className="capitalize">{invoice.effectiveStatus}</span>
+          <Field label="Type">
+            <span className="capitalize">{invoice.type.replace(/_/g, " ")}</span>
           </Field>
           <Field label="Due">{invoice.dueOn ?? "No date set"}</Field>
+          {invoice.covers &&
+          invoice.covers.toLowerCase() !== invoice.type.replace(/_/g, " ") ? (
+            <Field label="For">{invoice.covers}</Field>
+          ) : null}
           <Field label="Job">
             <Link
               href={`/jobs/${invoice.jobId}`}
               className="text-primary-ink underline underline-offset-4"
             >
-              {invoice.jobName ?? "Open the job"}
+              Job #{invoice.jobNumber}
             </Link>
           </Field>
           <Field label="Sourced from">
@@ -170,7 +209,16 @@ export default async function InvoicePage({
       ) : null}
 
       {/* Sending is its own act, with his words on it — the same as a quote. */}
-      {invoice.effectiveStatus !== "void" ? (
+      {showFees && releases ? (
+        <PaymentFees
+          amountCents={invoice.outstandingCents}
+          oursOn={releases.ach_application_fee}
+          payer={firstName}
+        />
+      ) : null}
+
+      {/* Nothing left to ask for once it's paid or void. */}
+      {invoice.effectiveStatus !== "void" && !paid ? (
         <InvoiceSend
           invoiceId={invoice.id}
           customerName={invoice.customerName}
@@ -216,6 +264,7 @@ export default async function InvoicePage({
                 <p className="text-muted-foreground mt-1 text-xs">
                   {entry.occurredAt.toISOString().slice(0, 10)}
                   {entry.memo ? ` · ${entry.memo}` : ""}
+                  {feeNote(entry.entryType)}
                 </p>
               </div>
               <span className="font-medium tabular-nums">
@@ -329,12 +378,23 @@ function entryLabel(
     case "chargeback_reversed":
       return "Dispute resolved in your favour";
     case "processing_fee":
-      return "Processing fee";
+      return "Stripe processing fee";
     case "application_fee":
-      return "Platform fee";
+      return "ServiceClerk fee";
     case "payout":
       return "Paid out to your bank";
     case "adjustment":
       return "Adjustment";
   }
+}
+
+/** Why a fee row is there, said once under it. */
+function feeNote(type: InvoiceDetail["entries"][number]["entryType"]): string {
+  if (type === "processing_fee") {
+    return ` · Stripe's charge for taking the payment online: ${CARD_PERCENT}% + ${CARD_FIXED_CENTS}¢ on a card, ${BANK_PERCENT}% (max $5) on a bank transfer`;
+  }
+  if (type === "application_fee") {
+    return " · ServiceClerk's 0.2% on a bank transfer, max $5";
+  }
+  return "";
 }

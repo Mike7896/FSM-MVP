@@ -13,9 +13,11 @@ import {
   jobs,
   permits,
 } from "@/lib/db/schema";
+import { jobStage, type JobStage } from "@/lib/billing/stage";
 import type { DocumentStatus } from "@/lib/documents";
 import { collectedForInvoice } from "@/lib/ledger";
 import { openGates, type Gate } from "@/lib/queries/gates";
+import { listInvoices } from "@/lib/queries/invoices";
 import { jobMoney, type JobMoney } from "@/lib/queries/jobs";
 import { passedInspectionPhases } from "@/lib/field/inspection-gates";
 
@@ -66,6 +68,8 @@ export type JobHub = {
   address: string | null;
   jurisdiction: string | null;
   status: (typeof jobs.status.enumValues)[number];
+  /** Where it stands in words — the status, read with its invoices and money. */
+  stage: JobStage;
   startsOn: string | null;
   customerId: string;
   customerName: string;
@@ -135,12 +139,13 @@ export async function getJobHub(
 
   if (!job) return null;
 
-  const [money, gates, stages, permitRows, documentRows] = await Promise.all([
+  const [money, gates, stages, permitRows, documentRows, invoices] = await Promise.all([
     jobMoney([jobId]),
     openGates(organizationId),
     buildStages(jobId),
     buildPermits(jobId),
     buildDocuments(jobId),
+    listInvoices(organizationId, { jobId, limit: 100 }),
   ]);
 
   const state = money.get(jobId) ?? {
@@ -152,8 +157,20 @@ export async function getJobHub(
     remainingCents: 0,
   };
 
+  // Every phase in the plan past its gate: the work is done, whatever is
+  // or isn't billed yet. A deposit is paid up front, so it says nothing.
+  const work = stages.filter((row) => row.gate !== "on_acceptance");
+  const workDone = work.length > 0 && work.every((row) => row.state !== "gated");
+
   return {
     ...job,
+    stage: jobStage({
+      status: job.status,
+      agreedCents: state.totalCents,
+      collectedCents: state.collectedCents,
+      invoices,
+      workDone,
+    }),
     money: state,
     gate: gates.get(jobId) ?? null,
     stages,

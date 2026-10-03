@@ -9,6 +9,7 @@ import { TourProvider } from "@/components/tours/tour-provider";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { getCurrentUser, getUserOrganizations, requireSession } from "@/lib/dal";
 import { FreeLimitSheet } from "@/components/billing/free-limit-sheet";
+import { KeyboardShortcuts } from "@/components/shortcuts/keyboard-shortcuts";
 import { getBillSummary } from "@/lib/membership/bill";
 import { listTourProgress } from "@/lib/queries/tours";
 
@@ -62,6 +63,8 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
       <PresenceBeacon />
       {/* The upgrade prompt, over whatever draft hit the Free job limit. */}
       <FreeLimitSheet />
+      {/* ? lists them; G then a letter goes somewhere; C starts a quote. */}
+      <KeyboardShortcuts />
       <SidebarProvider>
         <AppSidebar
           businessName={organizations[0].name}

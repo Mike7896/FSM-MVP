@@ -8,6 +8,8 @@ import { getCurrentUser, requireActiveOrganization } from "@/lib/dal";
 import { emailConfigured } from "@/lib/email/send";
 import { getOfficeIdentity } from "@/lib/queries/office";
 import { getQuoteTimeline } from "@/lib/queries/quote-timeline";
+import { getReleases } from "@/lib/membership/releases";
+import { feeRates } from "@/lib/payments/fees";
 import { canAcceptPayments, getConnectedAccount } from "@/lib/stripe/connect";
 
 const UUID =
@@ -31,12 +33,14 @@ export async function SentPage({
   if (!UUID.test(quoteId)) notFound();
 
   const org = await requireActiveOrganization();
-  const [timeline, profile, office, account] = await Promise.all([
+  const [timeline, profile, office, account, releases] = await Promise.all([
     getQuoteTimeline(quoteId, org.id),
     getCurrentUser(),
     getOfficeIdentity(org.id),
     getConnectedAccount(org.id),
+    getReleases(),
   ]);
+  const rates = feeRates(releases.ach_application_fee);
 
   if (!timeline) notFound();
   // Never sent: nothing to confirm yet. Back to the quote.
@@ -64,6 +68,8 @@ export async function SentPage({
                 depositCents !== null &&
                 depositCents > 0 &&
                 !canAcceptPayments(account),
+              // What taking it online costs, said before he sets it up.
+              feeLine: `Cards cost you ${rates.card}; bank transfers ${rates.bank}. It comes out of the deposit, not the customer's price.`,
             }
       }
     />

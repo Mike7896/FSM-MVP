@@ -22,6 +22,7 @@ import { requireMembership } from "@/lib/dal";
 import { issueDepositInvoice, recordShareView } from "@/lib/documents";
 import { listInfoRequests, resolveInfoToken } from "@/lib/field/info-requests";
 import { resolveShareToken, type SharedDocument } from "@/lib/queries/share";
+import { reconcileOpenPayments } from "@/lib/stripe/collect";
 
 /** One read per request — the title and the page both need it. */
 const resolve = cache(resolveShareToken);
@@ -100,6 +101,19 @@ export default async function SharePage({ params }: PageProps<"/share/[token]">)
       return null;
     });
     if (issued) shared = (await resolveShareToken(token)) ?? shared;
+  }
+
+  // Back from paying: Stripe knows before the webhook does — and on a laptop
+  // with no webhook forwarding, Stripe is the only one who knows. Ask, record,
+  // and read again so the page says "paid" now.
+  if (shared.kind === "invoice") {
+    const checked = await reconcileOpenPayments([shared.documentId]).catch(
+      (error) => {
+        console.error("[share] couldn't check the payment with Stripe:", error);
+        return false;
+      }
+    );
+    if (checked) shared = (await resolveShareToken(token)) ?? shared;
   }
 
   const canRequestChange = !shared.demo && await requestContext(token).then(() => true).catch(() => false);

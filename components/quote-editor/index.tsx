@@ -2,6 +2,7 @@
 
 import {
   useCallback,
+  useEffect,
   useImperativeHandle,
   useMemo,
   useRef,
@@ -21,7 +22,10 @@ import {
 } from "@/components/quote-editor/document-sections";
 import { EditorHeader } from "@/components/quote-editor/editor-header";
 import { MarginCheck } from "@/components/quote-editor/margin-check";
-import { ScopeSection } from "@/components/quote-editor/scope/scope-section";
+import {
+  ScopeSection,
+  type ScopeUpdate,
+} from "@/components/quote-editor/scope/scope-section";
 import {
   ChangeMoneySection,
   ChangeTermsSection,
@@ -47,8 +51,8 @@ import {
   type EditorMode,
   type QuoteDraft,
   type QuoteTerms,
-  type ScopeNode,
 } from "@/lib/quote";
+import { hasMod } from "@/lib/shortcuts";
 import { emitTourEvent } from "@/lib/tours";
 import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
@@ -259,7 +263,11 @@ export function QuoteEditor({
       : "264px";
 
   const setScope = useCallback(
-    (scope: ScopeNode[]) => update((current) => ({ ...current, scope })),
+    (next: ScopeUpdate) =>
+      update((current) => ({
+        ...current,
+        scope: typeof next === "function" ? next(current.scope) : next,
+      })),
     [update]
   );
 
@@ -320,6 +328,32 @@ export function QuoteEditor({
     }
   }
 
+  // ⌘S saves now rather than opening the browser's save dialog; ⌘↵ is the
+  // header's primary action. Ctrl on Windows and Linux.
+  const previewRef = useRef(preview);
+  useEffect(() => {
+    previewRef.current = preview;
+  });
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (!hasMod(event) || event.altKey || event.shiftKey) return;
+      if (event.key === "s" || event.key === "S") {
+        event.preventDefault();
+        if (!autosave) return;
+        void saveNow().then((saved) => {
+          if (saved) toast.success("Saved");
+        });
+      } else if (event.key === "Enter") {
+        // Not from inside a dialog — the terms sheet has its own Enter.
+        if ((event.target as HTMLElement).closest?.("[role=dialog]")) return;
+        event.preventDefault();
+        void previewRef.current();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [autosave, saveNow]);
+
   /**
    * Pricing, Terms and Acceptance — the three that move to the rail at the desk
    * and come back into the document when it folds. Written once and placed
@@ -379,7 +413,12 @@ export function QuoteEditor({
      * scrolls like every other page is worth more than independently scrolling
      * panes.
      */
-    <div ref={frame} className="@container flex flex-1 flex-col">
+    <div
+      ref={frame}
+      // The app's single-letter shortcuts stay off while the editor is open.
+      data-letter-shortcuts="off"
+      className="@container flex flex-1 flex-col"
+    >
       <div className="bg-background flex flex-1 flex-col">
         <EditorHeader
           draft={draft}

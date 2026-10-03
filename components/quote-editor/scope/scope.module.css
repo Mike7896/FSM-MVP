@@ -59,11 +59,17 @@
 .control input { height: 31px; background: var(--background); border-color: var(--input); box-shadow: none; }
 .costControls { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; min-height: 31px; border-left: 1px solid var(--border); padding-left: 12px; }
 .costFields { display: grid; grid-template-columns: repeat(auto-fit, minmax(135px, 1fr)); gap: 16px; margin: 0 18px 18px; padding: 16px; border: 1px dashed var(--border); background: var(--muted); border-radius: 8px; }
+.costNote { grid-column: 1 / -1; margin: 0; }
 .textRun { background: color-mix(in srgb, var(--muted) 45%, var(--background)); border-radius: 9px; }
 .textRun > div + div { border-top: 1px dashed var(--border); }
 .addInside { margin-left: 18px; border-left: 2px solid color-mix(in srgb, var(--primary) 25%, var(--border)); padding-block: 5px; }
-.menu { opacity: .6; }
-@media (hover: none) { .menu { opacity: 1; } }
+.rowActions { gap: 2px; margin-inline: -4px; }
+.moveActions { gap: 2px; }
+/* A narrow column keeps its room for the description: the arrows go, and
+   the menu and Alt+↑/↓ still move rows. */
+@container (max-width: 640px) {
+  .moveActions { display: none; }
+}
 @container (max-width: 520px) {
   .roots { padding: 12px 8px 16px; gap: 14px; }
   .row { padding-inline: 12px; }

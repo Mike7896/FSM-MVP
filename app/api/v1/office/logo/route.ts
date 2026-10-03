@@ -13,6 +13,7 @@ import {
   BUCKETS,
   createSignedUploadUrl,
   getPublicUrl,
+  removeObjects,
 } from "@/lib/supabase/storage";
 
 /**
@@ -21,7 +22,11 @@ import {
  * Two calls, the same shape as a job photo: `POST` hands back somewhere to put
  * the file, the browser uploads straight to Storage, then `PUT` makes the file
  * that landed the Office's logo. The row is written after the bytes land, so a
- * logo that failed to upload is never the one on a customer's quote.
+ * logo that failed to upload is never the one on a customer's quote. `DELETE`
+ * takes it off.
+ *
+ * A replaced or removed logo's file is deleted from the bucket once the row no
+ * longer points at it.
  *
  * **The path is built here** from the organization `requireOrg` proved, and
  * `PUT` refuses any path outside it — the bucket is public, and a path from the
@@ -54,6 +59,7 @@ export const PUT = handler(async (request) => {
   }
 
   const logoUrl = await getPublicUrl(BUCKETS.logos, path);
+  const previous = await currentLogoPath(organizationId);
 
   const [row] = await db
     .update(organizations)
@@ -61,5 +67,51 @@ export const PUT = handler(async (request) => {
     .where(eq(organizations.id, organizationId))
     .returning({ logoUrl: organizations.logoUrl });
 
+  if (previous && previous !== path) await removeQuietly(previous);
+
   return ok(row);
 });
+
+export const DELETE = handler(async (request) => {
+  const caller = await requireCaller(request);
+  const { organizationId } = await requireOrg(request, caller, {
+    roles: BILLING_ROLES,
+  });
+  const previous = await currentLogoPath(organizationId);
+
+  const [row] = await db
+    .update(organizations)
+    .set({ logoUrl: null, updatedAt: new Date() })
+    .where(eq(organizations.id, organizationId))
+    .returning({ logoUrl: organizations.logoUrl });
+
+  if (previous) await removeQuietly(previous);
+
+  return ok(row);
+});
+
+/**
+ * The bucket path of the Office's current logo, when it is a file we hold —
+ * an older pasted link points somewhere else and there is nothing to delete.
+ */
+async function currentLogoPath(organizationId: string): Promise<string | null> {
+  const [org] = await db
+    .select({ logoUrl: organizations.logoUrl })
+    .from(organizations)
+    .where(eq(organizations.id, organizationId))
+    .limit(1);
+
+  const marker = `/storage/v1/object/public/${BUCKETS.logos}/`;
+  const at = org?.logoUrl?.indexOf(marker) ?? -1;
+  if (!org?.logoUrl || at === -1) return null;
+
+  const path = decodeURIComponent(org.logoUrl.slice(at + marker.length));
+  return path.startsWith(`${organizationId}/logo-`) && !path.includes("..")
+    ? path
+    : null;
+}
+
+/** An orphaned file costs a few kilobytes; a failed save over it costs the logo. */
+async function removeQuietly(path: string) {
+  await removeObjects(BUCKETS.logos, [path]).catch(() => undefined);
+}
