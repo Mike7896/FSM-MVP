@@ -62,7 +62,7 @@ export function MarginCheck({ draft }: { draft: QuoteDraft }) {
 
       {!priced || result.revenueCents === 0 ? (
         <p className="text-muted-foreground mt-2 text-sm leading-relaxed">
-          Click “Add your cost” on a row and your margin shows up here.
+          Open “Your cost &amp; markup” on a row and your margin shows up here.
         </p>
       ) : (
         <>

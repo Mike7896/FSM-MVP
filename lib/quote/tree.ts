@@ -90,9 +90,17 @@ export type ScopeNode = {
   taxable: boolean;
   /** The customer may add this row or leave it off. Inherited by descendants. */
   optional: boolean;
+  /**
+   * Groups and assemblies only: whether the customer sees the rows inside
+   * (`show`) or one line with its total (`hide`). Null or absent follows the
+   * quote's own setting — see `disclosure.ts`.
+   */
+  breakdown?: Breakdown | null;
   source: LineSource;
   children: ScopeNode[];
 };
+
+export type Breakdown = "show" | "hide";
 
 /* ── The registry ─────────────────────────────────────────────────────── */
 

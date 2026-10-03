@@ -50,6 +50,11 @@ export type LineSource = (typeof lineItemSourceEnum.enumValues)[number];
 export type QuoteTerms = {
   contractType: string | null;
   priceStructure: string | null;
+  /**
+   * On an itemised quote, how deep the customer sees: `top` (each top-level
+   * row with its total) or `all` (every row). Null reads as `top`.
+   */
+  scopeDetail: string | null;
   pricingMethod: string | null;
   estimatingMethod: string | null;
   estimateClass: string | null;

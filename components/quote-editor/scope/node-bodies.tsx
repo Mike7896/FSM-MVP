@@ -30,6 +30,8 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuShortcut,
   DropdownMenuSub,
@@ -47,6 +49,7 @@ import {
 } from "@/components/ui/tooltip";
 import {
   COST_BUCKETS,
+  CUSTOMER_DETAILS,
   NODE_SPEC,
   bucket,
   formatMoney,
@@ -123,7 +126,7 @@ function PricedBody({ node }: BodyProps) {
         node={node}
         onActivate={() => open(node.key)}
         lead={
-          <span className="min-w-0 truncate text-sm">
+          <span className={cn(styles.readName, "text-sm")}>
             {node.description || "Untitled row"}
             {perUnit ? (
               <span className="text-muted-foreground">
@@ -389,7 +392,7 @@ function ContainerBody({ node }: BodyProps) {
 
   const lead =
     mode === "read" ? (
-      <span className="min-w-0 truncate text-sm font-medium">
+      <span className={cn(styles.readName, "text-sm font-semibold")}>
         {node.description || (node.type === "group" ? "Untitled group" : "Assembly")}
       </span>
     ) : (
@@ -604,6 +607,8 @@ function NodeMenu({ node }: { node: ScopeNode }) {
     duplicate,
     moveTargets,
     moveTo,
+    saveToLibrary,
+    customerDetail,
   } = useScopeActions();
   const spec = NODE_SPEC[node.type];
   const { first, last } = position(node.key);
@@ -658,6 +663,11 @@ function NodeMenu({ node }: { node: ScopeNode }) {
             <Keys keys={ROW_KEYS.duplicate} />
           </DropdownMenuShortcut>
         </DropdownMenuItem>
+        {saveToLibrary ? (
+          <DropdownMenuItem onSelect={() => saveToLibrary(node.key)}>
+            Save to library
+          </DropdownMenuItem>
+        ) : null}
 
         <DropdownMenuSeparator />
 
@@ -686,6 +696,43 @@ function NodeMenu({ node }: { node: ScopeNode }) {
           <DropdownMenuItem onSelect={() => dissolve(node.key)}>
             Break apart — keep the rows
           </DropdownMenuItem>
+        ) : null}
+
+        {/* What the customer sees of this group: its rows, or one line. The
+            quote sets it for every group; this sets it for this one. */}
+        {spec.container ? (
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>Your customer sees</DropdownMenuSubTrigger>
+            <DropdownMenuSubContent className="w-72">
+              {customerDetail === "total" ? (
+                <DropdownMenuLabel className="text-muted-foreground text-xs leading-snug font-normal">
+                  This quote shows one total, so no rows are shown. This
+                  applies if you switch it back.
+                </DropdownMenuLabel>
+              ) : null}
+              <DropdownMenuRadioGroup
+                value={node.breakdown ?? "quote"}
+                onValueChange={(value) =>
+                  patch(node.key, {
+                    breakdown: value === "quote" ? null : (value as "show" | "hide"),
+                  })
+                }
+              >
+                <DropdownMenuRadioItem value="show">
+                  The rows inside, with their prices
+                </DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="hide">
+                  One line with its total
+                </DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="quote">
+                  Same as the quote (
+                  {CUSTOMER_DETAILS.find((option) => option.value === customerDetail)
+                    ?.label.toLowerCase()}
+                  )
+                </DropdownMenuRadioItem>
+              </DropdownMenuRadioGroup>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
         ) : null}
 
         {/* Retyping only within a body kind. Turning a note into a priced row

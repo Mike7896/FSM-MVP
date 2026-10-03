@@ -22,6 +22,7 @@
     "field:integration-check": "node scripts/field-workflows-check.mjs",
     "tags:check": "tsx --env-file=.env.local --conditions=react-server scripts/tags-check.mts",
     "quote:check": "tsx scripts/tree-check.ts",
+    "library:check": "tsx scripts/library-check.ts",
     "quote:persist-check": "tsx --env-file=.env.local --conditions=react-server scripts/persist-check.mts",
     "connector:check": "tsx --env-file=.env.local --conditions=react-server scripts/connector-check.mts",
     "ledger:check": "tsx --env-file=.env.local --conditions=react-server scripts/ledger-check.mts",

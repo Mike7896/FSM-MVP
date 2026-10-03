@@ -188,6 +188,7 @@ const emptyPreview: QuoteDraft = {
   terms: {
     contractType: null,
     priceStructure: null,
+    scopeDetail: null,
     pricingMethod: null,
     estimatingMethod: null,
     estimateClass: null,

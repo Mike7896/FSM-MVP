@@ -403,8 +403,9 @@ function describeDecisions(draft: QuoteDraft): string {
   else if (contractType === "gmp") words.push("Guaranteed maximum");
   else if (contractType === "flat_rate_menu") words.push("Flat rate");
 
-  if (priceStructure === "itemized") words.push("itemised");
-  else if (priceStructure === "single_total") words.push("one number");
+  if (priceStructure === "itemized") {
+    words.push(draft.terms.scopeDetail === "all" ? "every row shown" : "itemised");
+  } else if (priceStructure === "single_total") words.push("one number");
   else if (priceStructure === "partitioned") words.push("base plus fees");
   else if (priceStructure === "tiered") words.push("options");
 

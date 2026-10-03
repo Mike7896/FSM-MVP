@@ -236,6 +236,7 @@ export function scopeTreeFromRows(rows: ScopeNodeRow[]): ScopeNode[] {
       sellPriceCents: row.sellPriceCents,
       taxable: row.taxable,
       optional: row.optional,
+      breakdown: row.breakdown,
       source: row.source,
       children: [],
     })

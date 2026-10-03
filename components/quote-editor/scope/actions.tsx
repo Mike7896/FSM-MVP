@@ -2,7 +2,12 @@
 
 import { createContext, useContext, type ReactNode } from "react";
 
-import type { MoveTarget, NodeType, ScopeNode } from "@/lib/quote";
+import type {
+  CustomerDetail,
+  MoveTarget,
+  NodeType,
+  ScopeNode,
+} from "@/lib/quote";
 
 /**
  * Everything that can be done to a Scope node, in one place.
@@ -56,6 +61,14 @@ export type ScopeActions = {
   add: (parentKey: string | null) => void;
   /** Read mode only: open this node for editing. */
   open: (key: string) => void;
+  /** Keep a copy of the row in the Office's Library. Absent where there's no Library. */
+  saveToLibrary?: (key: string) => void;
+
+  /**
+   * How much the customer sees, quote-wide. A group's own `breakdown` overrides
+   * it, set through `patch`.
+   */
+  customerDetail: CustomerDetail;
 
   /**
    * The first priced row. Its price field carries the `quote.row-price` tour
@@ -63,6 +76,12 @@ export type ScopeActions = {
    * mark is somebody else's question.
    */
   priceAnchorKey: string | null;
+  /**
+   * Whether that row is open in its sheet (phone). Closed, the row itself
+   * carries the marker, so a step about its price points at the row to tap
+   * rather than waiting on a field that isn't on screen.
+   */
+  priceAnchorOpen: boolean;
 };
 
 const Context = createContext<ScopeActions | null>(null);

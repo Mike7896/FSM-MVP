@@ -6,9 +6,11 @@ import type {
   SharedQuote,
 } from "@/lib/queries/share";
 import {
-  baseTotal,
+  customerDetail,
+  customerLines,
   formatChange,
   formatMoney,
+  isPriced,
   isText,
   nodeTotal,
   termsSentence,
@@ -42,6 +44,8 @@ export type PaperLine = {
   detail?: string | null;
   /** Formatted, or null for a line that carries no money. */
   amount: string | null;
+  /** Inside a group the customer is shown: 1 for its rows, 2 for theirs. */
+  depth?: number;
 };
 
 export type PaperSignature = {
@@ -177,21 +181,28 @@ function draftPaper({
     blocks.push({ kind: "text", body: draft.scopeOfWork.trim(), quiet: true });
   }
 
-  // Top level only — a group is one row with its subtotal, the way her page
-  // reads it.
-  const rows = draft.scope.filter((node) => !isText(node) && !node.optional);
-  if (rows.length) {
-    blocks.push({
-      kind: "lines",
-      lines: rows.map((node) => ({
-        description: node.description || "Work",
-        detail:
-          node.type === "allowance"
-            ? "An allowance — trued up to the actual cost once you choose."
-            : null,
-        amount: formatMoney(baseTotal(node)),
-      })),
-    });
+  // The rows the contractor chose to show her, exactly as her page draws them
+  // — see `lib/quote/disclosure.ts`. One total prints the money and no rows.
+  const detail = customerDetail(draft.terms);
+  const rows = customerLines(draft.scope, detail);
+  const priced = draft.scope.some(function walk(node): boolean {
+    return (isPriced(node) && !node.optional) || node.children.some(walk);
+  });
+  if (rows.length || (detail === "total" && priced)) {
+    if (rows.length) {
+      blocks.push({
+        kind: "lines",
+        lines: rows.map(({ node, depth, amountCents }) => ({
+          description: node.description || "Work",
+          detail:
+            node.type === "allowance"
+              ? "An allowance — trued up to the actual cost once you choose."
+              : null,
+          amount: formatMoney(amountCents),
+          depth,
+        })),
+      });
+    }
     blocks.push({
       kind: "totals",
       lines:

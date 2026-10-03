@@ -4,48 +4,61 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   draftFromRecord,
-  flatten,
   hasChanges,
+  idsByKey,
   toSavePayload,
+  withIds,
   type QuoteDraft,
   type QuoteRecord,
-  type ScopeNode,
 } from "@/lib/quote";
 
 /**
  * The draft, and keeping it saved.
  *
- * **The contractor never presses Save.** He is standing in someone's kitchen
- * with one hand on the phone; a Save button is a thing to forget, and the quote
- * he loses is the one he was about to send. So every change debounces into a
- * write and the interface reports what happened rather than asking permission.
+ * **There is no Save button.** Every change debounces into a write — a pause in
+ * typing saves, the way a Google Doc does — and the header reports what
+ * happened.
  *
- * Three rules the implementation exists to hold:
+ * The rules the implementation holds:
  *
  * 1. **Local state is the truth while editing.** A response never overwrites a
- *    field he is currently typing in — only ids and server-assigned values
- *    (`number`, line ids) are merged back. Anything else produces the cursor
- *    jumping backwards mid-word, which is the classic autosave bug.
+ *    field being typed in — only ids and server-assigned values (`number`, row
+ *    ids) are merged back, matched to rows by their client `key`, so rows added
+ *    or moved while a write was out keep their own identity.
  *
- * 2. **One write in flight at a time.** Saves are serialised rather than fired
- *    per change, so two PATCHes carrying different line sets can never land out
- *    of order and leave the quote holding the older one.
+ * 2. **One write in flight at a time.** Saves are serialised, so two PATCHes
+ *    carrying different row sets can never land out of order.
  *
  * 3. **A failed save is never silent and never destructive.** The draft stays
- *    exactly as typed, the status says so, and the next change retries.
+ *    exactly as typed, the status says so, and it retries on its own — sooner
+ *    when the connection comes back.
  *
- * What the server last confirmed is held as **state, not a ref**, so that
- * `dirty` is derived purely during render — reading a ref there would be a lie
- * about when the value changed, and React's compiler is right to reject it.
+ * 4. **Leaving saves.** Closing the editor inside the app, hiding the tab or
+ *    closing it writes whatever hasn't been written; closing the tab with a
+ *    change still unsaved asks first.
  */
 
 export type SaveStatus = "idle" | "saving" | "saved" | "error";
 
-/** Long enough that typing a line doesn't chatter, short enough to feel live. */
+/** The pause after the last change before it saves. */
 const DEBOUNCE_MS = 900;
 
 /** How long `saveNow` waits on a write that was already out. */
 const FLUSH_TIMEOUT_MS = 15_000;
+
+/** Retries after a failure wait 2s, 4s, 8s … and never more than a minute. */
+const RETRY_BASE_MS = 2_000;
+const RETRY_MAX_MS = 60_000;
+
+/**
+ * Bodies under this go with `keepalive`, so a write started as the tab closes
+ * still lands. Browsers refuse keepalive bodies over 64KB, so a very large
+ * quote goes without it rather than not at all.
+ */
+const KEEPALIVE_MAX_BYTES = 60_000;
+
+const OFFLINE_MESSAGE =
+  "Couldn't reach the server. Your changes are still here and will save when the connection is back.";
 
 type Options = {
   /** A loaded quote, or an empty draft. The row is created by the first save. */
@@ -53,9 +66,7 @@ type Options = {
   saveRequest?: (draft: QuoteDraft) => Promise<Response>;
   /**
    * Create-time context the draft does not carry. Taken as primitives rather
-   * than an object so the effect below has stable dependencies — an object
-   * literal from the caller would be a new identity every render and would
-   * re-arm the debounce on every parent update.
+   * than an object so the save callback keeps a stable identity.
    */
   jobId?: string;
   /** Set when the quote was started from a customer's page. */
@@ -85,6 +96,10 @@ export function useQuoteDraft({
   const [saved, setSaved] = useState<QuoteDraft>(initial);
   const [status, setStatus] = useState<SaveStatus>("idle");
   const [error, setError] = useState<string | null>(null);
+  /** Bumped on every failure, so the retry below re-arms with a longer wait. */
+  const [failures, setFailures] = useState(0);
+  /** Whether the last failure is worth retrying — a refusal (4xx) isn't. */
+  const [retryable, setRetryable] = useState(false);
 
   // Touched only inside the async save, never during render.
   const inFlight = useRef(false);
@@ -114,95 +129,110 @@ export function useQuoteDraft({
       inFlight.current = true;
 
       try {
-        // Drains the queue in a loop rather than by recursing. Same behaviour,
-        // but the function never references itself, which is what lets React's
-        // compiler keep this memoized.
+        // Drains the queue in a loop rather than by recursing, which is what
+        // lets React's compiler keep this memoized.
         let current: QuoteDraft | null = first;
 
         while (current) {
           setStatus("saving");
           setError(null);
 
+          let server: QuoteDraft;
           try {
-            const payload = toSavePayload(current);
-
-            const response = saveRequest ? await saveRequest(current) : current.id
-              ? await fetch(`/api/v1/quotes/${current.id}`, {
-                  method: "PATCH",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify(payload),
-                })
-              : await fetch("/api/v1/quotes", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    ...payload,
-                    jobId,
-                    // An explicit id beats the name match the endpoint would
-                    // otherwise fall back on — the same name typed twice
-                    // should not become two people.
-                    customerId,
-                    address,
-                    packId,
-                    demo,
-                  }),
-                });
-
-            const body = (await response.json().catch(() => null)) as {
-              data?: QuoteRecord;
-              error?: { message?: string };
-            } | null;
-
-            if (!response.ok || !body?.data) {
-              throw new Error(
-                body?.error?.message ??
-                  "Couldn't save. Your changes are still here."
-              );
-            }
-
-            const server = draftFromRecord(body.data);
-            const written = current;
-            const adopted = adoptIdentity(written, server);
-
-            // Rule 1: merge identity, not content. Whatever he has typed since
-            // this request left stays exactly as typed.
-            setDraft((live) => adoptIdentity(live, server));
-            setSaved(adopted);
-            confirmed.current = adopted;
-            setStatus("saved");
+            server = await write(current);
           } catch (cause) {
+            const failure = cause instanceof SaveFailure ? cause : null;
             confirmed.current = null;
             setStatus("error");
-            setError(
-              cause instanceof Error
-                ? cause.message
-                : "Couldn't save. Your changes are still here."
-            );
-            // Stop draining on failure. The debounce retries on the next
-            // keystroke, and hammering a failing endpoint helps nobody.
+            setError(failure?.message ?? OFFLINE_MESSAGE);
+            setRetryable(failure ? failure.retryable : true);
+            setFailures((count) => count + 1);
+            // Stop draining. The retry below — or the next change — writes
+            // the newest draft, so the queued one has nothing to add.
             queued.current = null;
             break;
           }
 
-          // A change queued behind a first write was captured before that
-          // write gave the quote its row. Sent as it stands it would create a
-          // second quote, so it takes the identity the write just confirmed —
-          // the quote's, not its lines', which the next response re-keys.
+          // Rule 1: merge identity, not content. Rows are matched by key, so
+          // whatever was typed, added or moved since this request left stays
+          // exactly as it is and keeps its own id.
+          const ids = idsByKey(current.scope, server.scope);
+          const adopted = adopt(current, server, ids);
+
+          setDraft((live) => adopt(live, server, ids));
+          setSaved(adopted);
+          confirmed.current = adopted;
+          setStatus("saved");
+          setFailures(0);
+          setRetryable(false);
+
+          // A change queued behind this write was captured before its
+          // response, so it takes the identity the write just confirmed —
+          // otherwise a first save's follow-up would create a second quote,
+          // and its new rows would be written again as new.
           const next: QuoteDraft | null = queued.current;
           queued.current = null;
-          current =
-            next && !next.id && confirmed.current?.id
-              ? {
-                  ...next,
-                  id: confirmed.current.id,
-                  number: confirmed.current.number,
-                  jobId: confirmed.current.jobId,
-                  customerId: confirmed.current.customerId,
-                }
-              : next;
+          current = next ? adopt(next, server, ids) : null;
         }
       } finally {
         inFlight.current = false;
+      }
+
+      async function write(target: QuoteDraft): Promise<QuoteDraft> {
+        let response: Response;
+        try {
+          if (saveRequest) {
+            response = await saveRequest(target);
+          } else {
+            const body = JSON.stringify(
+              target.id
+                ? toSavePayload(target)
+                : {
+                    ...toSavePayload(target),
+                    jobId,
+                    // An explicit id beats the name match the endpoint would
+                    // otherwise fall back on.
+                    customerId,
+                    address,
+                    packId,
+                    demo,
+                  }
+            );
+            response = await fetch(
+              target.id ? `/api/v1/quotes/${target.id}` : "/api/v1/quotes",
+              {
+                method: target.id ? "PATCH" : "POST",
+                headers: { "Content-Type": "application/json" },
+                body,
+                keepalive: body.length < KEEPALIVE_MAX_BYTES,
+              }
+            );
+          }
+        } catch {
+          // The request never got an answer — offline, or the connection
+          // dropped. Always worth trying again.
+          throw new SaveFailure(OFFLINE_MESSAGE, true);
+        }
+
+        const body = (await response.json().catch(() => null)) as {
+          data?: QuoteRecord;
+          error?: { message?: string };
+        } | null;
+
+        if (!response.ok || !body?.data) {
+          // The server's own refusals — an accepted quote, a bad field — won't
+          // change by asking again. Its failures and rate limits might.
+          const retry =
+            response.status >= 500 ||
+            response.status === 408 ||
+            response.status === 429;
+          throw new SaveFailure(
+            body?.error?.message ?? "Couldn't save. Your changes are still here.",
+            retry
+          );
+        }
+
+        return draftFromRecord(body.data);
       }
     },
     [jobId, customerId, address, packId, demo, saveRequest]
@@ -224,12 +254,27 @@ export function useQuoteDraft({
     return () => clearTimeout(timer);
   }, [draft, dirty, autosave]);
 
+  // Rule 3: after a failure, try again on a growing delay, and straight away
+  // when the browser says it's back online. A change in the meantime re-arms
+  // the debounce above, which saves sooner.
+  useEffect(() => {
+    if (!autosave || !dirty || status !== "error" || !retryable) return;
+    const delay = Math.min(RETRY_MAX_MS, RETRY_BASE_MS * 2 ** (failures - 1));
+    const retry = () => void saveRef.current(draft);
+    const timer = setTimeout(retry, delay);
+    window.addEventListener("online", retry);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("online", retry);
+    };
+  }, [autosave, dirty, status, retryable, failures, draft]);
+
   /**
    * Flush before the tab goes away.
    *
    * `visibilitychange` rather than `beforeunload`, because iOS Safari does not
-   * reliably fire the latter — and a contractor backgrounding the app mid-quote
-   * is the single most likely way this screen ever gets left.
+   * reliably fire the latter — and backgrounding the app mid-quote is the most
+   * likely way this screen gets left.
    */
   useEffect(() => {
     if (!autosave || !dirty) return;
@@ -239,6 +284,38 @@ export function useQuoteDraft({
     document.addEventListener("visibilitychange", flush);
     return () => document.removeEventListener("visibilitychange", flush);
   }, [draft, dirty, autosave]);
+
+  /**
+   * Closing or reloading the tab with a change not yet written asks first.
+   * Browsers show their own wording; the flush above has already started the
+   * write, so staying a second is usually all it needs.
+   */
+  const unsaved = autosave && (dirty || status === "saving");
+  useEffect(() => {
+    if (!unsaved) return;
+    function warn(event: BeforeUnloadEvent) {
+      event.preventDefault();
+    }
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [unsaved]);
+
+  /**
+   * Leaving the editor inside the app — a sidebar link straight after typing —
+   * unmounts it before the debounce fires. The latest draft is kept in a ref so
+   * the unmount can write it.
+   */
+  const latest = useRef({ draft, dirty, autosave });
+  useEffect(() => {
+    latest.current = { draft, dirty, autosave };
+  }, [draft, dirty, autosave]);
+  useEffect(
+    () => () => {
+      const { draft: last, dirty: changed, autosave: on } = latest.current;
+      if (on && changed) void saveRef.current(last);
+    },
+    []
+  );
 
   /**
    * Forces a write now and hands back the saved row — used before preview and
@@ -275,41 +352,24 @@ export function useQuoteDraft({
   } as const;
 }
 
-/**
- * Takes the server's ids without taking the server's content.
- *
- * Nodes are matched **by position in the payload**, which is exactly how they
- * were sent: `toSavePayload` prunes empty rows and flattens the tree in
- * document order, so the nth row the server wrote back is the nth row that went
- * out. Matching on description or amount would re-key the wrong node the moment
- * two rows read the same, which on a quote with four identical 20A circuits is
- * immediately.
- *
- * The walk below has to prune in **exactly the same order and by exactly the
- * same rule** as `toSavePayload`, which is why it calls `flatten` on a pruned
- * copy rather than re-implementing the traversal — a second copy of that rule
- * is a second thing that can drift, and the symptom would be a line silently
- * adopting its neighbour's id.
- */
-function adoptIdentity(live: QuoteDraft, server: QuoteDraft): QuoteDraft {
-  const written = flatten(server.scope);
-
-  // The same prune, walked in the same pre-order, so the nth row here is the
-  // nth row the server wrote back.
-  let cursor = 0;
-  function adopt(nodes: ScopeNode[]): ScopeNode[] {
-    return nodes.map((node) => {
-      if (!persists(node)) return node;
-      const id = written[cursor]?.node.id ?? node.id;
-      cursor += 1;
-      return {
-        ...node,
-        id,
-        children: node.children.length ? adopt(node.children) : node.children,
-      };
-    });
+class SaveFailure extends Error {
+  constructor(
+    message: string,
+    readonly retryable: boolean
+  ) {
+    super(message);
   }
+}
 
+/**
+ * Takes the server's identity without taking the server's content: the quote's
+ * ids and number, and each row's id by its key.
+ */
+function adopt(
+  live: QuoteDraft,
+  server: QuoteDraft,
+  ids: Map<string, string>
+): QuoteDraft {
   return {
     ...live,
     id: server.id,
@@ -317,13 +377,6 @@ function adoptIdentity(live: QuoteDraft, server: QuoteDraft): QuoteDraft {
     jobId: server.jobId,
     customerId: server.customerId,
     status: server.status,
-    scope: adopt(live.scope),
+    scope: withIds(live.scope, ids),
   };
-}
-
-/** `toSavePayload`'s prune rule, so the walk above stays in step with it. */
-function persists(node: ScopeNode): boolean {
-  if (node.children.some(persists)) return true;
-  if (node.description.trim() !== "") return true;
-  return node.sellPriceCents > 0;
 }

@@ -35,6 +35,9 @@ import type {
 export const DEFAULT_TERMS: QuoteTerms = {
   contractType: "lump_sum",
   priceStructure: "itemized",
+  // Each top-level row with its total — how every quote looked before the
+  // contractor could choose.
+  scopeDetail: null,
   pricingMethod: "cost_based",
   estimatingMethod: "hourly_judgment",
   estimateClass: "class_3",
@@ -104,6 +107,7 @@ export function makeNode(
     sellPriceCents: 0,
     taxable: nodeSpec.bucketed ? config.taxableByDefault : false,
     optional: false,
+    breakdown: null,
     source: "typed",
     children: [],
     ...overrides,
@@ -161,6 +165,8 @@ export function retypeNode(node: ScopeNode, type: NodeType): ScopeNode {
     // becoming a leaf would orphan rows, so its children come with it as
     // siblings — handled by `dissolveNode` at the call site, never here.
     children: target.container ? node.children : [],
+    // Only a group or an assembly has rows inside to show or hide.
+    breakdown: target.container ? (node.breakdown ?? null) : null,
   };
 }
 
@@ -184,6 +190,8 @@ export type QuoteRecordNode = {
   sellPriceCents: number;
   taxable: boolean;
   optional: boolean;
+  /** Groups and assemblies: show the rows inside, or one line. Null follows the quote. */
+  breakdown?: "show" | "hide" | null;
   position: number;
   source: LineSource;
 };
@@ -210,6 +218,7 @@ export type QuoteRecord = {
   packId: string | null;
   contractType: string | null;
   priceStructure: string | null;
+  scopeDetail: string | null;
   pricingMethod: string | null;
   estimatingMethod: string | null;
   estimateClass: string | null;
@@ -248,6 +257,7 @@ export function draftFromRecord(record: QuoteRecord): QuoteDraft {
     terms: {
       contractType: record.contractType,
       priceStructure: record.priceStructure,
+      scopeDetail: record.scopeDetail,
       pricingMethod: record.pricingMethod,
       estimatingMethod: record.estimatingMethod,
       estimateClass: record.estimateClass,
@@ -277,6 +287,7 @@ export function draftFromRecord(record: QuoteRecord): QuoteDraft {
         sellPriceCents: row.sellPriceCents,
         taxable: row.taxable,
         optional: row.optional,
+        breakdown: row.breakdown ?? null,
         source: row.source,
         children: [],
       })
@@ -352,6 +363,8 @@ export type SaveNode = {
   sellPriceCents: number;
   taxable: boolean;
   optional: boolean;
+  /** Groups and assemblies only; null everywhere else. */
+  breakdown: "show" | "hide" | null;
   position: number;
   source: LineSource;
 };
@@ -420,6 +433,7 @@ export function toSavePayload(draft: QuoteDraft): QuoteSavePayload {
       sellPriceCents: node.sellPriceCents,
       taxable: node.taxable,
       optional: node.optional,
+      breakdown: NODE_SPEC[node.type].container ? (node.breakdown ?? null) : null,
       position: index,
       source: node.source,
     })),
@@ -432,6 +446,46 @@ function prune(nodes: ScopeNode[]): ScopeNode[] {
     .map((node) =>
       node.children.length ? { ...node, children: prune(node.children) } : node
     );
+}
+
+/**
+ * The rows a save sends, in the order it sends them — the same prune and the
+ * same document order as `toSavePayload`. The server writes them back in that
+ * order, so the nth row here is the nth row of the response.
+ */
+export function persistedNodes(scope: ScopeNode[]): ScopeNode[] {
+  return flatten(prune(scope)).map(({ node }) => node);
+}
+
+/**
+ * The ids the server gave the rows of a draft it was sent, keyed by each row's
+ * client `key`. `sent` is the draft that went out and `returned` the tree that
+ * came back; they line up row for row because the server keeps the order.
+ */
+export function idsByKey(
+  sent: ScopeNode[],
+  returned: ScopeNode[]
+): Map<string, string> {
+  const out = persistedNodes(sent);
+  const back = flatten(returned).map(({ node }) => node);
+  const ids = new Map<string, string>();
+  // Row counts that disagree mean the two aren't the same write; adopt nothing
+  // rather than pin an id on the wrong row.
+  if (out.length !== back.length) return ids;
+  out.forEach((node, index) => {
+    const id = back[index].id;
+    if (id) ids.set(node.key, id);
+  });
+  return ids;
+}
+
+/** Gives each row the id `ids` holds for its key, leaving every other field as it is. */
+export function withIds(scope: ScopeNode[], ids: Map<string, string>): ScopeNode[] {
+  return scope.map((node) => {
+    const id = ids.get(node.key) ?? node.id;
+    const children = node.children.length ? withIds(node.children, ids) : node.children;
+    return id === node.id && children === node.children ? node : { ...node, id, children };
+  });
 }
 
 /**

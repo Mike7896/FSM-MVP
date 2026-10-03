@@ -132,6 +132,11 @@ export function NewQuoteSurface({
         controllerRef={editor}
         previewLabel="Preview it"
         onPreview={setPreview}
+        // The saved quote's own address, without reloading the page: a reload
+        // of /quotes/new would open a blank quote and look like nothing saved.
+        onCreated={(quoteId) =>
+          window.history.replaceState(null, "", `/quotes/${quoteId}`)
+        }
       />
 
       <SendFlow

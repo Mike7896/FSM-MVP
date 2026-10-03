@@ -137,7 +137,11 @@ function Block({
           {block.lines.map((line, index) => (
             <div
               key={index}
-              className="flex items-baseline justify-between gap-3 border-t py-2"
+              className={cn(
+                "flex items-baseline justify-between gap-3 border-t py-2",
+                line.depth && "border-border/50 text-muted-foreground py-1.5 text-[0.9em]"
+              )}
+              style={line.depth ? { paddingLeft: `${line.depth * 1.25}rem` } : undefined}
             >
               <span className="min-w-0">
                 {line.description}

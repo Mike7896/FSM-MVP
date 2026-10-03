@@ -177,6 +177,7 @@ export async function createQuote({
       taxRate: input.taxRate == null ? null : String(input.taxRate),
       contractType: terms.contractType ?? null,
       priceStructure: terms.priceStructure ?? null,
+      scopeDetail: terms.scopeDetail ?? null,
       pricingMethod: terms.pricingMethod ?? null,
       estimatingMethod: terms.estimatingMethod ?? null,
       estimateClass: terms.estimateClass ?? null,

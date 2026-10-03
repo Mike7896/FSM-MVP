@@ -217,7 +217,7 @@ function Block({ block }: { block: PaperBlock }) {
             <Text style={{ ...LABEL, marginBottom: 4 }}>{block.heading}</Text>
           ) : null}
           {block.lines.map((line, index) => (
-            <Row key={index}>
+            <Row key={index} depth={line.depth ?? 0}>
               <View style={{ flex: 1, paddingRight: 16 }}>
                 <Text>{line.description}</Text>
                 {line.detail ? (
@@ -313,7 +313,16 @@ function Block({ block }: { block: PaperBlock }) {
   }
 }
 
-function Row({ children, muted = false }: { children: ReactNode; muted?: boolean }) {
+function Row({
+  children,
+  muted = false,
+  depth = 0,
+}: {
+  children: ReactNode;
+  muted?: boolean;
+  /** Rows inside a group the customer is shown sit indented and quieter under it. */
+  depth?: number;
+}) {
   return (
     <View
       wrap={false}
@@ -322,8 +331,10 @@ function Row({ children, muted = false }: { children: ReactNode; muted?: boolean
         justifyContent: "space-between",
         borderTopWidth: 1,
         borderTopColor: RULE,
-        paddingVertical: 6,
-        color: muted ? SOFT : INK,
+        paddingVertical: depth ? 4 : 6,
+        paddingLeft: depth * 14,
+        fontSize: depth ? 9 : undefined,
+        color: muted || depth ? SOFT : INK,
       }}
     >
       {children}

@@ -7,13 +7,14 @@ import type { ReactNode } from "react";
 
 import { Tag } from "@/components/fields";
 import { useScopeActions } from "@/components/quote-editor/scope/actions";
-import { SECTION_PAD } from "@/components/quote-editor/section-heading";
 import {
   NODE_SPEC,
   baseTotal,
   formatMoney,
   isEstimated,
   nodeTotal,
+  overridesQuote,
+  showsBreakdown,
   type ScopeNode,
 } from "@/lib/quote";
 import { cn } from "@/lib/utils";
@@ -61,7 +62,8 @@ export function NodeRow({
   /** Read mode: what tapping the row does. */
   onActivate?: () => void;
 }) {
-  const { mode } = useScopeActions();
+  const { mode, customerDetail, priceAnchorKey, priceAnchorOpen } =
+    useScopeActions();
   const spec = NODE_SPEC[node.type];
 
   const estimated = isEstimated(node.source);
@@ -73,20 +75,10 @@ export function NodeRow({
       data-node-key={node.key}
       data-kind={spec.container ? "container" : spec.priced ? "priced" : "text"}
       data-optional={node.optional || undefined}
+      data-mode={mode}
       className={cn(
-        // The section's own inset, so a row's text starts where the narrative's
-        // label does and its amount ends where the section's right edge is.
         "group/row",
         styles.row,
-        SECTION_PAD,
-        // A container is a heading and gets the room a heading needs; a leaf is
-        // a row and stays tight to the rows it belongs with. That difference is
-        // the hierarchy.
-        spec.container
-          ? "bg-muted/40 py-3"
-          : spec.priced
-            ? "py-3"
-            : "py-2",
         mode === "read" && onActivate && "hover:bg-muted/60 transition-colors",
         // Unpriced text sits off the money column entirely.
         !carriesMoney && "text-muted-foreground"
@@ -97,18 +89,31 @@ export function NodeRow({
         <div className={styles.lead}>
           {spec.container ? <span className={styles.groupIcon} aria-hidden="true">{node.type === "assembly" ? <Layers size={16} /> : <FolderOpen size={16} />}</span> : null}
           {lead}
-          {spec.badge ? (
+          {spec.badge || spec.container ? (
             <Tag>
-              {spec.badge}
+              {spec.badge || "GROUP"}
               {/* An assembly admits to its child count without opening: one row
                   to the customer, five cost rows to the estimator, and the
                   divergence is the whole reason the tree exists. */}
-              {node.type === "assembly" && node.children.length
+              {spec.container && node.children.length
                 ? ` · ${node.children.length}`
                 : ""}
             </Tag>
           ) : null}
           {node.optional ? <Tag>OPTIONAL</Tag> : null}
+          {/* Only where this group differs from the quote's setting — the
+              exception is what needs pointing out. */}
+          {overridesQuote(node, customerDetail) ? (
+            <Tag
+              title={
+                showsBreakdown(node, customerDetail)
+                  ? "Your customer sees the rows inside this, with their prices."
+                  : "Your customer sees this as one line with its total."
+              }
+            >
+              {showsBreakdown(node, customerDetail) ? "ROWS SHOWN" : "ONE LINE"}
+            </Tag>
+          ) : null}
         </div>
 
         {trailing}
@@ -164,7 +169,10 @@ export function NodeRow({
       <button
         type="button"
         onClick={onActivate}
-        className="w-full text-left"
+        {...(node.key === priceAnchorKey && !priceAnchorOpen
+          ? { "data-tour": "quote.row-price" }
+          : {})}
+        className={cn("w-full text-left", styles.readButton)}
       >
         {row}
       </button>

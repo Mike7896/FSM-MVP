@@ -96,11 +96,8 @@ export function ScopeTree({
   // Inside a container: tight, railed, and divided so siblings are countable.
   return (
     <ul className={styles.children} data-deep={depth > 3 || undefined}>
-      {nodes.map((node, index) => (
-        <li
-          key={node.key}
-          className={cn(index > 0 && "border-border/60 border-t")}
-        >
+      {nodes.map((node) => (
+        <li key={node.key} data-container={isContainer(node) || undefined}>
           <ScopeNode node={node} depth={depth} />
         </li>
       ))}

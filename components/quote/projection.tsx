@@ -5,8 +5,10 @@ import { inkFor } from "@/components/documents/ink";
 import { SignatureLines } from "@/components/signing/signature-lines";
 import { Separator } from "@/components/ui/separator";
 import {
-  baseTotal,
+  customerDetail,
+  customerLines,
   formatMoney,
+  isPriced,
   isText,
   nodeTotal,
   termsSentence,
@@ -34,13 +36,10 @@ import { cn } from "@/lib/utils";
  * **Her register, not his.** He reads the mechanism — a tree, cost buckets, a
  * markup. She reads the consequence, in sentences.
  *
- * **The projection is where the tree gets flattened, and it is the only place
- * that is allowed to.** She sees the top level: a group is one row carrying its
- * subtotal, an assembly is one row carrying its rollup. Nine recessed lights
- * are one line to her and five cost rows to him, and that divergence is the
- * whole reason Scope is a tree. The editor draws the rows where they were
- * authored; this page reorganises, because it is a projection of the document
- * rather than the document.
+ * **How much of the tree she sees is the contractor's choice** — one total,
+ * the top-level rows, or every row, with each group able to override it for
+ * itself (`lib/quote/disclosure.ts`). Rows inside a group she's shown sit
+ * indented under it, and their amounts add up to the group's.
  *
  * **Hiding detail never means deleting detail.** Every row below is derived
  * from the same tree the estimator built, and nothing about what she is shown
@@ -115,10 +114,15 @@ export function QuoteProjection({
   const sums = totals(draft);
   const customerName = draft.customerName.trim() || "your customer";
 
-  // Top level only. Unpriced text is gathered below under its own heading
-  // rather than sitting between priced rows, because an exclusion reads as a
-  // promise and a priced row reads as a charge.
-  const rows = draft.scope.filter((node) => !isText(node) && !node.optional);
+  // The rows the contractor chose to show her. Unpriced text is gathered below
+  // under its own heading rather than sitting between priced rows, because an
+  // exclusion reads as a promise and a priced row reads as a charge.
+  const detail = customerDetail(draft.terms);
+  const rows = customerLines(draft.scope, detail);
+  // One total still prints the money — just not the rows behind it.
+  const priced = draft.scope.some(function walk(node): boolean {
+    return (isPriced(node) && !node.optional) || node.children.some(walk);
+  });
   const optional = collectOptional(draft.scope);
   const { exclusions, assumptions, notes } = unpricedRows(draft);
 
@@ -194,12 +198,18 @@ export function QuoteProjection({
         ) : null}
       </section>
 
-      {rows.length ? (
+      {rows.length || (detail === "total" && priced) ? (
         <section>
-          {rows.map((node) => (
+          {rows.map(({ node, depth, amountCents }) => (
             <div
               key={node.key}
-              className="flex items-baseline justify-between gap-3 border-t py-2"
+              className={cn(
+                "flex items-baseline justify-between gap-3 border-t py-2",
+                // Inside a group she's shown: indented under it, quieter, and
+                // ruled lighter, so the group's own line reads as the sum.
+                depth > 0 && "border-border/50 text-muted-foreground py-1.5 text-[0.9em]"
+              )}
+              style={depth > 0 ? { paddingLeft: `${depth * 1.25}rem` } : undefined}
             >
               <span className="min-w-0">
                 {node.description || "Work"}
@@ -213,7 +223,7 @@ export function QuoteProjection({
                 ) : null}
               </span>
               <span className="shrink-0 tabular-nums">
-                {formatMoney(baseTotal(node))}
+                {formatMoney(amountCents)}
               </span>
             </div>
           ))}

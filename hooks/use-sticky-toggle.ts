@@ -60,3 +60,42 @@ export function useStickyToggle(
 
   return [value, set] as const;
 }
+
+/**
+ * The same, for one of a few named choices — which tab a panel was left on.
+ * A stored value that is no longer one of `choices` reads as the fallback.
+ */
+export function useStickyChoice<T extends string>(
+  key: string,
+  choices: readonly T[],
+  fallback: T
+): readonly [T, (next: T) => void] {
+  const value = useSyncExternalStore(
+    subscribe,
+    () => {
+      try {
+        const raw = window.localStorage.getItem(key);
+        return raw !== null && (choices as readonly string[]).includes(raw)
+          ? (raw as T)
+          : fallback;
+      } catch {
+        return fallback;
+      }
+    },
+    () => fallback
+  );
+
+  const set = useCallback(
+    (next: T) => {
+      try {
+        window.localStorage.setItem(key, next);
+      } catch {
+        /* as above */
+      }
+      window.dispatchEvent(new Event(CHANGED));
+    },
+    [key]
+  );
+
+  return [value, set] as const;
+}

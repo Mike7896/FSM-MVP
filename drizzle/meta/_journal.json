@@ -302,6 +302,20 @@
       "when": 1790834846521,
       "tag": "0042_product_updates",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1791037591047,
+      "tag": "0043_saved_items",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1791053772101,
+      "tag": "0044_scope_disclosure",
+      "breakpoints": true
     }
   ]
 }
