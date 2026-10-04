@@ -57,6 +57,14 @@ export const drawSchedule = pgTable(
     /** Set when an inspection is what clears this stage. */
     inspectionType: inspectionTypeEnum("inspection_type"),
 
+    /**
+     * The quote phase this stage was planned from — its `key` in the quote's
+     * `draw_pattern`, and so in the contract rows' `phase_key`. It is how the
+     * job knows which rooms a phase covers. Null for a deposit, a final
+     * balance, or a stage typed on the job.
+     */
+    phaseKey: text("phase_key"),
+
     /** The bill this became. Null until the phase is billed. */
     invoiceId: uuid("invoice_id").references(() => documents.id, {
       onDelete: "set null",

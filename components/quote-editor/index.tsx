@@ -60,7 +60,10 @@ import {
   SignedContractSection,
   type ChangeTarget,
 } from "@/components/quote-editor/change-order-sections";
-import { TermsSheet } from "@/components/quote-editor/terms-sheet";
+import {
+  TermsSheet,
+  type PhaseAssignments,
+} from "@/components/quote-editor/terms-sheet";
 import { useLayoutMode } from "@/components/quote-editor/use-layout-mode";
 import { useQuoteDraft } from "@/components/quote-editor/use-quote-draft";
 import { StoredSignature } from "@/components/office/stored-signature";
@@ -334,8 +337,22 @@ export function QuoteEditor({
     [update]
   );
 
+  // The terms, and which phase each top-level row is billed in — confirmed
+  // together from "How you get paid". Only the phases are written onto the
+  // rows, so an edit to a row since the sheet opened is kept.
   const setTerms = useCallback(
-    (terms: QuoteTerms) => update((current) => ({ ...current, terms })),
+    (terms: QuoteTerms, phases?: PhaseAssignments) =>
+      update((current) => ({
+        ...current,
+        terms,
+        scope: phases
+          ? current.scope.map((node) =>
+              phases.has(node.key) && (node.phaseKey ?? null) !== phases.get(node.key)
+                ? { ...node, phaseKey: phases.get(node.key) ?? null }
+                : node
+            )
+          : current.scope,
+      })),
     [update]
   );
 

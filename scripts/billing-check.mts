@@ -4,9 +4,6 @@
  * This is the arithmetic that decides what somebody is asked to pay, so every
  * rule below is checked against real rows rather than reasoned about:
  *
- * - **The plan adds up to the agreement, exactly.** Deposit plus every stage
- *   equals the total, whatever the percentages round to — a lost cent is a job
- *   that can never be fully billed.
  * - **The settlement reads both sides.** What is owed comes from the documents
  *   (contract plus approved change orders); what arrived comes from the ledger,
  *   so a cheque counts exactly as a card does.
@@ -23,7 +20,6 @@ import { sql } from "drizzle-orm";
 // Concrete modules rather than the barrel: this script is ESM and tsx loads the
 // library as CJS, where named-export detection cannot see through `export *`.
 import { jobSettlement } from "@/lib/billing/settlement";
-import { planFromTerms } from "@/lib/billing/schedule";
 import { db } from "@/lib/db";
 
 let passed = 0;
@@ -41,85 +37,8 @@ function check(label: string, condition: boolean, detail?: string) {
 
 class Rollback extends Error {}
 
-console.log("\nTHE PLAN THE TERMS IMPLY");
-{
-  const deposited = planFromTerms({
-    totalCents: 1_000_000,
-    depositPercent: 30,
-    draws: true,
-    pattern: [
-      { name: "Rough-in", percent: 50 },
-      { name: "Trim", percent: 30 },
-      { name: "Final", percent: 20 },
-    ],
-  });
-
-  check(
-    "the deposit comes first, at its percentage",
-    deposited[0]?.name === "Deposit" &&
-      deposited[0]?.amountCents === 300_000 &&
-      deposited[0]?.gate === "on_acceptance",
-    JSON.stringify(deposited[0])
-  );
-  check(
-    "the stages split what's left",
-    deposited[1]?.amountCents === 350_000 && deposited[2]?.amountCents === 210_000,
-    JSON.stringify(deposited.map((stage) => stage.amountCents))
-  );
-  check(
-    "the last stage is the balance at the end",
-    deposited[3]?.gate === "on_completion" && deposited[3]?.amountCents === 140_000,
-    JSON.stringify(deposited[3])
-  );
-  check(
-    "the plan adds up to the agreement",
-    deposited.reduce((sum, stage) => sum + stage.amountCents, 0) === 1_000_000
-  );
-
-  const awkward = planFromTerms({
-    totalCents: 100_001,
-    depositPercent: 33,
-    draws: true,
-    pattern: [
-      { name: "One", percent: 33 },
-      { name: "Two", percent: 33 },
-      { name: "Three", percent: 34 },
-    ],
-  });
-  check(
-    "it still adds up when the percentages don't divide",
-    awkward.reduce((sum, stage) => sum + stage.amountCents, 0) === 100_001,
-    JSON.stringify(awkward.map((stage) => stage.amountCents))
-  );
-
-  const once = planFromTerms({
-    totalCents: 250_000,
-    depositPercent: null,
-    draws: false,
-    pattern: null,
-  });
-  check(
-    "no deposit and no stages is one bill at the end",
-    once.length === 1 &&
-      once[0].gate === "on_completion" &&
-      once[0].amountCents === 250_000,
-    JSON.stringify(once)
-  );
-
-  const depositOnly = planFromTerms({
-    totalCents: 200_000,
-    depositPercent: 25,
-    draws: false,
-    pattern: null,
-  });
-  check(
-    "a deposit with no stages leaves the balance at the end",
-    depositOnly.length === 2 &&
-      depositOnly[0].amountCents === 50_000 &&
-      depositOnly[1].amountCents === 150_000,
-    JSON.stringify(depositOnly)
-  );
-}
+// The plan's arithmetic — deposit, phases, rounding — is pure, and is checked
+// without a database in `npm run plan:check`.
 
 try {
   await db

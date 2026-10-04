@@ -11,9 +11,13 @@ import {
   isPriced,
   isText,
   nodeTotal,
+  paymentPlan,
+  paymentSchedule,
+  phaseSections,
   termsSentence,
   totals,
   unpricedRows,
+  type CustomerLine,
   type QuoteDraft,
   type ScopeNode,
 } from "@/lib/quote";
@@ -61,7 +65,6 @@ export function QuoteProjection({
   demo = false,
   onGap,
   action,
-  schedule,
   signatures,
   signatureBlock,
   signaturePrompt,
@@ -84,13 +87,6 @@ export function QuoteProjection({
    * one — or the state that replaces it — and `null` for nothing at all.
    */
   action?: ReactNode;
-  /**
-   * How the money comes in, stage by stage — **shown before she decides.**
-   * Mid-job asks must never be a surprise, and the schedule being visible when
-   * she accepts is what makes each one read as scheduled rather than
-   * opportunistic.
-   */
-  schedule?: { name: string; when: string; amountCents: number }[];
   /**
    * Who has signed, for the lines at the foot. The business's line carries its
    * stored signature ahead of acceptance and the recorded one after; left
@@ -123,6 +119,12 @@ export function QuoteProjection({
   const priced = draft.scope.some(function walk(node): boolean {
     return (isPriced(node) && !node.optional) || node.children.some(walk);
   });
+  // How the money comes in, stage by stage — **shown before she decides**, so
+  // a mid-job ask is never a surprise. Billed in phases by scope, the rows are
+  // read phase by phase too, each with what it bills when it's done.
+  const plan = paymentPlan(draft, sums);
+  const schedule = paymentSchedule(draft, plan);
+  const phases = phaseSections(draft, plan);
   const optional = collectOptional(draft.scope);
   const { exclusions, assumptions, notes } = unpricedRows(draft);
 
@@ -198,35 +200,40 @@ export function QuoteProjection({
         ) : null}
       </section>
 
-      {rows.length || (detail === "total" && priced) ? (
-        <section>
-          {rows.map(({ node, depth, amountCents }) => (
-            <div
-              key={node.key}
-              className={cn(
-                "flex items-baseline justify-between gap-3 border-t py-2",
-                // Inside a group she's shown: indented under it, quieter, and
-                // ruled lighter, so the group's own line reads as the sum.
-                depth > 0 && "border-border/50 text-muted-foreground py-1.5 text-[0.9em]"
-              )}
-              style={depth > 0 ? { paddingLeft: `${depth * 1.25}rem` } : undefined}
-            >
+      {phases.length ? (
+        phases.map((phase) => (
+          <section key={phase.key}>
+            <p className="font-label mb-1 text-[11px] font-semibold uppercase">
+              {phase.heading}
+            </p>
+            {phase.lines.map((line) => (
+              <Line key={line.node.key} line={line} />
+            ))}
+            {phase.names.length ? (
+              <p className="border-t py-2 leading-relaxed">{phase.names.join(" · ")}</p>
+            ) : null}
+            <div className="flex items-baseline justify-between gap-3 border-t pt-2 font-medium">
               <span className="min-w-0">
-                {node.description || "Work"}
-                {node.type === "allowance" ? (
-                  // An allowance is a provisional sum, and she has to know that
-                  // before she agrees to it — otherwise the true-up arrives as
-                  // a surprise on the final bill.
-                  <span className="text-muted-foreground block text-xs">
-                    An allowance — trued up to the actual cost once you choose.
+                {phase.when}
+                {phase.note ? (
+                  <span className="text-muted-foreground block text-xs font-normal">
+                    {phase.note}
                   </span>
                 ) : null}
               </span>
               <span className="shrink-0 tabular-nums">
-                {formatMoney(amountCents)}
+                {formatMoney(phase.billedCents)}
               </span>
             </div>
-          ))}
+          </section>
+        ))
+      ) : null}
+
+      {phases.length || rows.length || (detail === "total" && priced) ? (
+        <section>
+          {phases.length
+            ? null
+            : rows.map((line) => <Line key={line.node.key} line={line} />)}
 
           {sums.taxCents > 0 ? (
             <>
@@ -292,7 +299,7 @@ export function QuoteProjection({
 
       <p className="leading-relaxed">{termsSentence(draft, sums)}</p>
 
-      {schedule?.length ? (
+      {schedule.length ? (
         <section>
           <p className="text-muted-foreground font-label text-[10px] uppercase">
             How you&apos;ll pay
@@ -342,6 +349,34 @@ export function QuoteProjection({
       ) : (
         action
       )}
+    </div>
+  );
+}
+
+/** One priced row as she reads it. */
+function Line({ line: { node, depth, amountCents } }: { line: CustomerLine }) {
+  return (
+    <div
+      className={cn(
+        "flex items-baseline justify-between gap-3 border-t py-2",
+        // Inside a group she's shown: indented under it, quieter, and ruled
+        // lighter, so the group's own line reads as the sum.
+        depth > 0 && "border-border/50 text-muted-foreground py-1.5 text-[0.9em]"
+      )}
+      style={depth > 0 ? { paddingLeft: `${depth * 1.25}rem` } : undefined}
+    >
+      <span className="min-w-0">
+        {node.description || "Work"}
+        {node.type === "allowance" ? (
+          // An allowance is a provisional sum, and she has to know that before
+          // she agrees to it — otherwise the true-up arrives as a surprise on
+          // the final bill.
+          <span className="text-muted-foreground block text-xs">
+            An allowance — trued up to the actual cost once you choose.
+          </span>
+        ) : null}
+      </span>
+      <span className="shrink-0 tabular-nums">{formatMoney(amountCents)}</span>
     </div>
   );
 }

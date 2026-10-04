@@ -20,6 +20,8 @@ import {
 import type {
   LineSection,
   LineSource,
+  PhaseSplit,
+  QuotePhase,
   QuoteDraft,
   QuoteTerms,
 } from "./types";
@@ -47,7 +49,31 @@ export const DEFAULT_TERMS: QuoteTerms = {
   progressBilling: "single_final_invoice",
   retainagePercent: null,
   capCents: null,
+  phases: [],
+  // A room or a floor is the phase most jobs have in mind; percentages arrive
+  // with the shop's own pattern when it has one.
+  phaseSplit: "scope",
 };
+
+/** A phase's key — unique within its quote, and stable while the quote is edited. */
+export function newPhaseKey(): string {
+  return `ph-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+/**
+ * A stored pattern as the quote's phases. A pattern written before phases had
+ * keys gets positional ones; nothing can point at those yet, so any stable
+ * answer will do.
+ */
+export function phasesFromPattern(
+  pattern: Array<{ key?: string; name: string; percent: number }> | null | undefined
+): QuotePhase[] {
+  return (pattern ?? []).map((stage, index) => ({
+    key: stage.key || `ph-${index + 1}`,
+    name: stage.name,
+    percent: stage.percent,
+  }));
+}
 
 let keySeed = 0;
 
@@ -108,6 +134,7 @@ export function makeNode(
     taxable: nodeSpec.bucketed ? config.taxableByDefault : false,
     optional: false,
     breakdown: null,
+    phaseKey: null,
     source: "typed",
     children: [],
     ...overrides,
@@ -192,6 +219,8 @@ export type QuoteRecordNode = {
   optional: boolean;
   /** Groups and assemblies: show the rows inside, or one line. Null follows the quote. */
   breakdown?: "show" | "hide" | null;
+  /** Top-level rows: the phase they're billed in. */
+  phaseKey?: string | null;
   position: number;
   source: LineSource;
 };
@@ -228,6 +257,9 @@ export type QuoteRecord = {
   progressBilling: string | null;
   retainagePercent: number | null;
   capCents: number | null;
+  /** The quote's phases, as stored — `quote_details.draw_pattern`. */
+  drawPattern?: Array<{ key?: string; name: string; percent: number }> | null;
+  phaseSplit?: PhaseSplit | null;
   signatureLines: boolean;
   scope: QuoteRecordNode[];
 };
@@ -267,6 +299,11 @@ export function draftFromRecord(record: QuoteRecord): QuoteDraft {
       progressBilling: record.progressBilling,
       retainagePercent: record.retainagePercent,
       capCents: record.capCents,
+      phases: phasesFromPattern(record.drawPattern),
+      // Stored phases with no split recorded were percentages — the only kind
+      // there was.
+      phaseSplit:
+        record.phaseSplit ?? (record.drawPattern?.length ? "percent" : "scope"),
     },
     scope: buildTree(
       record.scope.map((node) => ({ ...node, parentId: node.parentNodeId })),
@@ -288,6 +325,7 @@ export function draftFromRecord(record: QuoteRecord): QuoteDraft {
         taxable: row.taxable,
         optional: row.optional,
         breakdown: row.breakdown ?? null,
+        phaseKey: row.parentNodeId === null ? (row.phaseKey ?? null) : null,
         source: row.source,
         children: [],
       })
@@ -365,6 +403,8 @@ export type SaveNode = {
   optional: boolean;
   /** Groups and assemblies only; null everywhere else. */
   breakdown: "show" | "hide" | null;
+  /** Top-level rows only; null everywhere else. */
+  phaseKey: string | null;
   position: number;
   source: LineSource;
 };
@@ -434,6 +474,9 @@ export function toSavePayload(draft: QuoteDraft): QuoteSavePayload {
       taxable: node.taxable,
       optional: node.optional,
       breakdown: NODE_SPEC[node.type].container ? (node.breakdown ?? null) : null,
+      // Only the top level is billed by phase; a row moved inside a group
+      // follows the group.
+      phaseKey: parentIndex === null ? (node.phaseKey ?? null) : null,
       position: index,
       source: node.source,
     })),
@@ -524,6 +567,8 @@ export function hasChanges(a: QuoteDraft, b: QuoteDraft): boolean {
  */
 export type OfficeStartingValues = {
   depositPercent: number | null;
+  /** The shop's stages, as percentages — a new quote's phases until it has its own. */
+  drawPattern?: Array<{ name: string; percent: number }> | null;
   materialMarkupPercent: string | number | null;
   laborRateCents: number | null;
   taxRate: string | number | null;
@@ -555,14 +600,27 @@ export function applyOfficeDefaults(
     // The shop's deposit switches the deposit on as well as setting it: a
     // percentage with the switch left off is a deposit one screen shows and
     // another says isn't there.
-    terms:
-      defaults.depositPercent === null
+    terms: {
+      ...(defaults.depositPercent === null
         ? draft.terms
         : {
             ...draft.terms,
             moneyUpFront: "deposit",
             depositPercent: defaults.depositPercent,
-          },
+          }),
+      // The pattern is a starting point the quote then owns. It stays off
+      // until billing in stages is switched on, and is there when it is.
+      ...(defaults.drawPattern?.length && draft.terms.phases.length === 0
+        ? {
+            phases: defaults.drawPattern.map((stage) => ({
+              key: newPhaseKey(),
+              name: stage.name,
+              percent: stage.percent,
+            })),
+            phaseSplit: "percent" as const,
+          }
+        : {}),
+    },
     scope: hasText ? draft.scope : [...draft.scope, ...textNodes],
   };
 }

@@ -232,6 +232,28 @@ function Block({ block }: { block: PaperBlock }) {
         </View>
       );
 
+    case "phase":
+      return (
+        <View style={{ marginTop: 16 }}>
+          <Text style={{ ...LABEL, color: INK, marginBottom: 4 }}>{block.heading}</Text>
+          {block.lines.map((line, index) => (
+            <Row key={index} depth={line.depth ?? 0}>
+              <Text style={{ flex: 1, paddingRight: 16 }}>{line.description}</Text>
+              {line.amount ? <Text>{line.amount}</Text> : null}
+            </Row>
+          ))}
+          <Row>
+            <View style={{ flex: 1, paddingRight: 16 }}>
+              <Text style={{ fontFamily: "Helvetica-Bold" }}>{block.bill.label}</Text>
+              {block.bill.note ? (
+                <Text style={{ fontSize: 8.5, color: SOFT, marginTop: 1 }}>{block.bill.note}</Text>
+              ) : null}
+            </View>
+            <Text style={{ fontFamily: "Helvetica-Bold" }}>{block.bill.value}</Text>
+          </Row>
+        </View>
+      );
+
     case "totals":
       return (
         <View style={{ marginTop: block.lines.length ? 0 : 0 }} wrap={false}>

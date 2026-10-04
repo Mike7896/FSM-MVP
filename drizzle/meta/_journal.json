@@ -316,6 +316,13 @@
       "when": 1791053772101,
       "tag": "0044_scope_disclosure",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1791104651289,
+      "tag": "0045_quote_phases",
+      "breakpoints": true
     }
   ]
 }

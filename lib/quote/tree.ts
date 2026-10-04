@@ -96,6 +96,11 @@ export type ScopeNode = {
    * quote's own setting — see `disclosure.ts`.
    */
   breakdown?: Breakdown | null;
+  /**
+   * Top-level rows of a quote billed in phases by scope: the `key` of the
+   * phase this row is part of. Null or unknown puts it in the last phase.
+   */
+  phaseKey?: string | null;
   source: LineSource;
   children: ScopeNode[];
 };
@@ -296,13 +301,12 @@ export function nodeSection(
   return NODE_SPEC[type].bucketed ? (section ?? NODE_SPEC[type].defaultSection) : null;
 }
 
-/**
- * Depth stops at three by intent: group → assembly → components covers
- * ordinary work, and deeper nesting is a commercial bidding practice rather
- * than a service one (Quote Document Structure §4.4). The limit is enforced on
- * insert and move rather than drawn as a rule anywhere the contractor reads.
+/*
+ * **Depth is not capped.** A room group holding a walls assembly holding a
+ * materials assembly is ordinary estimating, and a cap made "Add inside" on the
+ * fourth level quietly put the row at the top of the quote instead (Mike,
+ * Oct 4 2026). The tree draws deeper levels with a tighter indent.
  */
-export const MAX_DEPTH = 3;
 
 /* ── Reading the tree ─────────────────────────────────────────────────── */
 
@@ -358,12 +362,6 @@ export function depthOf(nodes: ScopeNode[], key: string): number {
   return depth;
 }
 
-/** How deep the subtree under `node` runs, counting the node itself as 1. */
-export function subtreeHeight(node: ScopeNode): number {
-  if (!node.children.length) return 1;
-  return 1 + Math.max(...node.children.map(subtreeHeight));
-}
-
 /* ── Changing the tree ────────────────────────────────────────────────── */
 
 /**
@@ -412,10 +410,9 @@ export function removeNode(nodes: ScopeNode[], key: string): ScopeNode[] {
  * picker says where it will land ("Inside Service upgrade") and appending is
  * what that sentence promises.
  *
- * A node whose parent cannot hold children, or whose placement would break
- * `MAX_DEPTH`, lands at the root instead of being dropped. Silently discarding
- * a row the contractor just asked for is worse than putting it somewhere he can
- * see and move.
+ * A node whose parent is missing or cannot hold children lands at the root
+ * instead of being dropped. Silently discarding a row the contractor just asked
+ * for is worse than putting it somewhere he can see and move.
  */
 export function insertNode(
   nodes: ScopeNode[],
@@ -430,26 +427,10 @@ export function insertNode(
   const parent = findNode(nodes, parentKey);
   if (!parent || !isContainer(parent)) return place(nodes, node, null);
 
-  if (!fitsUnder(depthOf(nodes, parentKey) + 1, node)) {
-    return place(nodes, node, null);
-  }
-
   return replaceNode(nodes, parentKey, (current) => ({
     ...current,
     children: place(current.children, node, index),
   }));
-}
-
-/**
- * Whether a subtree placed at `depth` stays inside `MAX_DEPTH`.
- *
- * A node at depth `d` whose subtree is `h` tall occupies depths `d` through
- * `d + h - 1`, and the deepest allowed index is `MAX_DEPTH - 1`. So the whole
- * check is `d + h <= MAX_DEPTH`: a leaf may go two levels down, a group holding
- * a leaf may go one.
- */
-export function fitsUnder(depth: number, node: ScopeNode): boolean {
-  return depth + subtreeHeight(node) <= MAX_DEPTH;
 }
 
 function place(list: ScopeNode[], node: ScopeNode, index: number | null) {
@@ -503,8 +484,6 @@ export type MoveTarget = {
 /**
  * Where a row can go: every group and assembly except itself, anything inside
  * it, and the one it's already in — plus the top level when it isn't there.
- * A container too deep to take the row is left out rather than offered and
- * then refused.
  */
 export function moveTargets(nodes: ScopeNode[], key: string): MoveTarget[] {
   const node = findNode(nodes, key);
@@ -519,7 +498,6 @@ export function moveTargets(nodes: ScopeNode[], key: string): MoveTarget[] {
   walk(nodes, ({ node: candidate, depth }) => {
     if (!isContainer(candidate) || inside.has(candidate.key)) return;
     if (candidate.key === parent?.key) return;
-    if (!fitsUnder(depth + 1, node)) return;
     targets.push({
       key: candidate.key,
       label:

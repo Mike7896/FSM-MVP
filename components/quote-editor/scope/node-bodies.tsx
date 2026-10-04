@@ -425,10 +425,14 @@ function ContainerBody({ node }: BodyProps) {
             // contractor who does not trust what she sees will flatten his own
             // estimate by hand, which is the one outcome the assembly exists to
             // prevent.
-            <>
-              One row on her quote. The {node.children.length} rows underneath
-              are how you priced it.
-            </>
+            node.children.length === 1 ? (
+              <>One row on her quote. The row underneath is how you priced it.</>
+            ) : (
+              <>
+                One row on her quote. The {node.children.length} rows underneath
+                are how you priced it.
+              </>
+            )
           ) : null
         }
       />

@@ -22,6 +22,7 @@ import {
   documentSection,
   formatChange,
   formatMoney,
+  paymentSchedule,
   termsSentence,
   type ChangeOrderContext,
   type DocumentSectionId,
@@ -435,6 +436,8 @@ export function TermsSection({
   onOpenTerms: () => void;
   collapsed?: boolean;
 }) {
+  const schedule = paymentSchedule(draft);
+
   if (collapsed) {
     return (
       <CollapsedRow
@@ -462,6 +465,22 @@ export function TermsSection({
       <p className="text-muted-foreground text-sm leading-relaxed">
         {termsSentence(draft, sums)}
       </p>
+      {schedule.length ? (
+        <ul className="mt-3 flex flex-col text-sm">
+          {schedule.map((payment, index) => (
+            <li
+              key={`${payment.name}-${index}`}
+              className="flex items-baseline justify-between gap-3 border-t py-1.5"
+            >
+              <span className="min-w-0">
+                {payment.name}
+                <span className="text-muted-foreground block text-xs">{payment.when}</span>
+              </span>
+              <span className="shrink-0 tabular-nums">{formatMoney(payment.amountCents)}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </SectionCard>
   );
 }

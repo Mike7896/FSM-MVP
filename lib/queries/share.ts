@@ -3,7 +3,7 @@ import "server-only";
 
 import { and, asc, desc, eq, gt, isNull, or, sql } from "drizzle-orm";
 
-import { jobSettlement, planFromTerms } from "@/lib/billing";
+import { jobSettlement } from "@/lib/billing";
 import { db } from "@/lib/db";
 import {
   contractDetails,
@@ -29,7 +29,12 @@ import {
   type DocumentStatus,
 } from "@/lib/documents";
 import { collectedForInvoice } from "@/lib/ledger";
-import { draftFromRecord, totals, type QuoteDraft } from "@/lib/quote";
+import {
+  draftFromRecord,
+  paymentSchedule,
+  type QuoteDraft,
+  type ScheduledPayment,
+} from "@/lib/quote";
 import { contractDraft } from "@/lib/queries/contracts";
 import {
   getOfficeSignature,
@@ -82,14 +87,6 @@ type SharedBase = {
    * doesn't read as the customer opening it.
    */
   organizationId: string;
-};
-
-/** One payment of the schedule, as the customer reads it. */
-export type ScheduledPayment = {
-  name: string;
-  /** What opens it, in her words — "When the inspection passes". */
-  when: string;
-  amountCents: number;
 };
 
 export type SharedQuote = SharedBase & {
@@ -360,13 +357,7 @@ async function sharedQuote(
 
   const [[details], [contract]] = await Promise.all([
     db
-      .select({
-        validUntil: quoteDetails.validUntil,
-        depositPercent: quoteDetails.depositPercent,
-        progressBilling: quoteDetails.progressBilling,
-        // The shop's pattern as it stood when this quote was written.
-        drawPattern: quoteDetails.drawPattern,
-      })
+      .select({ validUntil: quoteDetails.validUntil })
       .from(quoteDetails)
       .where(eq(quoteDetails.documentId, base.documentId))
       .limit(1),
@@ -399,24 +390,14 @@ async function sharedQuote(
 
   // Priced off the same total the page shows, so the schedule and the figure
   // above it can never disagree.
-  const schedule = planFromTerms({
-    totalCents: totals(draft).totalCents,
-    depositPercent: details?.depositPercent ?? null,
-    draws: details?.progressBilling === "draws",
-    pattern: details?.drawPattern ?? null,
-  }).map((stage) => ({
-    name: stage.name,
-    when: WHEN[stage.gate],
-    amountCents: stage.amountCents,
-  }));
+  const schedule = paymentSchedule(draft);
 
   return {
     ...base,
     kind: "quote",
     draft,
     status: record.status,
-    // One payment is just the total again, said twice.
-    schedule: schedule.length > 1 ? schedule : [],
+    schedule,
     // **The letterhead on the page is the one it was sent with** (Documents §2).
     // Only a link opened before any send — which the product never hands out —
     // falls back to the Office as it stands today.
@@ -663,14 +644,6 @@ async function sharedInvoice(
       : null,
   };
 }
-
-/** What opens each payment, in the customer's words. */
-const WHEN: Record<string, string> = {
-  on_acceptance: "When you approve this",
-  phase_complete: "When that stage is done",
-  inspection_passed: "When the inspection passes",
-  on_completion: "When the work's finished",
-};
 
 /** A photo that won't sign is a missing picture, not a broken page. */
 async function signQuietly(path: string): Promise<string | null> {

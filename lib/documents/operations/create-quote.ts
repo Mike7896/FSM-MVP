@@ -187,7 +187,15 @@ export async function createQuote({
       progressBilling: terms.progressBilling ?? null,
       retainagePercent: terms.retainagePercent ?? null,
       capCents: terms.capCents ?? null,
-      drawPattern: defaults?.drawPattern ?? null,
+      // The editor starts a quote with the shop's pattern already in its
+      // phases; a client that sends none gets the pattern copied here.
+      drawPattern:
+        terms.phases !== undefined
+          ? terms.phases.length
+            ? terms.phases
+            : null
+          : (defaults?.drawPattern ?? null),
+      phaseSplit: terms.phaseSplit ?? null,
       signatureLines: input.signatureLines ?? true,
     });
 

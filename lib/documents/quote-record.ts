@@ -77,6 +77,8 @@ export function toQuoteRecord(
     progressBilling: details?.progressBilling ?? null,
     retainagePercent: details?.retainagePercent ?? null,
     capCents: details?.capCents ?? null,
+    drawPattern: details?.drawPattern ?? null,
+    phaseSplit: details?.phaseSplit ?? null,
     signatureLines: details?.signatureLines ?? true,
     scope: document.scope.map((node) => ({
       id: node.id,
@@ -94,6 +96,7 @@ export function toQuoteRecord(
       taxable: node.taxable,
       optional: node.optional,
       breakdown: node.breakdown,
+      phaseKey: node.phaseKey,
       position: node.position,
       source: node.source,
     })),

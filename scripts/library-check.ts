@@ -201,10 +201,10 @@ is("formula naming a missing setting", savedItemIssues({ template, settings: set
 is("default outside its setting", savedItemIssues({ template: saved, settings, defaults: { width: 500 }, summary: null }).length, 1);
 is("default with no setting", savedItemIssues({ template: saved, settings: [], defaults: { width: 36 }, summary: null }).length, 1);
 is("broken formula", savedItemIssues({ template: { ...saved, formulas: { quantity: "1 +" } }, settings: [], defaults: {}, summary: null }).length, 1);
-is("too deep", savedItemIssues({
+is("a deep item is fine", savedItemIssues({
   template: { ...saved, children: [{ ...saved, type: "group", children: [{ ...saved, type: "group", children: [templateFromNode(makeNode("item"))] }] }] },
   settings: [], defaults: {}, summary: null,
-}).length > 0, true);
+}), []);
 
 console.log(failures ? `\n${failures} failed` : "\nall passed");
 process.exit(failures ? 1 : 0);

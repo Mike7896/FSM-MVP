@@ -11,12 +11,14 @@ import {
   officeDefaults,
   scopeNodes,
 } from "@/lib/db/schema";
-import { planFromTerms, seedJobSchedule } from "@/lib/billing";
+import { seedJobSchedule } from "@/lib/billing";
 import { notifyLater } from "@/lib/notifications";
+import { draftFromRecord, paymentPlan } from "@/lib/quote";
 import { documentHash } from "@/lib/signing/hash";
 import { parseMark } from "@/lib/signing/mark";
 
 import { DocumentError } from "../errors";
+import { toQuoteRecord } from "../quote-record";
 import { loadDocument, type Executor } from "../repository";
 import { scopeTotals } from "../scope";
 import type { ContractDocument } from "../types";
@@ -169,6 +171,8 @@ export async function acceptQuote(
           section: node.section,
           optional: node.optional,
           breakdown: node.breakdown,
+          // The phase a row was billed in is part of what she agreed to.
+          phaseKey: node.phaseKey,
           description: node.description,
           quantity: node.quantity,
           unit: node.unit,
@@ -212,18 +216,22 @@ export async function acceptQuote(
       });
     }
 
-    // The payment plan the terms imply, written onto the job now that there is
-    // an agreed price to apply the shop's percentages to (Flow 6). A plan the
-    // contractor made himself stands; this only fills an empty one.
+    // The payment plan the quote showed her, written onto the job now that
+    // there is an agreed price (Flow 6) — the same plan her page and the PDF
+    // printed, from the same function. Where the quote showed a schedule, it
+    // is the agreement and replaces anything unbilled planned before it; a
+    // single payment leaves a plan the contractor typed himself standing.
+    const plan = paymentPlan(draftFromRecord(toQuoteRecord(quote, null)));
     await seedJobSchedule({
       jobId: quote.jobId,
       contractId: contract.id,
-      stages: planFromTerms({
-        totalCents: totals.totalCents,
-        depositPercent: quote.details?.depositPercent ?? null,
-        draws: quote.details?.progressBilling === "draws",
-        pattern: quote.details?.drawPattern ?? null,
-      }),
+      stages: plan.map((payment) => ({
+        name: payment.name,
+        amountCents: payment.amountCents,
+        gate: payment.gate,
+        phaseKey: payment.phaseKey,
+      })),
+      replace: plan.length > 1,
       on: tx,
     });
 

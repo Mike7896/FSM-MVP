@@ -486,6 +486,13 @@ export const scopeBreakdownEnum = pgEnum("scope_breakdown", ["show", "hide"]);
 export const scopeDetailEnum = pgEnum("scope_detail", ["top", "all"]);
 
 /**
+ * How a quote billed in phases splits its price: by the **scope** each phase
+ * covers (a room, a floor — the phase bills what its rows are worth), or by
+ * **percent** (rough-in 40%, trim 30% — work where the same rows span phases).
+ */
+export const phaseSplitEnum = pgEnum("phase_split", ["scope", "percent"]);
+
+/**
  * What a change-order node does to the contracted node it points at —
  * Documents §4.
  *

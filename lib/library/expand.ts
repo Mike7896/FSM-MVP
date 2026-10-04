@@ -277,9 +277,3 @@ export function savedItemText(item: Pick<SavedItem, "name" | "template">): strin
   visit(item.template);
   return words.join(" ").toLowerCase();
 }
-
-/** How deep the template runs, counting its root as 1 — what `fitsUnder` measures. */
-export function templateHeight(node: TemplateNode): number {
-  if (!node.children.length) return 1;
-  return 1 + Math.max(...node.children.map(templateHeight));
-}

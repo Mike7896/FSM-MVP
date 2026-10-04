@@ -158,10 +158,23 @@ export async function saveQuote({
       }
     }
 
-    // Switching progress billing on is when the shop's pattern is copied onto
-    // the quote. Before that there is no schedule to show; after it, the
-    // snapshot is the quote's own and the Office may change its mind freely.
-    if (input.terms?.progressBilling === "draws") {
+    // The editor sends the quote's phases with every save, and they are the
+    // quote's own: what it sends is what is kept.
+    if (input.terms?.phases !== undefined) {
+      details.drawPattern = input.terms.phases.length ? input.terms.phases : null;
+    }
+    if (input.terms?.phaseSplit !== undefined) {
+      details.phaseSplit = input.terms.phaseSplit;
+    }
+
+    // A client that says nothing about phases gets the shop's pattern copied on
+    // when billing in stages is switched on. Before that there is no schedule
+    // to show; after it, the snapshot is the quote's own and the Office may
+    // change its mind freely.
+    if (
+      input.terms?.progressBilling === "draws" &&
+      input.terms.phases === undefined
+    ) {
       const [current] = await tx
         .select({ drawPattern: quoteDetails.drawPattern })
         .from(quoteDetails)

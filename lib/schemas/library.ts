@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { isValidSetting, templateHeight } from "@/lib/library/expand";
+import { isValidSetting } from "@/lib/library/expand";
 import {
   FormulaError,
   formulaNames,
@@ -8,7 +8,7 @@ import {
   templateFormulas,
 } from "@/lib/library/formula";
 import type { SettingDef, TemplateNode } from "@/lib/library/types";
-import { MAX_DEPTH, NODE_SPEC } from "@/lib/quote";
+import { NODE_SPEC } from "@/lib/quote";
 
 import { lineSectionSchema, lineTypeSchema } from "./quote";
 
@@ -134,10 +134,6 @@ export function savedItemIssues(item: {
     const def = item.settings.find((candidate) => candidate.key === key);
     if (!def) issues.push(`The default for "${key}" has no setting.`);
     else if (!isValidSetting(def, value)) issues.push(`The default for ${def.label} doesn't fit it.`);
-  }
-
-  if (templateHeight(item.template) > MAX_DEPTH) {
-    issues.push(`Scope goes ${MAX_DEPTH} levels deep, and this goes deeper.`);
   }
 
   let count = 0;

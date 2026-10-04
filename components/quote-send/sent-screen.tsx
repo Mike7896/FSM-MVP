@@ -11,7 +11,7 @@ import {
 } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Check, Copy, ExternalLink, Loader2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Copy, ExternalLink, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { DemoChip } from "@/components/demo-chip";
@@ -203,6 +203,14 @@ export function SentScreen({
           >
             {state}
           </Badge>
+          {/* Sending is when the job starts being worked on, so the way to it
+              sits up top on every visit, not only in the one-time beat. */}
+          <Button asChild size="sm">
+            <Link href={`/jobs/${quote.jobId}`}>
+              {quote.jobNumber ? `Go to job #${quote.jobNumber}` : "Go to the job"}
+              <ArrowRight />
+            </Link>
+          </Button>
         </div>
       </div>
 

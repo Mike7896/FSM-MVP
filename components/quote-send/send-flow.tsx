@@ -198,6 +198,8 @@ const emptyPreview: QuoteDraft = {
     progressBilling: null,
     retainagePercent: null,
     capCents: null,
+    phases: [],
+    phaseSplit: "scope",
   },
   status: "draft",
   licenseId: null,

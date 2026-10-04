@@ -157,6 +157,35 @@ function Block({
         </section>
       );
 
+    case "phase":
+      return (
+        <section>
+          <p className="font-label mb-1 text-[11px] font-semibold uppercase">{block.heading}</p>
+          {block.lines.map((line, index) => (
+            <div
+              key={index}
+              className={cn(
+                "flex items-baseline justify-between gap-3 border-t py-2",
+                line.depth && "border-border/50 text-muted-foreground py-1.5 text-[0.9em]"
+              )}
+              style={line.depth ? { paddingLeft: `${line.depth * 1.25}rem` } : undefined}
+            >
+              <span className="min-w-0">{line.description}</span>
+              {line.amount ? <span className="shrink-0 tabular-nums">{line.amount}</span> : null}
+            </div>
+          ))}
+          <div className="flex items-baseline justify-between gap-3 border-t pt-2 font-medium">
+            <span className="min-w-0">
+              {block.bill.label}
+              {block.bill.note ? (
+                <span className="text-muted-foreground block text-xs font-normal">{block.bill.note}</span>
+              ) : null}
+            </span>
+            <span className="shrink-0 tabular-nums">{block.bill.value}</span>
+          </div>
+        </section>
+      );
+
     case "totals":
       return (
         <section className={cn(attached && "-mt-6")}>

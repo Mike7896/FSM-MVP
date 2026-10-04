@@ -5,7 +5,6 @@ import { and, asc, eq, isNull } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { drawSchedule } from "@/lib/db/schema";
 import type { Executor } from "@/lib/documents";
-import { percentOf } from "@/lib/quote/money";
 import type { PhaseGate } from "@/lib/schemas";
 
 /**
@@ -27,115 +26,46 @@ import type { PhaseGate } from "@/lib/schemas";
  * milestone is observable and a percentage is an assertion.
  */
 
-/** A stage of the Office's pattern — a name and its share, with no job behind it. */
-export type DrawPatternStage = { name: string; percent: number };
-
 export type PlannedStage = {
   name: string;
   amountCents: number;
   gate: PhaseGate;
+  /** The quote phase it was planned from, when it was. */
+  phaseKey?: string | null;
 };
-
-/**
- * The plan a job's terms imply.
- *
- * The deposit comes first and the stages split what is left, so the shape holds
- * whatever the deposit is: 30% up front and three draws over the rest adds to
- * the agreed price, and so does no deposit at all.
- *
- * With no pattern — or terms that bill once — there is exactly one stage: the
- * balance, when the work is done.
- */
-export function planFromTerms({
-  totalCents,
-  depositPercent,
-  draws,
-  pattern,
-}: {
-  totalCents: number;
-  depositPercent: number | null;
-  /** Whether the terms bill in stages at all. */
-  draws: boolean;
-  pattern: DrawPatternStage[] | null;
-}): PlannedStage[] {
-  const stages: PlannedStage[] = [];
-
-  const depositCents =
-    depositPercent && depositPercent > 0
-      ? percentOf(totalCents, depositPercent)
-      : 0;
-
-  if (depositCents > 0) {
-    stages.push({
-      name: "Deposit",
-      amountCents: depositCents,
-      gate: "on_acceptance",
-    });
-  }
-
-  const rest = Math.max(totalCents - depositCents, 0);
-  const shares =
-    draws && pattern?.length ? pattern.filter((stage) => stage.percent > 0) : [];
-
-  if (shares.length === 0) {
-    stages.push({
-      name: "Final balance",
-      amountCents: rest,
-      gate: "on_completion",
-    });
-    return stages;
-  }
-
-  const weight = shares.reduce((sum, stage) => sum + stage.percent, 0) || 1;
-  let allocated = 0;
-
-  shares.forEach((share, index) => {
-    const last = index === shares.length - 1;
-    // The last stage takes what remains rather than its own rounded share, so
-    // the plan always adds up to the agreement exactly.
-    const amountCents = last
-      ? rest - allocated
-      : Math.round((rest * share.percent) / weight);
-    allocated += amountCents;
-
-    stages.push({
-      name: share.name.trim() || (last ? "Final balance" : `Stage ${index + 1}`),
-      amountCents,
-      // The last stage is the balance at the end, and it is the one that
-      // carries the settlement.
-      gate: last ? "on_completion" : "phase_complete",
-    });
-  });
-
-  return stages;
-}
 
 /**
  * Writes the plan onto the job — called when a quote is accepted and the
  * agreement it reads comes into existence.
  *
- * **A plan the contractor made himself always wins.** If the job already has
- * stages, they stand: they only gain the contract they now read. Overwriting
- * them with the pattern would throw away the split he typed for this job.
+ * **A plan the contractor made himself wins over a pattern** — if the job
+ * already has stages, they stand and only gain the contract they now read.
+ * **The schedule she agreed to wins over both**: with `replace`, unbilled
+ * stages typed on the job before anything was agreed give way to the one the
+ * quote showed her. Nothing billed is ever touched.
  */
 export async function seedJobSchedule({
   jobId,
   contractId,
   stages,
+  replace = false,
   on = db,
 }: {
   jobId: string;
   contractId: string | null;
   stages: PlannedStage[];
+  /** The quote showed her a schedule, so it is the plan. */
+  replace?: boolean;
   on?: Executor;
 }): Promise<number> {
-  const existing = await on
-    .select({ id: drawSchedule.id })
+  const existing: { id: string; invoiceId: string | null }[] = await on
+    .select({ id: drawSchedule.id, invoiceId: drawSchedule.invoiceId })
     .from(drawSchedule)
-    .where(eq(drawSchedule.jobId, jobId))
-    .limit(1);
+    .where(eq(drawSchedule.jobId, jobId));
 
-  if (existing.length > 0) {
+  if (replace && existing.length > 0 && existing.every((row) => row.invoiceId === null)) {
+    await on.delete(drawSchedule).where(eq(drawSchedule.jobId, jobId));
+  } else if (existing.length > 0) {
     if (contractId) {
       await on
         .update(drawSchedule)
@@ -157,6 +87,7 @@ export async function seedJobSchedule({
       name: stage.name,
       amountCents: stage.amountCents,
       gate: stage.gate,
+      phaseKey: stage.phaseKey ?? null,
     }))
   );
 
