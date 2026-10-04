@@ -240,7 +240,7 @@ export default async function ChangeOrderPage({
               </a>
             </Button>
           ) : null}
-          {contract.status === "signed" ? (
+          {contract.status === "signed" && !contract.jobPaid ? (
             <Button asChild variant="outline">
               <Link href={`/jobs/${id}/change-orders/new`}>
                 <FilePlus2 />

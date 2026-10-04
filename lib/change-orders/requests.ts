@@ -7,10 +7,13 @@ import { attachmentUrl, verifyAttachment } from "@/lib/field/storage";
 import { notifyLater } from "@/lib/notifications";
 
 export async function requestContext(token: string) {
-  const [link] = await db.select({ link: shareLinks, doc: documents, demo: jobs.isDemo }).from(shareLinks).innerJoin(documents, eq(documents.id, shareLinks.documentId)).innerJoin(jobs, eq(jobs.id, documents.jobId)).where(eq(shareLinks.token, token));
+  const [link] = await db.select({ link: shareLinks, doc: documents, demo: jobs.isDemo, jobStatus: jobs.status }).from(shareLinks).innerJoin(documents, eq(documents.id, shareLinks.documentId)).innerJoin(jobs, eq(jobs.id, documents.jobId)).where(eq(shareLinks.token, token));
   if (!link || link.demo || link.link.revokedAt || (link.link.expiresAt && link.link.expiresAt <= new Date()) || !link.link.scopes.includes("view")) throw new DocumentError("This link is no longer available.", "not_found");
   const [contract] = await db.select().from(documents).where(and(eq(documents.jobId, link.doc.jobId), eq(documents.organizationId, link.doc.organizationId), eq(documents.type, "contract"), eq(documents.status, "signed"))).orderBy(desc(documents.createdAt)).limit(1);
   if (!contract) throw new DocumentError("Changes can be requested after the contract is signed.", "invalid");
+  // Paid in full, the contract is finished. More work is a new quote — a new
+  // agreement — not a change to one both sides have closed out.
+  if (link.jobStatus === "paid") throw new DocumentError("This job is paid in full. For more work, ask for a new quote.", "invalid");
   return contract;
 }
 
