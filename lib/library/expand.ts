@@ -139,12 +139,12 @@ export function expandSavedItem(
       return Math.max(0, Math.round(value * 1000) / 1000);
     });
 
-    const unitCostCents = compute(name, formulas.unitCostCents, (text) =>
-      Math.max(0, Math.round(formulaNumber(parseFormula(text), scope)))
+    const unitCostCents = compute(name, formulas.unitCost, (text) =>
+      Math.max(0, Math.round(formulaNumber(parseFormula(text), scope) * 100))
     );
 
-    let sellPriceCents = compute(name, formulas.sellPriceCents, (text) =>
-      Math.round(formulaNumber(parseFormula(text), scope))
+    let sellPriceCents = compute(name, formulas.sellPrice, (text) =>
+      Math.max(0, Math.round(formulaNumber(parseFormula(text), scope) * 100))
     );
     // A computed cost with a markup and no price formula prices itself the way
     // the row does when the cost is typed in.
@@ -194,6 +194,10 @@ export function expandSavedItem(
  * to the quote it was saved from.
  */
 export function templateFromNode(node: ScopeNode): TemplateNode {
+  const { when, ...formulas } = node.sizing ?? {};
+  const written = Object.fromEntries(
+    Object.entries(formulas).filter(([, source]) => source?.trim())
+  ) as TemplateNode["formulas"];
   return {
     type: node.type,
     description: node.description,
@@ -206,8 +210,37 @@ export function templateFromNode(node: ScopeNode): TemplateNode {
     taxable: node.taxable,
     optional: node.optional,
     ...(node.breakdown ? { breakdown: node.breakdown } : {}),
+    ...(written && Object.keys(written).length ? { formulas: written } : {}),
+    ...(when?.trim() ? { when: when.trim() } : {}),
     children: node.children.map(templateFromNode),
   };
+}
+
+/**
+ * A saved item's rows as editable Scope rows — the Library edits them with
+ * the same editor a quote uses. Each row carries its formulas in `sizing`, and
+ * `templateFromNode` turns the edited rows back into the template.
+ *
+ * Keys come from each row's place in the item rather than at random, so the
+ * page drawn on the server and the one the browser takes over agree on them.
+ */
+export function nodeFromTemplate(template: TemplateNode, key = "row"): ScopeNode {
+  const sizing = { ...(template.formulas ?? {}), ...(template.when ? { when: template.when } : {}) };
+  return makeNode(template.type, {
+    description: template.description,
+    section: template.section,
+    quantity: template.quantity,
+    unit: template.unit,
+    unitCostCents: template.unitCostCents,
+    markupPercent: template.markupPercent,
+    sellPriceCents: template.sellPriceCents,
+    taxable: template.taxable,
+    optional: template.optional,
+    breakdown: template.breakdown ?? null,
+    sizing: Object.keys(sizing).length ? sizing : null,
+    key,
+    children: template.children.map((child, index) => nodeFromTemplate(child, `${key}-${index}`)),
+  });
 }
 
 /* ── Reading one ──────────────────────────────────────────────────────── */

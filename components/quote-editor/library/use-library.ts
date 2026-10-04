@@ -71,6 +71,9 @@ export function useLibraryMutations(jobId: string | null) {
       id: string;
       name?: string;
       defaults?: SettingValues;
+      template?: TemplateNode;
+      settings?: SettingDef[];
+      summary?: string | null;
     }) => apiJson<SavedItem>(`/api/v1/saved-items/${id}`, "PATCH", fields),
     onSuccess: replaceItem,
   });

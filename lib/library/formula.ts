@@ -370,3 +370,27 @@ export function fillTemplate(
 export function templateFormulas(template: string): Formula[] {
   return [...template.matchAll(/\{([^{}]+)\}/g)].map((match) => parseFormula(match[1]));
 }
+
+/**
+ * What's wrong with one formula, said for the field it was typed in — or null
+ * when it reads and names only settings the item has. `sentence` checks the
+ * formulas inside a description's braces instead.
+ */
+export function formulaIssue(
+  source: string,
+  settingKeys: Iterable<string>,
+  sentence = false
+): string | null {
+  const keys = new Set(settingKeys);
+  try {
+    const formulas = sentence ? templateFormulas(source) : [parseFormula(source)];
+    for (const formula of formulas) {
+      for (const name of formulaNames(formula)) {
+        if (!keys.has(name)) return `"${name}" isn't one of this item's settings.`;
+      }
+    }
+    return null;
+  } catch (error) {
+    return error instanceof FormulaError ? error.message : "This can't be read as a formula.";
+  }
+}

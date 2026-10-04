@@ -62,7 +62,7 @@ export function NodeRow({
   /** Read mode: what tapping the row does. */
   onActivate?: () => void;
 }) {
-  const { mode, customerDetail, priceAnchorKey, priceAnchorOpen } =
+  const { mode, customerDetail, priceAnchorKey, priceAnchorOpen, rowExtra } =
     useScopeActions();
   const spec = NODE_SPEC[node.type];
 
@@ -161,6 +161,8 @@ export function NodeRow({
           {detail}
         </div>
       ) : null}
+
+      {mode === "edit" && rowExtra ? rowExtra(node) : null}
     </div>
   );
 

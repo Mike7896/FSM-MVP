@@ -101,8 +101,28 @@ export type ScopeNode = {
    * phase this row is part of. Null or unknown puts it in the last phase.
    */
   phaseKey?: string | null;
+  /**
+   * Saved items only: how the row is sized from the item's settings when it
+   * is placed. A quote's rows never carry it. It rides on the row while a
+   * saved item is edited so it survives every tree operation — a moved,
+   * duplicated or regrouped row keeps its formulas.
+   */
+  sizing?: RowSizing | null;
   source: LineSource;
   children: ScopeNode[];
+};
+
+/**
+ * A saved row's formulas over its item's settings — `lib/library/formula.ts`.
+ * Money is in dollars. `description` is a sentence with formulas in braces;
+ * `when` is the condition the row is placed under.
+ */
+export type RowSizing = {
+  description?: string;
+  quantity?: string;
+  sellPrice?: string;
+  unitCost?: string;
+  when?: string;
 };
 
 export type Breakdown = "show" | "hide";

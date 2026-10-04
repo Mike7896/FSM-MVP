@@ -1,5 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import {
+  LibraryBig,
   Bell,
   Blocks,
   BookOpen,
@@ -143,6 +144,13 @@ export const officeNav: NavSection = {
       href: "/office/defaults",
       icon: SlidersHorizontal,
       description: "Where every new quote starts — money, scope language, terms",
+    },
+    {
+      title: "Library",
+      href: "/office/library",
+      icon: LibraryBig,
+      description:
+        "Saved line items, groups and assemblies, and the settings that size them",
     },
     {
       title: "Licenses",

@@ -10,6 +10,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { requireActiveOrganization, requireSession } from "@/lib/dal";
 import { JobTasks } from "@/components/tasks/job-tasks";
+import { JobItemSettings } from "@/components/jobs/job-item-settings";
+import { listJobItemSettings, listSavedItems } from "@/lib/queries/library";
 import { listTags } from "@/lib/queries/tags";
 import { listTeam } from "@/lib/schedule";
 import { DocumentRail } from "@/components/documents/document-rail";
@@ -42,7 +44,7 @@ export default async function JobPage({ params }: PageProps<"/jobs/[id]">) {
 
   // The documents and the letterhead they carry. Fetched after the hub because
   // both need the job to exist first.
-  const [documents, office, captures, receipts, team, tags, session] = await Promise.all([
+  const [documents, office, captures, receipts, team, tags, session, library, itemSettings] = await Promise.all([
     listJobDocuments(id, org.id),
     getOfficeIdentity(org.id),
     listCaptures(id, org.id),
@@ -50,7 +52,11 @@ export default async function JobPage({ params }: PageProps<"/jobs/[id]">) {
     listTeam(org.id),
     listTags(org.id),
     requireSession(),
+    listSavedItems(org.id),
+    listJobItemSettings(id, org.id),
   ]);
+  // Only items with settings have anything for a job to set.
+  const sizedItems = library.filter((item) => item.settings.length > 0);
 
   const first = job.customerName.trim().split(/\s+/)[0] || "the customer";
   // The deposit, from the job's plan once there is one — and from the quote
@@ -366,6 +372,16 @@ export default async function JobPage({ params }: PageProps<"/jobs/[id]">) {
               ))
             )}
           </section>
+
+          {sizedItems.length ? (
+            <JobItemSettings
+              className={styles.panel}
+              heading={<SectionLabel>Library settings for this job</SectionLabel>}
+              jobId={job.id}
+              items={sizedItems}
+              initial={itemSettings}
+            />
+          ) : null}
 
           {job.money.spentCents > 0 ? (
             <section className={styles.panel}>
