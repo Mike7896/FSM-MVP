@@ -37,6 +37,20 @@ export async function listSavedItems(organizationId: string): Promise<SavedItem[
   return rows.map(toSavedItem);
 }
 
+/** One saved item, for a page — null where it isn't this Office's. */
+export async function getSavedItem(
+  id: string,
+  organizationId: string
+): Promise<SavedItem | null> {
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
+  const [row] = await db
+    .select()
+    .from(savedItems)
+    .where(and(eq(savedItems.id, id), eq(savedItems.organizationId, organizationId)))
+    .limit(1);
+  return row ? toSavedItem(row) : null;
+}
+
 export async function requireSavedItem(
   id: string,
   organizationId: string

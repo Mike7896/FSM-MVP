@@ -13,6 +13,7 @@ import {
   evaluateFormula,
   expandSavedItem,
   fillTemplate,
+  nodeFromTemplate,
   parseFormula,
   resolveSettings,
   templateFromNode,
@@ -118,7 +119,7 @@ const template: TemplateNode = {
       taxable: true,
       optional: false,
       children: [],
-      formulas: { quantity: "style == 'pair' ? 2 : 1", unitCostCents: "width * height * 5" },
+      formulas: { quantity: "style == 'pair' ? 2 : 1", unitCost: "width * height * 0.05" },
     },
     {
       type: "item",
@@ -151,6 +152,24 @@ const template: TemplateNode = {
   ],
 };
 const item = { template, source: "shop" as const };
+
+/** Same content, whatever order the keys were written in. */
+const canonical = (value: unknown): unknown =>
+  Array.isArray(value)
+    ? value.map(canonical)
+    : value && typeof value === "object"
+      ? Object.fromEntries(
+          Object.entries(value)
+            .filter(([, entry]) => entry !== undefined)
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([key, entry]) => [key, canonical(entry)])
+        )
+      : value;
+is(
+  "edited as rows and saved back, a template is unchanged — formulas and conditions included",
+  canonical(templateFromNode(nodeFromTemplate(template))),
+  canonical({ ...template, breakdown: undefined })
+);
 
 const placed = expandSavedItem(item, fromDefaults.values);
 const [unit, trim] = placed.node.children;

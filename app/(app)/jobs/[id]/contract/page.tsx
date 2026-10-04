@@ -248,7 +248,7 @@ export default async function ContractPage({
               signed={signed}
             />
           )}
-          {signed ? (
+          {signed && !contract.jobPaid ? (
             <Button asChild variant="outline">
               <Link href={`/jobs/${id}/change-orders/new`}>
                 <FilePlus2 />
@@ -419,7 +419,12 @@ function Changes({
         </Link>
       </div>
 
-      {orders.length === 0 ? (
+      {orders.length === 0 && contract.jobPaid ? (
+        <p className="text-muted-foreground border-t py-4 text-sm">
+          None, and none to come: it&apos;s paid in full, so more work is a new
+          quote.
+        </p>
+      ) : orders.length === 0 ? (
         <p className="text-muted-foreground border-t py-4 text-sm">
           None. When the work or the price changes, it goes through a change
           order — the contract itself is never edited.

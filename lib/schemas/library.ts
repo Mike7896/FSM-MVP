@@ -1,12 +1,7 @@
 import { z } from "zod";
 
 import { isValidSetting } from "@/lib/library/expand";
-import {
-  FormulaError,
-  formulaNames,
-  parseFormula,
-  templateFormulas,
-} from "@/lib/library/formula";
+import { formulaIssue } from "@/lib/library/formula";
 import type { SettingDef, TemplateNode } from "@/lib/library/types";
 import { NODE_SPEC } from "@/lib/quote";
 
@@ -17,7 +12,7 @@ import { lineSectionSchema, lineTypeSchema } from "./quote";
  *
  * The shapes are checked by Zod; the rules that span them — a formula naming a
  * setting the item doesn't have, a default that isn't one of a choice's values,
- * a template deeper than Scope allows — by `savedItemIssues`, so a broken
+ * a row that can't hold what it holds — by `savedItemIssues`, so a broken
  * formula is refused when it is saved rather than discovered on a drop.
  */
 
@@ -76,8 +71,8 @@ export const templateNodeSchema: z.ZodType<TemplateNode> = z.lazy(() =>
       .object({
         description: formulaSchema.optional(),
         quantity: formulaSchema.optional(),
-        sellPriceCents: formulaSchema.optional(),
-        unitCostCents: formulaSchema.optional(),
+        sellPrice: formulaSchema.optional(),
+        unitCost: formulaSchema.optional(),
       })
       .optional(),
     when: formulaSchema.optional(),
@@ -138,16 +133,8 @@ export function savedItemIssues(item: {
 
   let count = 0;
   function checkFormula(where: string, source: string, sentence = false) {
-    try {
-      const formulas = sentence ? templateFormulas(source) : [parseFormula(source)];
-      for (const formula of formulas) {
-        for (const name of formulaNames(formula)) {
-          if (!keys.has(name)) issues.push(`${where} uses "${name}", which isn't one of the settings.`);
-        }
-      }
-    } catch (error) {
-      issues.push(`${where}: ${error instanceof FormulaError ? error.message : "the formula can't be read."}`);
-    }
+    const issue = formulaIssue(source, keys, sentence);
+    if (issue) issues.push(`${where}: ${issue}`);
   }
 
   function visit(node: TemplateNode, isRoot: boolean) {
@@ -165,8 +152,8 @@ export function savedItemIssues(item: {
     const formulas = node.formulas ?? {};
     if (formulas.description) checkFormula(where, formulas.description, true);
     if (formulas.quantity) checkFormula(where, formulas.quantity);
-    if (formulas.sellPriceCents) checkFormula(where, formulas.sellPriceCents);
-    if (formulas.unitCostCents) checkFormula(where, formulas.unitCostCents);
+    if (formulas.sellPrice) checkFormula(where, formulas.sellPrice);
+    if (formulas.unitCost) checkFormula(where, formulas.unitCost);
     if (node.when) {
       if (isRoot) issues.push("The item itself can't be conditional — only the rows inside it.");
       else checkFormula(where, node.when);

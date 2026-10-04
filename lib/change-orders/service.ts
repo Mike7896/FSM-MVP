@@ -63,6 +63,9 @@ export async function saveChangeOrder(organizationId: string, userId: string | n
         return loaded;
       }
     } else {
+      // Paid in full, the contract is finished: new work goes on a new quote.
+      const [job] = await tx.select({ status: jobs.status }).from(jobs).where(eq(jobs.id, parent.jobId));
+      if (job?.status === "paid") throw new DocumentError("This job is paid in full. Quote new work instead of changing this contract.", "invalid");
       await tx.insert(documents).values({ id: input.id, organizationId, jobId: parent.jobId, customerId: parent.customerId, type: "change_order", number: "", status: "draft", createdBy: userId });
       await tx.insert(changeOrderDetails).values({ documentId: input.id, parentContractId: parent.id });
       if (input.requestId) await tx.update(changeRequests).set({ changeOrderId: input.id }).where(eq(changeRequests.id, input.requestId));

@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { useMemo, useState, type DragEvent } from "react";
 import {
   Ban,
@@ -44,9 +46,9 @@ export const KIND_ICON: Record<NodeType, LucideIcon> = {
   exclusion: Ban,
 };
 
-type Sort = "recent" | "used" | "name" | "newest";
+export type Sort = "recent" | "used" | "name" | "newest";
 
-const SORTS: { value: Sort; label: string }[] = [
+export const SORTS: { value: Sort; label: string }[] = [
   { value: "recent", label: "Recently used" },
   { value: "used", label: "Most used" },
   { value: "name", label: "Name" },
@@ -54,22 +56,22 @@ const SORTS: { value: Sort; label: string }[] = [
 ];
 
 /** The filter a kind falls under. Text rows share one. */
-type Filter = "all" | "item" | "group" | "assembly" | "text";
+export type Filter = "all" | "item" | "group" | "assembly" | "text";
 
-function filterOf(type: NodeType): Exclude<Filter, "all"> {
+export function filterOf(type: NodeType): Exclude<Filter, "all"> {
   if (type === "item" || type === "allowance") return "item";
   if (type === "group" || type === "assembly") return type;
   return "text";
 }
 
-const FILTER_LABEL: Record<Exclude<Filter, "all">, string> = {
+export const FILTER_LABEL: Record<Exclude<Filter, "all">, string> = {
   item: "Line items",
   group: "Groups",
   assembly: "Assemblies",
   text: "Notes",
 };
 
-function sortItems(items: SavedItem[], sort: Sort): SavedItem[] {
+export function sortItems(items: SavedItem[], sort: Sort): SavedItem[] {
   const sorted = [...items];
   switch (sort) {
     case "name":
@@ -243,6 +245,14 @@ export function LibraryPanel({
             Drag a tile into Scope, or onto a group to put it inside.
           </p>
         ) : null}
+        {/* Changing an item's rows and settings is Office work, done once for
+            every quote — not something to do mid-quote in a side panel. */}
+        <Link
+          href="/office/library"
+          className="text-muted-foreground hover:text-foreground mt-3 block px-1 text-xs underline underline-offset-4"
+        >
+          Edit your library in the Office
+        </Link>
       </div>
     </div>
   );

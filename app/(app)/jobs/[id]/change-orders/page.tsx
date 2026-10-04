@@ -48,6 +48,8 @@ export default async function ChangeOrdersPage({
 
   const first = firstName(contract.customerName);
   const signed = contract.status === "signed";
+  // Signed and not yet paid off: the window in which the agreement can change.
+  const changeable = signed && !contract.jobPaid;
   // Newest first: the one he just sent is the one he's looking for.
   const orders = contract.changeOrders;
   const byId = new Map(orders.map((order) => [order.id, order]));
@@ -136,7 +138,9 @@ export default async function ChangeOrdersPage({
         ) : null}
 
         <div className="mt-6 flex flex-wrap items-center gap-2">
-          {signed ? (
+          {contract.jobPaid ? (
+            <PaidInFull customerId={contract.customerId} />
+          ) : signed ? (
             <Button asChild>
               <Link href={`/jobs/${id}/change-orders/new`}>
                 <FilePlus2 />
@@ -173,8 +177,9 @@ export default async function ChangeOrdersPage({
 
             {requests.length === 0 ? (
               <p className="text-muted-foreground border-t py-4 text-sm">
-                Nothing asked for yet. {first} can ask for a change, with
-                photos, from the contract you sent them.
+                {changeable
+                  ? `Nothing asked for yet. ${first} can ask for a change, with photos, from the contract you sent them.`
+                  : "Nothing was asked for."}
               </p>
             ) : (
               <ol>
@@ -264,9 +269,9 @@ export default async function ChangeOrdersPage({
 
             {orders.length === 0 ? (
               <p className="text-muted-foreground border-t py-4 text-sm">
-                None yet. When the work or the price changes after signing, it
-                goes through a change order — the contract itself is never
-                edited.
+                {contract.jobPaid
+                  ? "None. The contract was paid in full as signed."
+                  : "None yet. When the work or the price changes after signing, it goes through a change order — the contract itself is never edited."}
               </p>
             ) : (
               <ol>
@@ -438,4 +443,25 @@ function Figure({ label, value }: { label: string; value: string }) {
 
 function firstName(name: string) {
   return name.trim().split(/\s+/)[0] || "The customer";
+}
+
+/**
+ * Where "Write a change order" was, once the job is paid in full: the
+ * contract is finished, and more work for the same customer starts a new
+ * quote — and with it a new job.
+ */
+function PaidInFull({ customerId }: { customerId: string }) {
+  return (
+    <div className="flex flex-wrap items-center gap-3">
+      <p className="text-muted-foreground text-sm">
+        Paid in full, so this contract is closed. More work is a new quote.
+      </p>
+      <Button asChild variant="outline">
+        <Link href={`/quotes/new?customer=${customerId}`}>
+          <FilePlus2 />
+          Quote new work
+        </Link>
+      </Button>
+    </div>
+  );
 }

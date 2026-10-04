@@ -85,6 +85,29 @@ export default async function NewChangeOrderPage({
     );
   }
 
+  if (contract.jobPaid) {
+    return (
+      <div className="mx-auto flex w-full max-w-lg flex-col gap-8">
+        <Empty>
+          <EmptyHeader>
+            <EmptyTitle>This job is paid in full.</EmptyTitle>
+            <EmptyDescription>
+              Its contract is finished, so more work for {contract.customerName}{" "}
+              is a new quote, not a change to this one.
+            </EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent className="gap-3">
+            <Button asChild>
+              <Link href={`/quotes/new?customer=${contract.customerId}`}>
+                Quote new work
+              </Link>
+            </Button>
+          </EmptyContent>
+        </Empty>
+      </div>
+    );
+  }
+
   const [captures, targets, signature, profile] = await Promise.all([
     listCaptures(job.id, org.id),
     agreedChangeTargets(contract.id, org.id),

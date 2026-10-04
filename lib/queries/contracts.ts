@@ -81,6 +81,11 @@ export type ContractView = {
   customerEmail: string | null;
   demo: boolean;
   address: string | null;
+  /**
+   * Everything agreed has been collected. The contract is finished: new work
+   * is a new quote, not a change to this one.
+   */
+  jobPaid: boolean;
 
   scopeOfWork: string | null;
   terms: string | null;
@@ -131,6 +136,7 @@ export async function getJobContract(
       customerId: customers.id,
       address: jobs.address,
       demo: jobs.isDemo,
+      jobStatus: jobs.status,
       customerName: customers.name,
       customerEmail: customers.email,
       businessName: organizations.name,
@@ -199,6 +205,7 @@ export async function getJobContract(
     customerEmail: row.customerEmail,
     demo: row.demo,
     address: row.address,
+    jobPaid: row.jobStatus === "paid",
     scopeOfWork: row.summary,
     terms: row.termsText,
     agreedPriceCents,

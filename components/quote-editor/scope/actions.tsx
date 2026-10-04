@@ -63,6 +63,11 @@ export type ScopeActions = {
   open: (key: string) => void;
   /** Keep a copy of the row in the Office's Library. Absent where there's no Library. */
   saveToLibrary?: (key: string) => void;
+  /**
+   * Drawn under a row in edit mode. The Library uses it for how a saved row
+   * is sized by its settings; a quote's rows have nothing there.
+   */
+  rowExtra?: (node: ScopeNode) => ReactNode;
 
   /**
    * How much the customer sees, quote-wide. A group's own `breakdown` overrides

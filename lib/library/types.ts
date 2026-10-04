@@ -1,4 +1,4 @@
-import type { LineSection, NodeType } from "@/lib/quote";
+import type { LineSection, NodeType, RowSizing } from "@/lib/quote";
 
 /**
  * Saved items — rows, groups and assemblies kept in the Office's Library and
@@ -31,14 +31,11 @@ export type SettingValues = Record<string, SettingValue>;
 /**
  * What can be computed on a row when the item is placed. Each is a formula
  * over the settings (`lib/library/formula.ts`); `description` is a sentence
- * with formulas in braces. Money formulas give cents.
+ * with formulas in braces. **Money formulas are in dollars**, the unit the
+ * contractor writes them in — `width * height / 144 * 4.5` — and become cents
+ * when the row is placed.
  */
-export type TemplateFormulas = {
-  description?: string;
-  quantity?: string;
-  sellPriceCents?: string;
-  unitCostCents?: string;
-};
+export type TemplateFormulas = Omit<RowSizing, "when">;
 
 /**
  * One row of a saved item — a Scope node without identity. The static values
