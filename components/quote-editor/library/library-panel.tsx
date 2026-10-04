@@ -25,7 +25,6 @@ import {
   describeSavedItem,
   resolveSettings,
   savedItemText,
-  templateHeight,
   type JobItemSettings,
   type SavedItem,
 } from "@/lib/library";
@@ -34,14 +33,6 @@ import { cn } from "@/lib/utils";
 
 /** The type a drag from a tile carries. Scope accepts only this. */
 export const SAVED_ITEM_DRAG = "application/x-serviceclerk-saved-item";
-
-/**
- * The tile being dragged. A drag's data can only be read on drop, so Scope
- * reads how deep the item runs from here while it decides where it would land.
- */
-export const libraryDrag: { current: { id: string; height: number } | null } = {
-  current: null,
-};
 
 export const KIND_ICON: Record<NodeType, LucideIcon> = {
   item: ReceiptText,
@@ -277,7 +268,6 @@ function SavedItemTile({
     event.dataTransfer.setData(SAVED_ITEM_DRAG, item.id);
     event.dataTransfer.setData("text/plain", item.name);
     event.dataTransfer.effectAllowed = "copy";
-    libraryDrag.current = { id: item.id, height: templateHeight(item.template) };
   }
 
   return (
@@ -285,9 +275,6 @@ function SavedItemTile({
       type="button"
       draggable={draggable}
       onDragStart={draggable ? onDragStart : undefined}
-      onDragEnd={() => {
-        libraryDrag.current = null;
-      }}
       onClick={onOpen}
       aria-label={`${item.name} — ${subheading}`}
       title={draggable ? "Drag into Scope, or click for details" : undefined}

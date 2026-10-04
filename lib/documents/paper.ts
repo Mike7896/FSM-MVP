@@ -13,6 +13,9 @@ import {
   isPriced,
   isText,
   nodeTotal,
+  paymentPlan,
+  paymentSchedule,
+  phaseSections,
   termsSentence,
   totals,
   unpricedRows,
@@ -67,6 +70,13 @@ export type PaperBlock =
       lines: { label: string; value: string }[];
       total: { label: string; value: string };
     }
+  | {
+      /** One phase of a quote split by scope: its rows, then what it bills. */
+      kind: "phase";
+      heading: string;
+      lines: PaperLine[];
+      bill: { label: string; value: string; note: string | null };
+    }
   | { kind: "list"; heading: string; items: string[] }
   | { kind: "offer"; heading: string; lines: PaperLine[]; note: string }
   | { kind: "signatures"; heading: string; note: string; lines: PaperSignature[] };
@@ -115,13 +125,12 @@ export function paperFor(shared: SharedDocument): PaperDocument {
  * customer opens (`QuoteProjection`).
  */
 export function quotePaper(
-  shared: Pick<SharedQuote, "draft" | "office" | "schedule" | "signatures" | "demo" | "jobAddress">
+  shared: Pick<SharedQuote, "draft" | "office" | "signatures" | "demo" | "jobAddress">
 ): PaperDocument {
   return draftPaper({
     label: "Quote",
     draft: shared.draft,
     office: shared.office,
-    schedule: shared.schedule,
     signatures: shared.draft.signatureLines ? shared.signatures : null,
     demo: shared.demo,
     jobAddress: shared.jobAddress,
@@ -146,7 +155,6 @@ export function contractPaper(shared: SharedContract): PaperDocument {
     label: "Contract",
     draft: shared.draft,
     office: shared.office,
-    schedule: [],
     signatures: { contractor: line("contractor"), customer: line("customer") },
     demo: shared.demo,
     jobAddress: shared.jobAddress,
@@ -159,7 +167,6 @@ function draftPaper({
   label,
   draft,
   office,
-  schedule,
   signatures,
   demo,
   jobAddress,
@@ -168,13 +175,17 @@ function draftPaper({
   label: string;
   draft: QuoteDraft;
   office: OfficeIdentity;
-  schedule: { name: string; when: string; amountCents: number }[];
   signatures: DocumentSignatures | null;
   demo: boolean;
   jobAddress: string | null;
   offerOptional: boolean;
 }): PaperDocument {
   const sums = totals(draft);
+  // The deposit, then each phase — the agreement says how it's paid, so the
+  // contract carries the schedule as well as the quote.
+  const plan = paymentPlan(draft, sums);
+  const schedule = paymentSchedule(draft, plan);
+  const phases = phaseSections(draft, plan);
   const blocks: PaperBlock[] = [];
 
   if (draft.scopeOfWork.trim()) {
@@ -188,20 +199,34 @@ function draftPaper({
   const priced = draft.scope.some(function walk(node): boolean {
     return (isPriced(node) && !node.optional) || node.children.some(walk);
   });
-  if (rows.length || (detail === "total" && priced)) {
-    if (rows.length) {
-      blocks.push({
-        kind: "lines",
-        lines: rows.map(({ node, depth, amountCents }) => ({
-          description: node.description || "Work",
-          detail:
-            node.type === "allowance"
-              ? "An allowance — trued up to the actual cost once you choose."
-              : null,
-          amount: formatMoney(amountCents),
-          depth,
-        })),
-      });
+  const paperLine = ({ node, depth, amountCents }: (typeof rows)[number]): PaperLine => ({
+    description: node.description || "Work",
+    detail:
+      node.type === "allowance"
+        ? "An allowance — trued up to the actual cost once you choose."
+        : null,
+    amount: formatMoney(amountCents),
+    depth,
+  });
+
+  for (const phase of phases) {
+    blocks.push({
+      kind: "phase",
+      heading: phase.heading,
+      lines: phase.names.length
+        ? [{ description: phase.names.join(" · "), amount: null }]
+        : phase.lines.map(paperLine),
+      bill: {
+        label: phase.when,
+        value: formatMoney(phase.billedCents),
+        note: phase.note,
+      },
+    });
+  }
+
+  if (phases.length || rows.length || (detail === "total" && priced)) {
+    if (rows.length && !phases.length) {
+      blocks.push({ kind: "lines", lines: rows.map(paperLine) });
     }
     blocks.push({
       kind: "totals",

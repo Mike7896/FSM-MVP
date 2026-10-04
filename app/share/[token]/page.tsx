@@ -181,7 +181,6 @@ export default async function SharePage({ params }: PageProps<"/share/[token]">)
                 demo={shared.demo}
                 action={null}
                 documentLabel="Quote"
-                schedule={shared.schedule}
                 signatures={shared.signatures}
                 signaturePrompt={shared.signing ? "Sign below to accept" : null}
               />

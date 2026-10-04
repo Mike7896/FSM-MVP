@@ -147,6 +147,8 @@ export async function duplicateQuote({
       progressBilling: source.progressBilling as never,
       retainagePercent: source.retainagePercent,
       capCents: source.capCents,
+      drawPattern: source.drawPattern ?? null,
+      phaseSplit: source.phaseSplit ?? null,
       signatureLines: source.signatureLines,
     });
 
@@ -173,6 +175,7 @@ export async function duplicateQuote({
       taxable: node.taxable,
       optional: node.optional,
       breakdown: node.breakdown,
+      phaseKey: node.phaseKey ?? null,
       position: node.position,
       source: "duplicated",
     }));

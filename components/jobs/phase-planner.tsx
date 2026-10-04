@@ -32,6 +32,8 @@ type PlannedPhase = {
   amountCents: number;
   gate: PhaseGate;
   billed: boolean;
+  /** The parts of the job it was agreed to cover — "Bedroom 1, Bedroom 2". */
+  covers?: string | null;
 };
 
 type Row = {
@@ -41,6 +43,7 @@ type Row = {
   amount: string;
   gate: PhaseGate;
   billed: boolean;
+  covers?: string | null;
 };
 
 let rowSeed = 0;
@@ -54,6 +57,7 @@ function toRows(phases: PlannedPhase[]): Row[] {
     amount: moneyInputValue(phase.amountCents),
     gate: phase.gate,
     billed: phase.billed,
+    covers: phase.covers ?? null,
   }));
 }
 
@@ -170,6 +174,8 @@ export function PhasePlanner({
           body.data.phases.map((phase) => ({
             ...phase,
             billed: phase.invoiceId !== null,
+            // What a phase covers comes from the contract, not the save.
+            covers: phases.find((planned) => planned.id === phase.id)?.covers ?? null,
           }))
         )
       );
@@ -244,6 +250,11 @@ export function PhasePlanner({
               >
                 <Trash2 />
               </Button>
+              {row.covers ? (
+                <p className="text-muted-foreground -mt-1 text-xs sm:col-span-4">
+                  Covers {row.covers}
+                </p>
+              ) : null}
               {row.billed ? (
                 <p className="text-muted-foreground text-xs sm:col-span-4">
                   Billed — the amount and when it&apos;s due are on an invoice

@@ -18,7 +18,9 @@ import type { DocumentStatus } from "@/lib/documents";
 import { collectedForInvoice } from "@/lib/ledger";
 import { openGates, type Gate } from "@/lib/queries/gates";
 import { listInvoices } from "@/lib/queries/invoices";
+import { getJobAgreement } from "@/lib/queries/job-agreement";
 import { jobMoney, type JobMoney } from "@/lib/queries/jobs";
+import type { PlannedPayment } from "@/lib/quote";
 import { passedInspectionPhases } from "@/lib/field/inspection-gates";
 
 /**
@@ -49,6 +51,8 @@ export type StageRow = {
   amountCents: number;
   gate: (typeof drawSchedule.gate.enumValues)[number];
   position: number;
+  /** The quote phase it was planned from — how the job knows which rooms it covers. */
+  phaseKey: string | null;
   /** Null until the stage is billed. */
   invoiceId: string | null;
   invoiceStatus: DocumentStatus | null;
@@ -80,6 +84,13 @@ export type JobHub = {
   /** The open gate, if one is. The hub's only framed block. */
   gate: Gate | null;
   stages: StageRow[];
+  /**
+   * Nothing planned on the job yet, but its quote proposes how it's paid: the
+   * deposit and phases she'll agree to by accepting. It becomes `stages` at
+   * acceptance, so until then it is shown as proposed rather than as
+   * "nothing planned".
+   */
+  proposed: ProposedPlan | null;
 
   permits: {
     id: string;
@@ -113,6 +124,14 @@ export type JobHub = {
    * than in the page so the native app offers the same next step.
    */
   nextAction: { label: string; href: string } | null;
+};
+
+export type ProposedPlan = {
+  quoteId: string;
+  /** `Q-0003`. */
+  quoteNumber: string;
+  quoteStatus: string;
+  payments: Pick<PlannedPayment, "name" | "gate" | "amountCents" | "phaseKey">[];
 };
 
 export async function getJobHub(
@@ -157,6 +176,23 @@ export async function getJobHub(
     remainingCents: 0,
   };
 
+  // A plan the quote proposes, read only when the job has none of its own.
+  const agreement = stages.length === 0 ? await getJobAgreement(jobId, organizationId) : null;
+  const proposed: ProposedPlan | null =
+    agreement?.kind === "quote" && agreement.quoteId
+      ? {
+          quoteId: agreement.quoteId,
+          quoteNumber: agreement.number,
+          quoteStatus: agreement.status,
+          payments: agreement.plan.map(({ name, gate, amountCents, phaseKey }) => ({
+            name,
+            gate,
+            amountCents,
+            phaseKey,
+          })),
+        }
+      : null;
+
   // Every phase in the plan past its gate: the work is done, whatever is
   // or isn't billed yet. A deposit is paid up front, so it says nothing.
   const work = stages.filter((row) => row.gate !== "on_acceptance");
@@ -174,9 +210,10 @@ export async function getJobHub(
     money: state,
     gate: gates.get(jobId) ?? null,
     stages,
+    proposed,
     permits: permitRows,
     documents: documentRows,
-    nextAction: nextAction(jobId, stages, job.status),
+    nextAction: nextAction(jobId, stages, job.status, proposed),
   };
 }
 
@@ -202,6 +239,7 @@ async function buildStages(jobId: string): Promise<StageRow[]> {
       amountCents: drawSchedule.amountCents,
       gate: drawSchedule.gate,
       position: drawSchedule.position,
+      phaseKey: drawSchedule.phaseKey,
       invoiceId: drawSchedule.invoiceId,
       invoiceStatus: documents.status,
       invoiceDueOn: invoiceDetails.dueOn,
@@ -257,6 +295,7 @@ async function buildStages(jobId: string): Promise<StageRow[]> {
       amountCents: row.amountCents,
       gate: row.gate,
       position: row.position,
+      phaseKey: row.phaseKey,
       invoiceId: row.invoiceId,
       invoiceStatus: row.invoiceStatus,
       paidCents,
@@ -384,7 +423,8 @@ async function buildDocuments(jobId: string): Promise<JobHub["documents"]> {
 function nextAction(
   jobId: string,
   stages: StageRow[],
-  status: (typeof jobs.status.enumValues)[number]
+  status: (typeof jobs.status.enumValues)[number],
+  proposed: ProposedPlan | null
 ): JobHub["nextAction"] | null {
   const ready = stages.find((row) => row.state === "ready");
   if (ready) {
@@ -412,6 +452,14 @@ function nextAction(
       label: `${waiting.name} done? Mark it complete`,
       href: `/jobs/${jobId}/complete?phase=${waiting.id}`,
     };
+  }
+
+  if (stages.length === 0 && proposed) {
+    // The plan is on the quote, so the next step is the quote: finishing it,
+    // or seeing where it stands while she decides.
+    return proposed.quoteStatus === "draft"
+      ? { label: "Finish the quote", href: `/quotes/${proposed.quoteId}` }
+      : { label: "See where the quote stands", href: `/quotes/${proposed.quoteId}/sent` };
   }
 
   if (stages.length === 0) {

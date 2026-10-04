@@ -18,7 +18,7 @@
 
 import {
   baseTotal, describeScope, dissolveNode, draftFromSeed, emptyDraft, flatten,
-  insertNode, makeNode, margin, moveNode, nodeTotal, optionalTotal, parseSeed,
+  insertNode, makeNode, margin, moveNode, moveTargets, nodeTotal, optionalTotal, parseSeed,
   retypeNode, shapeOf, toSavePayload, totals, buildTree, applyOfficeDefaults,
   idsByKey, withIds, customerLines, customerDetail, withCustomerDetail, overridesQuote, DEFAULT_TERMS,
   type ScopeNode,
@@ -99,16 +99,17 @@ is("rebuilds the same shape", flatten(rebuilt).map((f) => f.node.description),
   ["Service upgrade", "Panel", "Dryer circuit", "Permit"]);
 is("rebuilds the same totals", totals({ ...draft, scope: rebuilt }).totalCents, sums.totalCents);
 
-/* 6 — depth is capped at three */
+/* 6 — depth is not capped: a fourth level lands where it was asked */
 const deep = insertNode([makeNode("group", { description: "L0" })], makeNode("group", { description: "L1" }), null);
 const g0 = deep[0].key;
-let tree = insertNode(deep, makeNode("group", { description: "in L0" }), g0);
+let tree = insertNode(deep, makeNode("assembly", { description: "Walls" }), g0);
 const g1 = tree[0].children[0].key;
-tree = insertNode(tree, makeNode("item", { section: "material", description: "leaf at 2" }), g1);
-is("a leaf fits at depth 2", tree[0].children[0].children.length, 1);
+tree = insertNode(tree, makeNode("assembly", { description: "Materials" }), g1);
 const g2 = tree[0].children[0].children[0].key;
-tree = insertNode(tree, makeNode("item", { section: "material", description: "too deep" }), g2);
-is("a fourth level falls back to the root", tree.length, 3);
+tree = insertNode(tree, makeNode("item", { section: "material", description: "Paint" }), g2);
+is("a row inside a third-level assembly stays inside it", tree[0].children[0].children[0].children.length, 1);
+is("…and nothing lands at the root", tree.length, 2);
+is("Move to offers the deep assembly", moveTargets(tree, deep[1].key).some((target) => target.key === g2), true);
 
 /* 7 — retype drops money when a row stops being priced */
 const priced = makeNode("item", { section: "labor", description: "note-to-be", sellPriceCents: 5_000, unitCostCents: 3_000 });

@@ -41,6 +41,8 @@ export type QuoteTimeline = {
     title: string;
     status: string;
     jobId: string;
+    /** The job's number, for the way back to it. */
+    jobNumber: number | null;
     demo: boolean;
     totalCents: number;
     /** Null when no deposit is asked for. */
@@ -77,6 +79,7 @@ export async function getQuoteTimeline(
   const [meta] = await db
     .select({
       sentAt: documents.sentAt,
+      jobNumber: jobs.number,
       demo: jobs.isDemo,
       email: customers.email,
       phone: customers.phone,
@@ -166,6 +169,7 @@ export async function getQuoteTimeline(
       title: draft.title,
       status: record.status,
       jobId: record.jobId,
+      jobNumber: meta?.jobNumber ?? null,
       demo: meta?.demo ?? false,
       totalCents: sums.totalCents,
       depositCents: sums.depositCents,

@@ -65,7 +65,35 @@ export type QuoteTerms = {
   progressBilling: string | null;
   retainagePercent: number | null;
   capCents: number | null;
+  /**
+   * The stages the work is billed in, when `progressBilling` is `draws`. Kept
+   * while billing in stages is switched off, so switching it back on doesn't
+   * lose them.
+   */
+  phases: QuotePhase[];
+  /** How the phases split the price — by the rows each covers, or by percent. */
+  phaseSplit: PhaseSplit;
 };
+
+/**
+ * One stage of the work, billed when it is done.
+ *
+ * A top-level Scope row names its phase by `key` (`ScopeNode.phaseKey`), so a
+ * phase can be renamed or reordered without the rows losing their place.
+ */
+export type QuotePhase = {
+  key: string;
+  name: string;
+  /** Its share of what's left after the deposit. Read only when splitting by percent. */
+  percent: number;
+};
+
+/**
+ * `scope`: each phase bills what its rows are worth — a floor, a room.
+ * `percent`: each phase bills a share — rough-in, trim — for work where the
+ * same rows run through every stage.
+ */
+export type PhaseSplit = "scope" | "percent";
 
 /**
  * The whole editable document.

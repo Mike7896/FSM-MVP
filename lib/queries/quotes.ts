@@ -237,6 +237,7 @@ export function scopeTreeFromRows(rows: ScopeNodeRow[]): ScopeNode[] {
       taxable: row.taxable,
       optional: row.optional,
       breakdown: row.breakdown,
+      phaseKey: row.parentNodeId === null ? row.phaseKey : null,
       source: row.source,
       children: [],
     })

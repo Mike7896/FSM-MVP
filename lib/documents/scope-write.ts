@@ -44,6 +44,8 @@ export type IncomingScopeNode = {
   optional: boolean;
   /** Groups and assemblies only. Absent or null follows the quote's setting. */
   breakdown?: (typeof scopeNodes.breakdown.enumValues)[number] | null;
+  /** Top-level rows only: the phase they're billed in. */
+  phaseKey?: string | null;
   position: number;
   source: (typeof scopeNodes.source.enumValues)[number];
 };
@@ -104,6 +106,8 @@ export function resolveScopeNodes(
         node.nodeType === "group" || node.nodeType === "assembly"
           ? (node.breakdown ?? null)
           : null,
+      // A phase is a top-level fact; a row inside a group follows the group.
+      phaseKey: node.parentIndex === null ? (node.phaseKey ?? null) : null,
       description: node.description,
       // `numeric` takes a string; a float is how a quantity ends up stored as
       // 2.0000000000000004.

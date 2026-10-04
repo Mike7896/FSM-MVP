@@ -52,6 +52,25 @@ export default async function JobPage({ params }: PageProps<"/jobs/[id]">) {
     requireSession(),
   ]);
 
+  const first = job.customerName.trim().split(/\s+/)[0] || "the customer";
+  // The deposit, from the job's plan once there is one — and from the quote
+  // that asks for it until then.
+  const depositStage = job.stages.find((stage) => stage.gate === "on_acceptance");
+  const proposedDeposit = job.proposed?.payments.find((payment) => payment.gate === "on_acceptance");
+  const deposit = depositStage
+    ? {
+        cents: depositStage.amountCents,
+        detail:
+          depositStage.state === "paid"
+            ? "Paid"
+            : depositStage.state === "sent"
+              ? "Billed, waiting on payment"
+              : "Due now",
+      }
+    : proposedDeposit
+      ? { cents: proposedDeposit.amountCents, detail: `Due when ${first} accepts` }
+      : null;
+
   const collectedPercent = job.money.totalCents > 0
     ? Math.max(0, Math.min(100, job.money.collectedCents / job.money.totalCents * 100))
     : 0;
@@ -85,8 +104,9 @@ export default async function JobPage({ params }: PageProps<"/jobs/[id]">) {
             </div>
           </div>
         </header>
-        <div className={styles.moneyStrip}>
+        <div className={styles.moneyStrip} data-count={deposit ? 4 : 3}>
           <Figure label="Job value" cents={job.money.totalCents} />
+          {deposit ? <Figure label="Deposit" cents={deposit.cents} detail={deposit.detail} /> : null}
           <Figure label="Collected" cents={job.money.collectedCents} />
           <Figure label="Still owed" cents={job.money.remainingCents} />
         </div>
@@ -122,13 +142,62 @@ export default async function JobPage({ params }: PageProps<"/jobs/[id]">) {
               <SectionLabel>The money, in order</SectionLabel>
               <ol className={styles.phases}>
                 {job.stages.map((stage) => (
-                  <Phase key={stage.id} stage={stage} />
+                  <Phase key={stage.id} name={stage.name} cents={stage.amountCents} state={stage.state} />
                 ))}
               </ol>
 
               <div className="mt-3 @2xl:mt-4">
                 {job.stages.map((stage) => (
                   <StageLine key={stage.id} jobId={job.id} stage={stage} />
+                ))}
+              </div>
+            </section>
+          ) : job.proposed ? (
+            // **Proposed, not "nothing planned".** The quote already says how
+            // it's paid — she agrees to it by accepting, and it becomes the
+            // job's plan then. Changed on the quote, where she reads it.
+            <section className={styles.panel}>
+              <SectionLabel>The money, in order</SectionLabel>
+              <p className="text-muted-foreground mt-1 text-xs leading-relaxed">
+                Proposed on {job.proposed.quoteNumber} — it becomes the plan when{" "}
+                {first} accepts.{" "}
+                <Link
+                  href={`/quotes/${job.proposed.quoteId}`}
+                  className="text-foreground underline underline-offset-4"
+                >
+                  Change it in the quote
+                </Link>
+              </p>
+              <ol className={styles.phases}>
+                {job.proposed.payments.map((payment, index) => (
+                  <Phase
+                    key={payment.phaseKey ?? `${payment.name}-${index}`}
+                    name={payment.name}
+                    cents={payment.amountCents}
+                    state="gated"
+                  />
+                ))}
+              </ol>
+              <div className="mt-3 @2xl:mt-4">
+                {job.proposed.payments.map((payment, index) => (
+                  <div key={payment.phaseKey ?? `${payment.name}-${index}`} className={styles.stageLine}>
+                    <span className={styles.stageIcon} data-state="gated">
+                      <Circle size={16} />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium">{payment.name}</p>
+                      <p className="text-muted-foreground mt-1.5 text-xs leading-relaxed">
+                        {payment.gate === "on_acceptance"
+                          ? `Due when ${first} accepts`
+                          : payment.gate === "on_completion"
+                            ? "Bill this when the job's done"
+                            : "Bill this when the phase is done"}
+                      </p>
+                    </div>
+                    <span className="text-muted-foreground shrink-0 font-medium tabular-nums">
+                      {formatMoney(payment.amountCents)}
+                    </span>
+                  </div>
                 ))}
               </div>
             </section>
@@ -369,24 +438,32 @@ const STATE_ICON = {
 } as const;
 
 /** One stage in the horizontal timeline — the shape of the job at a glance. */
-function Phase({ stage }: { stage: StageRow }) {
-  const Icon = STATE_ICON[stage.state];
+function Phase({
+  name,
+  cents,
+  state,
+}: {
+  name: string;
+  cents: number;
+  state: StageRow["state"];
+}) {
+  const Icon = STATE_ICON[state];
   return (
     <li
       className={cn(
         styles.phase,
-        stage.state === "ready" && "border-primary/60 bg-primary/[0.03]",
-        stage.state === "gated" && "text-muted-foreground"
+        state === "ready" && "border-primary/60 bg-primary/[0.03]",
+        state === "gated" && "text-muted-foreground"
       )}
     >
       <div className="flex items-center gap-1.5">
         <Icon className="size-3 shrink-0" />
         <span className="truncate font-label text-[10px] uppercase">
-          {stage.name}
+          {name}
         </span>
       </div>
       <p className="mt-1.5 font-medium tabular-nums">
-        {formatMoney(stage.amountCents)}
+        {formatMoney(cents)}
       </p>
     </li>
   );

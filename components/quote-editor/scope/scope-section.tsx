@@ -15,10 +15,7 @@ import {
   ScopeActionsProvider,
   type ScopeActions,
 } from "@/components/quote-editor/scope/actions";
-import {
-  SAVED_ITEM_DRAG,
-  libraryDrag,
-} from "@/components/quote-editor/library/library-panel";
+import { SAVED_ITEM_DRAG } from "@/components/quote-editor/library/library-panel";
 import { AddToScope } from "@/components/quote-editor/scope/add-to-scope";
 import { NodeSheet } from "@/components/quote-editor/scope/node-sheet";
 import { ScopeTree } from "@/components/quote-editor/scope/scope-tree";
@@ -40,9 +37,7 @@ import {
 } from "@/components/ui/select";
 import {
   CUSTOMER_DETAILS,
-  MAX_DEPTH,
   cloneNode,
-  depthOf,
   describeScope,
   dissolveNode,
   findNode,
@@ -426,9 +421,7 @@ export function ScopeSection({
 
   /**
    * Where a saved item would land if dropped here: inside a group or assembly
-   * it is over, after a row it is over, otherwise at the end of the quote. A
-   * placement that would go deeper than Scope allows lands at the end instead,
-   * and the hint says so before the drop rather than after.
+   * it is over, after a row it is over, otherwise at the end of the quote.
    */
   function hintFor(event: DragEvent<HTMLDivElement>): DropHint {
     const end: DropHint = {
@@ -437,18 +430,15 @@ export function ScopeSection({
       mode: "end",
       label: "Drop to add at the end of the quote",
     };
-    const height = libraryDrag.current?.height ?? 1;
-    const fits = (depth: number) => depth + height <= MAX_DEPTH;
 
     const row = (event.target as HTMLElement).closest<HTMLElement>("[data-node-key]");
     const key = row?.dataset.nodeKey;
     const node = key ? findNode(draft.scope, key) : null;
     if (!key || !node) return end;
 
-    const depth = depthOf(draft.scope, key);
     const name = node.description.trim() || NODE_SPEC[node.type].label.toLowerCase();
 
-    if (NODE_SPEC[node.type].container && fits(depth + 1)) {
+    if (NODE_SPEC[node.type].container) {
       return {
         target: { parentKey: key, index: null },
         key,
@@ -457,7 +447,6 @@ export function ScopeSection({
       };
     }
 
-    if (!fits(depth)) return end;
     const parent = findParent(draft.scope, key);
     const siblings = parent ? parent.children : draft.scope;
     return {

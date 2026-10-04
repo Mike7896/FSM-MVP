@@ -328,6 +328,29 @@ function Block({ block }: { block: PaperBlock }) {
         </Section>
       );
 
+    case "phase":
+      return (
+        <Section style={{ marginTop: 18 }}>
+          <Text style={{ ...LABEL, color: INK, marginBottom: 6 }}>{block.heading}</Text>
+          {block.lines.map((line, index) => (
+            <Line key={index} left={line.description} right={line.amount ?? ""} muted={Boolean(line.depth)} />
+          ))}
+          <Line
+            left={
+              <>
+                <strong>{block.bill.label}</strong>
+                {block.bill.note ? (
+                  <span style={{ display: "block", fontSize: 12, lineHeight: "17px", color: SOFT }}>
+                    {block.bill.note}
+                  </span>
+                ) : null}
+              </>
+            }
+            right={block.bill.value}
+          />
+        </Section>
+      );
+
     case "totals":
       return (
         <Section>

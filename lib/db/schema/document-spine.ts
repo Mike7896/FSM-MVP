@@ -28,6 +28,7 @@ import {
   estimateClassEnum,
   estimatingMethodEnum,
   invoiceTypeEnum,
+  phaseSplitEnum,
   lineItemSectionEnum,
   lineItemSourceEnum,
   lineItemTypeEnum,
@@ -273,17 +274,21 @@ export const quoteDetails = pgTable("quote_details", {
   retainagePercent: integer("retainage_percent"),
 
   /**
-   * The Office's draw pattern as it stood when this quote was written.
+   * The quote's phases — seeded from the Office's draw pattern, then the
+   * quote's own to edit.
    *
    * Snapshotted rather than read live: **changing a default never alters an
    * existing document**, and the payment schedule on a quote somebody is
    * holding must not move because the shop edited its pattern this morning.
-   * Percentages, because there is no agreed price until this is accepted —
-   * they become dollars on the job's plan the moment there is one.
+   * `key` is what a top-level scope row names in `scope_nodes.phase_key`;
+   * `percent` is only read when `phase_split` is `percent`. They become
+   * dollars on the job's plan once the quote is accepted.
    */
   drawPattern: jsonb("draw_pattern").$type<
-    Array<{ name: string; percent: number }>
+    Array<{ key?: string; name: string; percent: number }>
   >(),
+  /** Null reads as `percent`, which is how every quote split before scope could. */
+  phaseSplit: phaseSplitEnum("phase_split"),
 
   taxRate: numeric("tax_rate", { precision: 6, scale: 4 }),
 
@@ -454,6 +459,12 @@ export const scopeNodes = pgTable(
      * line with its total (`hide`). Null follows the quote's `scope_detail`.
      */
     breakdown: scopeBreakdownEnum("breakdown"),
+    /**
+     * On a top-level row of a quote billed in phases by scope: which phase it
+     * belongs to — a `key` from the quote's `draw_pattern`. Null puts the row
+     * in the last phase. Copied to the contract with the row.
+     */
+    phaseKey: text("phase_key"),
 
     description: text("description").notNull(),
     quantity: numeric("quantity", { precision: 12, scale: 3 })

@@ -125,6 +125,25 @@ export const quoteTermsSchema = z.object({
     .nullable(),
   retainagePercent: z.number().int().min(0).max(100).nullable(),
   capCents: z.number().int().min(0).nullable(),
+  /**
+   * The stages the work is billed in. Top-level rows name theirs by `key`, so
+   * two phases sharing one would put a row in both.
+   */
+  phases: z
+    .array(
+      z.object({
+        key: z.string().trim().min(1).max(40),
+        name: z.string().trim().max(80),
+        percent: z.number().min(0).max(100),
+      })
+    )
+    .max(20)
+    .refine(
+      (phases) => new Set(phases.map((phase) => phase.key)).size === phases.length,
+      { message: "Two phases share a key." }
+    ),
+  /** Split by the rows each phase covers, or by percent. */
+  phaseSplit: z.enum(["scope", "percent"]).nullable(),
 });
 
 /**
@@ -156,6 +175,8 @@ export const scopeNodeSchema = z.object({
   optional: z.boolean(),
   /** Groups and assemblies: show the customer the rows inside, or one line. */
   breakdown: z.enum(["show", "hide"]).nullable().optional(),
+  /** Top-level rows: the `key` of the phase they're billed in. */
+  phaseKey: z.string().trim().max(40).nullable().optional(),
   position: z.number().int().min(0),
   source: lineSourceSchema,
 });

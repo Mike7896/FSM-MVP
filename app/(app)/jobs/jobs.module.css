@@ -13,7 +13,7 @@
 .jobIdentity { display: flex; flex-direction: column; align-items: end; gap: 17px; flex-shrink: 0; }
 .jobIcon { display: grid; place-items: center; width: 56px; height: 56px; color: var(--primary-ink); background: var(--job-soft); border: 1px solid color-mix(in srgb, var(--primary) 25%, var(--border)); border-radius: 13px; }
 .status { text-transform: capitalize; background: var(--job-soft); border: 1px solid color-mix(in srgb, var(--primary) 25%, var(--border)); color: var(--primary-ink); border-radius: 20px; padding: 4px 10px; font-size: 10px; }
-.moneyStrip { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); border-block: 1px solid var(--border); margin-top: 30px; padding-block: 23px; }
+.moneyStrip { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0,1fr); border-block: 1px solid var(--border); margin-top: 30px; padding-block: 23px; }
 .figure { min-width: 0; }
 .figure + .figure { border-left: 1px solid var(--border); padding-left: 26px; }
 .figureValue { font-size: clamp(24px, 3vw, 36px); font-family: var(--font-archivo), sans-serif; font-weight: 550; letter-spacing: -.04em; font-variant-numeric: tabular-nums; margin-top: 9px; overflow-wrap: anywhere; }
@@ -56,8 +56,14 @@
 @container (max-width: 720px) { .detailGrid { grid-template-columns: minmax(0,1fr); } .overview { padding: 24px; } .figure + .figure { padding-left: 16px; } .sideColumn { display: grid; grid-template-columns: repeat(auto-fit,minmax(230px,1fr)); } .phases { display: none; } }
 @media (max-width: 1100px) { .jobRow { grid-template-columns: minmax(0,1fr) 17px; gap: 18px; } .rowMoney { grid-column: 1; text-align: left; min-width: 0; padding-left: 56px; } .rowArrow { grid-column: 2; grid-row: 1; } }
 @media (max-width: 540px) { .page { gap: 20px; } .overview { padding: 20px; } .jobHeader { gap: 12px; } .jobIcon { width: 42px; height: 42px; border-radius: 10px; } .jobIdentity { max-width: 100px; } .jobTitle { font-size: 27px; } .moneyStrip { padding-block: 18px; margin-top: 24px; } .figureValue { font-size: 21px; } .figure + .figure { padding-left: 10px; } .figure > p:first-child { font-size: 8px; letter-spacing: .08em; } .panel { padding: 18px; } .stageLine { flex-wrap: wrap; } .stageLine > span:last-child { margin-left: auto; font-size: 13px; } .gate { padding: 20px; } .actionBar { padding: 14px; } .actionHint { display: none; } .listHeading { padding: 18px; } .jobRow { padding: 20px 16px; gap: 15px; } .rowIcon { display: none; } .rowMoney { padding-left: 0; gap: 12px; } .rowMoney > div > p:last-child { font-size: 15px; } .listHeader h1 { font-size: 34px; } }
+/* Four figures don't fit across a phone: two rows of two. */
+@container (max-width: 520px) {
+  .moneyStrip[data-count="4"] { grid-auto-flow: row; grid-template-columns: repeat(2, minmax(0,1fr)); row-gap: 18px; }
+  .moneyStrip[data-count="4"] .figure:nth-child(3) { border-left: 0; padding-left: 0; }
+}
 @container (max-width: 330px) {
-  .moneyStrip { grid-template-columns: minmax(0,1fr); padding-block: 0; }
+  .moneyStrip { grid-auto-flow: row; grid-template-columns: minmax(0,1fr); padding-block: 0; row-gap: 0; }
+  .moneyStrip[data-count="4"] .figure:nth-child(3) { border-top: 1px solid var(--border); }
   .figure { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding-block: 13px; }
   .figure + .figure { border-left: 0; border-top: 1px solid var(--border); padding-left: 0; }
   .figureValue { margin-top: 0; font-size: 23px; }
