@@ -10,6 +10,7 @@ import type { SignFromLinkInput } from "@/lib/schemas";
 import { SigningError, signDocument } from "@/lib/signing";
 
 import { DEAD_LINK, heldLink } from "./link";
+import { reportError } from "@/lib/observability";
 
 /**
  * The customer signs the contract from the link — Flow 2's second step.
@@ -85,7 +86,7 @@ export async function signFromLink(
     });
     return { status, next: deposit?.url ?? null };
   } catch (error) {
-    console.error("[share] signed, but the deposit didn't issue:", error);
+    reportError("[share] signed, but the deposit didn't issue:", error);
     return { status, next: null };
   }
 }

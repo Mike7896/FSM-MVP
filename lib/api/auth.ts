@@ -6,6 +6,7 @@ import type { NextRequest } from "next/server";
 
 import { db } from "@/lib/db";
 import { memberships, organizations } from "@/lib/db/schema";
+import { identify } from "@/lib/observability";
 import { createClient } from "@/lib/supabase/server";
 import { ApiError } from "./response";
 
@@ -46,6 +47,7 @@ export async function requireCaller(request: NextRequest): Promise<ApiCaller> {
     );
   }
 
+  identify(data.user.id);
   return {
     userId: data.user.id,
     email: data.user.email ?? "",

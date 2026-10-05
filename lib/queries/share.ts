@@ -49,6 +49,7 @@ import {
   type DocumentSignatures,
 } from "@/lib/signing/lines";
 import { BUCKETS, createSignedDownloadUrl } from "@/lib/supabase/storage";
+import { reportError } from "@/lib/observability";
 
 /**
  * Resolving a share token.
@@ -758,7 +759,7 @@ async function onlineRails(organizationId: string): Promise<{ card: boolean; ach
   try {
     return await railsFor(account.stripeAccountId);
   } catch (error) {
-    console.error("[share] couldn't read payment capabilities:", error);
+    reportError("[share] couldn't read payment capabilities:", error);
     return { card: true, ach: false };
   }
 }

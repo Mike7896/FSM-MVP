@@ -293,6 +293,7 @@ function PolicyForm({
   const policy = account.policy;
   const [tester, setTester] = useState(policy?.kind === "tester");
   const [comp, setComp] = useState(policy?.compPlan ?? false);
+  const [internal, setInternal] = useState(policy?.internal ?? false);
   const [founding, setFounding] = useState(account.founding);
   const [until, setUntil] = useState(policy?.accessUntil ?? "");
   const [limit, setLimit] = useState(policy?.dailySendLimit === null || policy?.dailySendLimit === undefined ? "" : String(policy.dailySendLimit));
@@ -306,6 +307,7 @@ function PolicyForm({
         onSave({
           kind: tester ? "tester" : "standard",
           compPlan: comp,
+          internal,
           ...(founding !== account.founding ? { foundingMember: founding } : {}),
           accessUntil: until || null,
           dailySendLimit: limit === "" ? null : Number(limit),
@@ -319,6 +321,16 @@ function PolicyForm({
         <span>
           Tester
           <span className="text-muted-foreground block text-xs">Someone trying ServiceClerk. Access can end on a date.</span>
+        </span>
+      </label>
+      <label className="flex items-start gap-3 text-sm">
+        <Checkbox checked={internal} onCheckedChange={(checked) => setInternal(checked === true)} className="mt-0.5" />
+        <span>
+          Internal
+          <span className="text-muted-foreground block text-xs">
+            One of ours. Their shops, payments and activity never count in the dashboard&apos;s numbers — the live feed
+            still shows them, marked internal.
+          </span>
         </span>
       </label>
       <label className="flex items-start gap-3 text-sm">

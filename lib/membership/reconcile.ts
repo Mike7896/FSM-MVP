@@ -25,6 +25,7 @@ import {
 } from "./catalog";
 import { endEvaluation } from "./evaluation";
 import { monthlyRecurringCents } from "./mrr";
+import { reportError, reportWarning } from "@/lib/observability";
 
 /**
  * RECONCILIATION — Stripe's subscription, read into ServiceClerk's terms (§11.2).
@@ -117,13 +118,15 @@ export async function reconcileSubscription(subscriptionId: string): Promise<Bil
 export async function reconcileFrom(subscription: Stripe.Subscription): Promise<BillingAccount | null> {
   const organizationId = await organizationFor(subscription);
   if (!organizationId) {
-    console.error(`[membership] subscription ${subscription.id} has no organization; not projected.`);
+    reportError("[membership] A subscription has no organization; not projected.", undefined, {
+      extra: { subscription: subscription.id },
+    });
     return null;
   }
 
   // The plain mirror, kept for anything still reading it.
   await upsertSubscription(subscription).catch((error) =>
-    console.error("[membership] mirror upsert failed:", error)
+    reportError("[membership] mirror upsert failed:", error)
   );
 
   const [before] = await db
@@ -297,7 +300,7 @@ async function recordMrr(organizationId: string, cents: number | null) {
   await db
     .execute(sql`update billing_accounts set mrr_cents = ${cents} where organization_id = ${organizationId}`)
     .catch((error: unknown) =>
-      console.warn("[membership] MRR not recorded — has drizzle/0041_billing_mrr.sql been applied?", error)
+      reportWarning("[membership] MRR not recorded — has drizzle/0041_billing_mrr.sql been applied?", error)
     );
 }
 

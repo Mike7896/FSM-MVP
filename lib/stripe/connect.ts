@@ -8,6 +8,7 @@ import { connectedAccounts, connections, organizations } from "@/lib/db/schema";
 import type { ConnectedAccount } from "@/lib/db/schema";
 import { absoluteUrl } from "@/lib/env";
 import { stripe } from "./server";
+import { reportError, reportWarning } from "@/lib/observability";
 
 /**
  * STRIPE CONNECT — the contractor charging a homeowner.
@@ -199,7 +200,7 @@ export async function getOrCreateConnectedAccount(
   const account = await stripe()
     .accounts.retrieve(created.id)
     .catch((error: unknown) => {
-      console.warn(
+      reportWarning(
         `[connect] v1 read of new account ${created.id} failed; recording it as onboarding.`,
         error
       );
@@ -303,7 +304,7 @@ export async function refreshConnectedAccount(
     const account = await stripe().accounts.retrieve(row.stripeAccountId);
     await syncConnectedAccount(account);
   } catch (error) {
-    console.warn(
+    reportWarning(
       `[connect] Couldn't refresh ${row.stripeAccountId} from Stripe.`,
       error
     );
@@ -329,10 +330,9 @@ export async function syncConnectedAccount(
   if (!organizationId) {
     // An account we did not create, or one whose metadata was stripped. Better
     // to skip it loudly than to guess which shop it belongs to.
-    console.error(
-      `[connect] Account ${account.id} has no organizationId in metadata; ` +
-        `refusing to project it onto a shop.`
-    );
+    reportError("[connect] An account has no organizationId in metadata; refusing to project it onto a shop.", undefined, {
+      extra: { account: account.id },
+    });
     return null;
   }
 

@@ -3,6 +3,7 @@ import "server-only";
 import { paperFor, type PaperDocument } from "@/lib/documents/paper";
 
 import type { EmailLetterhead } from "./templates/document-email";
+import { reportError } from "@/lib/observability";
 
 /**
  * What goes in the envelope with a send: the document drawn as a page for the
@@ -34,7 +35,7 @@ export async function enclose(
     // The email's own letterhead: the one the send is about to capture.
     if (shared) paper = { ...paperFor(shared), letterhead };
   } catch (error) {
-    console.error("[enclosure] couldn't draw the document", error);
+    reportError("[enclosure] couldn't draw the document", error);
   }
   if (!paper || options.pdf === false) return { paper, pdf: null };
 
@@ -45,7 +46,7 @@ export async function enclose(
       pdf: { filename: paper.filename, content: await renderPaperPdf(paper) },
     };
   } catch (error) {
-    console.error("[enclosure] couldn't render the PDF", error);
+    reportError("[enclosure] couldn't render the PDF", error);
     return { paper, pdf: null };
   }
 }

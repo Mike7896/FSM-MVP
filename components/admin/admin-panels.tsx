@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 
 import { SupportReply } from "./support-reply";
 import { Bars, FunnelRow } from "./charts";
-import { ago, money, n, num, pct, text, when } from "./format";
+import { ago, latest, money, n, num, pct, text, when } from "./format";
 
 /**
  * The dashboard's panels — every number the metrics read returns, laid out
@@ -70,31 +70,211 @@ function Stat({
   );
 }
 
+/** A rate as a percentage, or a dash when there isn't one yet. */
+function rate(value: number | null) {
+  return value === null ? "—" : `${Math.round(value * 1000) / 10}%`;
+}
+
+/** Money with its sign — "+$36", "−$29". */
+function signed(cents: number) {
+  return `${cents < 0 ? "−" : "+"}${money(Math.abs(cents))}`;
+}
+
+/** "3 days" of history, or "30 days" once there's a full month. */
+function windowLabel(days: number) {
+  return days >= 30 ? "30 days" : `${days} day${days === 1 ? "" : "s"} of history`;
+}
+
+/** "1 shop", "3 shops". */
+function plural(count: number, noun: string) {
+  return `${num(count)} ${noun}${count === 1 ? "" : "s"}`;
+}
+
+function hoursLabel(hours: number | null) {
+  if (hours === null) return "no first quotes yet";
+  return hours < 48 ? `${Math.round(hours)}h to first quote` : `${Math.round(hours / 24)}d to first quote`;
+}
+
+/**
+ * The founder's numbers, first: what ServiceClerk earns and keeps, and
+ * whether the product is used. ServiceClerk's own revenue — not the money
+ * contractors collect through it, which is further down.
+ */
+export function FounderKpis({ metrics }: { metrics: AdminMetrics }) {
+  const { revenue, usage, costs } = metrics.founder;
+  const { movement, cash } = revenue;
+  const inflow = movement.newCents + movement.reactivationCents + movement.expansionCents;
+  const outflow = movement.churnCents + movement.contractionCents;
+  return (
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+      <Stat
+        label="MRR"
+        value={money(revenue.mrrCents)}
+        sub={`${num(revenue.paying)} paying · ARR ${money(revenue.arrCents)}${metrics.revenue.estimated ? ` · ${metrics.revenue.estimated} at list price` : ""}`}
+        tone="money"
+      />
+      <Stat
+        label="Net new MRR · 30d"
+        value={signed(movement.netCents)}
+        sub={`${money(inflow)} in · ${money(-outflow)} out`}
+        tone={movement.netCents < 0 ? "bad" : movement.netCents > 0 ? "money" : undefined}
+      />
+      <Stat label="ARPA" value={revenue.arpaCents === null ? "—" : money(revenue.arpaCents)} sub="average revenue per paying shop, a month" />
+      <Stat
+        label="Revenue churn"
+        value={rate(revenue.revenueChurn)}
+        sub={`${rate(revenue.customerChurn)} of shops · ${windowLabel(revenue.windowDays)}`}
+        tone={revenue.revenueChurn ? "bad" : undefined}
+      />
+      <Stat
+        label="Lifetime value"
+        value={revenue.ltvCents === null ? "—" : money(revenue.ltvCents)}
+        sub={revenue.ltvCents === null ? "needs a full month with churn" : "ARPA ÷ monthly shop churn"}
+      />
+      <Stat
+        label="Revenue at risk"
+        value={money(revenue.atRisk.cents)}
+        sub={`${num(revenue.atRisk.count)} past due`}
+        tone={revenue.atRisk.cents ? "bad" : undefined}
+      />
+
+      <Stat
+        label="We collected · 30d"
+        value={money(cash.collected30dCents)}
+        sub={`${num(cash.invoices30d)} invoices · ${money(cash.collectedAllCents)} all time`}
+        tone="money"
+      />
+      <Stat label="Refunds · 30d" value={money(cash.refunded30dCents)} sub={`net ${money(cash.net30dCents)}`} tone={cash.refunded30dCents ? "bad" : undefined} />
+      <Stat
+        label="Platform fees · 30d"
+        value={money(cash.fees30dCents)}
+        sub={`${money(cash.feesAllCents)} all time · on contractors' card payments`}
+        tone="money"
+      />
+      <Stat
+        label="Running costs"
+        value={costs.providers ? money(costs.reportedCents) : "Not entered"}
+        sub={costs.providers ? `${money(costs.mrrAfterCostsCents)} MRR after costs` : "add bills on Costs & Usage"}
+      />
+      <Stat
+        label="Activation"
+        value={rate(usage.activation.rate)}
+        sub={`${num(usage.activation.activated)} of ${plural(usage.activation.judged, "shop")} sent a quote in 7 days · ${hoursLabel(usage.activation.medianHoursToFirstQuote)}`}
+        tone="good"
+      />
+      <Stat label="DAU · WAU · MAU" value={`${num(usage.dau)} · ${num(usage.wau)} · ${num(usage.mau)}`} sub={`stickiness ${rate(usage.stickiness)}`} tone="good" />
+    </div>
+  );
+}
+
+export function FounderPanels({ metrics }: { metrics: AdminMetrics }) {
+  const { revenue, usage } = metrics.founder;
+  const { movement } = revenue;
+  const day = (value: string) => value.slice(5);
+  const since = (iso: string | null, series: { day: string }[]) =>
+    iso && iso.slice(0, 10) > series[0]?.day ? `tracking since ${new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : undefined;
+  const hourLabel = (hour: number) => (hour === 0 ? "12a" : hour < 12 ? `${hour}a` : hour === 12 ? "12p" : `${hour - 12}p`);
+  return (
+    <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+      <Panel title="MRR · 30 days" aside={since(revenue.trackingSince, revenue.series) ?? `ARR ${money(revenue.arrCents)}`}>
+        <Bars
+          values={revenue.series.map((row) => row.mrrCents ?? 0)}
+          labels={revenue.series.map((row) => (row.mrrCents === null ? `${day(row.day)} (before tracking)` : day(row.day)))}
+          tone="bg-emerald-500"
+          format={money}
+          summary={`now ${money(revenue.mrrCents)} · peak ${money(Math.max(0, ...revenue.series.map((row) => row.mrrCents ?? 0)))}`}
+        />
+      </Panel>
+      <Panel title="MRR movement · 30 days" aside={windowLabel(revenue.windowDays)}>
+        <Table
+          head={["", "Shops", "MRR"]}
+          rows={[
+            ["New", num(movement.newCount), signed(movement.newCents)],
+            ["Reactivated", num(movement.reactivationCount), signed(movement.reactivationCents)],
+            ["Expansion", num(movement.expansionCount), signed(movement.expansionCents)],
+            ["Contraction", num(movement.contractionCount), signed(movement.contractionCents)],
+            ["Churned", num(movement.churnCount), signed(movement.churnCents)],
+            ["Net", "", signed(movement.netCents)],
+          ]}
+        />
+      </Panel>
+      <Panel
+        title="Daily active users · 30 days"
+        aside={since(usage.trackingSince, usage.dauSeries) ?? plural(usage.activeShops7d, "shop") + " active this week"}
+      >
+        <Bars
+          values={usage.dauSeries.map((row) => row.users)}
+          labels={usage.dauSeries.map((row) => day(row.day))}
+          tone="bg-sky-500"
+          summary={`today ${num(usage.dau)} · avg ${usage.avgDau.toFixed(1)} · stickiness ${rate(usage.stickiness)}`}
+        />
+      </Panel>
+      <Panel title="Retention by signup week" aside="came back in week 1–4 after signing up">
+        {usage.retention.length ? (
+          <Table
+            head={["Week of", "People", "Wk 1", "Wk 2", "Wk 3", "Wk 4"]}
+            rows={usage.retention.map((row) => [
+              day(row.cohort),
+              num(row.people),
+              ...row.weeks.map((back) => (back === null ? "—" : `${Math.round((back / Math.max(1, row.people)) * 100)}%`)),
+            ])}
+          />
+        ) : (
+          <Empty>Nobody new in the last eight weeks.</Empty>
+        )}
+      </Panel>
+      <Panel title="When they use it · 30 days" aside="people in the app, by hour of day">
+        <Bars
+          values={usage.byHour}
+          labels={usage.byHour.map((_, hour) => hourLabel(hour))}
+          tone="bg-violet-500"
+          highlightLast={false}
+          format={(value) => `${value} person-hour${value === 1 ? "" : "s"}`}
+        />
+      </Panel>
+      <Panel title="Plans and packs" aside="paying and past-due memberships">
+
+        {revenue.planMix.length ? (
+          <Table
+            head={["Plan", "Shops", "Founding", "MRR"]}
+            rows={revenue.planMix.map((row) => [`${row.tier} · ${row.interval}ly`, num(row.shops), num(row.founding), money(row.mrrCents)])}
+          />
+        ) : (
+          <Empty>No paid plans yet.</Empty>
+        )}
+        {revenue.packs.length ? (
+          <div className="mt-3">
+            <Table
+              head={["Pack", "Shops", "Trials", "Bought", "Lapsed", "Running"]}
+              rows={revenue.packs.map((row) => [row.pack, num(row.shops), num(row.trialsStarted), num(row.trialsBought), num(row.trialsLapsed), num(row.trialsRunning)])}
+            />
+          </div>
+        ) : null}
+      </Panel>
+    </div>
+  );
+}
+
 export function KpiGrid({ metrics, online }: { metrics: AdminMetrics; online: number }) {
   const { people, revenue, usage, money: cash } = metrics;
   return (
     <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-      <Stat label="Online now" value={online} sub={`${num(people.active_24h)} in 24h · ${num(people.active_7d)} in 7d`} tone="good" />
+      <Stat label="Online now" value={online} sub={`${plural(metrics.founder.usage.activeShops7d, "shop")} active this week`} tone="good" />
       <Stat label="Events · last hour" value={num(people.events_hour)} sub={`${num(people.events_today)} today`} />
       <Stat label="Signups today" value={num(people.signups_today)} sub={`${num(people.signups_7d)} 7d · ${num(people.signups_30d)} 30d · ${num(people.users)} all`} />
       <Stat label="New businesses today" value={num(people.businesses_today)} sub={`${num(people.businesses_7d)} 7d · ${num(people.businesses)} all`} />
       <Stat
-        label="Active today"
-        value={num(people.active_today)}
-        sub={people.signins_logged ? `people · ${num(people.signed_in_today)} fresh sign-ins` : "people · sign-ins aren't being logged"}
+        label="Signed in today"
+        value={num(people.signed_in_today)}
+        sub={people.signins_logged ? "fresh sign-ins, not returning sessions" : "sign-ins aren't being logged"}
       />
       <Stat label="Support open" value={num(people.support_open)} sub={`${metrics.support.length} recent shown`} tone={n(people, "support_open") ? "bad" : undefined} />
 
-      <Stat
-        label="MRR"
-        value={money(revenue.mrrCents)}
-        sub={revenue.estimated ? `${revenue.paying} paying · ${revenue.estimated} at list price` : `${revenue.paying} paying`}
-        tone="money"
-      />
-      <Stat label="Trials" value={revenue.trialing} sub={`${revenue.trialsEnding.length} ending in 7 days`} />
-      <Stat label="Past due" value={revenue.pastDue} sub={`${revenue.canceled} canceled all-time`} tone={revenue.pastDue ? "bad" : undefined} />
-      <Stat label="Collected today" value={money(cash.today)} sub={`${money(cash.week)} 7d · ${money(cash.month)} 30d`} tone="money" />
-      <Stat label="Collected all-time" value={money(cash.all_time)} sub={`${num(cash.count_30d)} payments 30d · ${pct(cash.card_30d, cash.month)} card`} tone="money" />
+      <Stat label="Paying shops" value={num(revenue.paying)} sub={`${revenue.trialing} trialing · ${revenue.canceled} canceled all-time`} tone="money" />
+      <Stat label="Trials ending" value={revenue.trialsEnding.length} sub="in the next 7 days" />
+      <Stat label="Past due" value={revenue.pastDue} sub="memberships with a failed renewal" tone={revenue.pastDue ? "bad" : undefined} />
+      <Stat label="Contractors collected today" value={money(cash.today)} sub={`${money(cash.week)} 7d · ${money(cash.month)} 30d · through the app`} tone="money" />
+      <Stat label="Contractors collected, all time" value={money(cash.all_time)} sub={`${num(cash.count_30d)} payments 30d · ${pct(cash.card_30d, cash.month)} card`} tone="money" />
       <Stat label="Card payments on" value={num(cash.card_enabled)} sub="businesses" />
 
       <Stat label="Quotes sent today" value={num(usage.sent_today)} sub={`${num(usage.sent_7d)} 7d · ${num(usage.sent_30d)} 30d · ${num(usage.sent_all)} all`} />
@@ -226,7 +406,16 @@ export function OnlinePanel({
   );
 }
 
-export function BusinessesPanel({ metrics, now }: { metrics: AdminMetrics; now: number }) {
+export function BusinessesPanel({
+  metrics,
+  lastSeen,
+  now,
+}: {
+  metrics: AdminMetrics;
+  /** Newest presence per business, from the live feed — fresher than the last read. */
+  lastSeen: Record<string, string>;
+  now: number;
+}) {
   return (
     <Panel title="Newest businesses" aside={`${metrics.newest.length} shown`}>
       {metrics.newest.length ? (
@@ -242,7 +431,7 @@ export function BusinessesPanel({ metrics, now }: { metrics: AdminMetrics; now: 
             num(row.won),
             money(row.collected),
             text(row, "plan") || "free",
-            ago(row.last_seen, now),
+            ago(latest(lastSeen[String(row.id)], row.last_seen), now),
             ago(row.last_event, now),
           ])}
         />

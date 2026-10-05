@@ -12,6 +12,7 @@ import {
   MEMBERSHIP_EVENTS,
   handleMembershipEvent,
 } from "@/lib/membership/webhook";
+import { reportError, reportWarning } from "@/lib/observability";
 
 /**
  * Stripe webhook receiver.
@@ -44,7 +45,7 @@ const RELEVANT_EVENTS = new Set<Stripe.Event.Type>([
 export async function POST(request: NextRequest) {
   const { STRIPE_WEBHOOK_SECRET } = serverEnv();
   if (!STRIPE_WEBHOOK_SECRET) {
-    console.error("[stripe] STRIPE_WEBHOOK_SECRET is not set.");
+    reportError("[stripe] STRIPE_WEBHOOK_SECRET is not set.");
     return NextResponse.json({ error: "Not configured" }, { status: 500 });
   }
 
@@ -65,7 +66,9 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     // A bad signature is the caller's problem - 400 so Stripe stops retrying.
     const message = error instanceof Error ? error.message : "Unknown error";
-    console.error(`[stripe] Signature verification failed: ${message}`);
+    // A probe, or a signing secret that's wrong — which silently stops every
+    // billing event, so it's worth seeing when it repeats.
+    reportWarning("[stripe] Signature verification failed", undefined, { reason: message });
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
   }
 
@@ -86,7 +89,7 @@ export async function POST(request: NextRequest) {
     });
     return NextResponse.json({ received: true, ...(duplicate ? { duplicate: true } : {}) });
   } catch (error) {
-    console.error(`[stripe] Failed handling ${event.type} (${event.id}):`, error);
+    reportError(`[stripe] Failed handling ${event.type} (${event.id}):`, error);
     return NextResponse.json({ error: "Event processing failed" }, { status: 500 });
   }
 }

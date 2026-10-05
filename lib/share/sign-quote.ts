@@ -20,6 +20,7 @@ import { SigningError, signDocument } from "@/lib/signing";
 import { signsOnQuote } from "@/lib/signing/lines";
 
 import { heldLink } from "./link";
+import { reportError } from "@/lib/observability";
 
 /**
  * The customer accepts the quote by signing it — Flow 2, in one step.
@@ -189,7 +190,7 @@ export async function signQuoteFromLink(
     });
     return { status: agreed.status, next: deposit?.url ?? agreed.url };
   } catch (error) {
-    console.error("[share] signed, but the deposit didn't issue:", error);
+    reportError("[share] signed, but the deposit didn't issue:", error);
     return { status: agreed.status, next: agreed.url };
   }
 }

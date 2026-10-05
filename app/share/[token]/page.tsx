@@ -23,6 +23,7 @@ import { issueDepositInvoice, recordShareView } from "@/lib/documents";
 import { listInfoRequests, resolveInfoToken } from "@/lib/field/info-requests";
 import { resolveShareToken, type SharedDocument } from "@/lib/queries/share";
 import { reconcileOpenPayments } from "@/lib/stripe/collect";
+import { reportError } from "@/lib/observability";
 
 /** One read per request — the title and the page both need it. */
 const resolve = cache(resolveShareToken);
@@ -97,7 +98,7 @@ export default async function SharePage({ params }: PageProps<"/share/[token]">)
       organizationId: shared.organizationId,
       contractId: shared.documentId,
     }).catch((error) => {
-      console.error("[share] the deposit didn't issue:", error);
+      reportError("[share] the deposit didn't issue:", error);
       return null;
     });
     if (issued) shared = (await resolveShareToken(token)) ?? shared;
@@ -109,7 +110,7 @@ export default async function SharePage({ params }: PageProps<"/share/[token]">)
   if (shared.kind === "invoice") {
     const checked = await reconcileOpenPayments([shared.documentId]).catch(
       (error) => {
-        console.error("[share] couldn't check the payment with Stripe:", error);
+        reportError("[share] couldn't check the payment with Stripe:", error);
         return false;
       }
     );

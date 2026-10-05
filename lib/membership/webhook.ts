@@ -2,11 +2,13 @@ import "server-only";
 
 import type Stripe from "stripe";
 
+import { reportError } from "@/lib/observability";
 import { formatMoney } from "@/lib/quote/money";
 
 import { releaseFoundingHold } from "./founding";
 import { sendNotice } from "./notices";
 import { reconcileCheckoutSession, reconcileSubscription } from "./reconcile";
+import { recordPlatformInvoice } from "./revenue";
 
 /**
  * The membership's half of the platform webhook.
@@ -87,8 +89,14 @@ export async function handleMembershipEvent(event: Stripe.Event) {
     }
 
     case "invoice.paid": {
-      const id = subscriptionOfInvoice(event.data.object);
-      if (id) await reconcileSubscription(id);
+      const invoice = event.data.object;
+      const id = subscriptionOfInvoice(invoice);
+      const account = id ? await reconcileSubscription(id) : null;
+      // The dashboard's copy of the cash. Never fails the webhook: access
+      // already followed the payment, and a missing row is reported.
+      await recordPlatformInvoice(invoice, account?.organizationId ?? null).catch((error: unknown) =>
+        reportError("[membership] couldn't record a paid invoice for the dashboard:", error, { extra: { invoice: invoice.id } })
+      );
       return;
     }
 

@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 
 import { serverEnv } from "@/lib/env";
+import { reportError } from "@/lib/observability";
 
 /**
  * `POST /api/webhooks/quickbooks` — Intuit's change notifications.
@@ -38,7 +39,7 @@ export async function POST(request: NextRequest) {
     // Not configured is not the caller's fault, but it is also not something
     // retrying fixes. 200 so Intuit does not disable the endpoint while the
     // deployment is still being set up.
-    console.error("[quickbooks] QUICKBOOKS_WEBHOOK_VERIFIER is not set.");
+    reportError("[quickbooks] QUICKBOOKS_WEBHOOK_VERIFIER is not set.");
     return NextResponse.json({ received: true, ignored: "unconfigured" });
   }
 

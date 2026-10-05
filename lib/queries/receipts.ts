@@ -4,6 +4,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { jobs, receipts } from "@/lib/db/schema";
 import { attachmentUrl } from "@/lib/field/storage";
+import { reportError } from "@/lib/observability";
 
 export type ReceiptItem = {
   id: string;
@@ -37,7 +38,7 @@ export async function listJobReceipts(jobId: string, organizationId: string): Pr
         url = await attachmentUrl(imageUrl, `${organizationId}/${jobId}/receipts`);
       } catch {
         // A storage outage should not hide the recorded expense.
-        console.error("[receipts] Could not load attachment for", row.id);
+        reportError("[receipts] Could not load an attachment", undefined, { extra: { receipt: row.id } });
       }
     }
     return { ...row, hasAttachment: Boolean(imageUrl), attachmentUrl: url };

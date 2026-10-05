@@ -40,10 +40,11 @@ export default async function EventsPage({ searchParams }: PageProps<"/admin/eve
       org_name: string | null;
       amount_cents: string | null;
       test: boolean;
+      internal: boolean;
       demo: boolean;
       data: Record<string, unknown>;
     }>(sql`
-      select id, occurred_at, kind, level, title, org_name, amount_cents::text, test, demo, data
+      select id, occurred_at, kind, level, title, org_name, amount_cents::text, test, internal, demo, data
       from admin_events
       where (${test} or not test)
         and (${like}::text is null or title ilike ${like} or org_name ilike ${like})
@@ -128,7 +129,7 @@ export default async function EventsPage({ searchParams }: PageProps<"/admin/eve
               </tr>
             ) : (
               rows.map((row) => (
-                <tr key={row.id} className={cn("border-t align-top", (row.test || row.demo) && "opacity-60")}>
+                <tr key={row.id} className={cn("border-t align-top", (row.test || row.internal || row.demo) && "opacity-60")}>
                   <td className="text-muted-foreground px-3 py-1.5">{row.id}</td>
                   <td className="px-3 py-1.5 whitespace-nowrap">
                     {new Date(row.occurred_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", second: "2-digit" })}
@@ -151,6 +152,7 @@ export default async function EventsPage({ searchParams }: PageProps<"/admin/eve
                   </td>
                   <td className="min-w-72 px-3 py-1.5">
                     {row.title}
+                    {row.internal ? <span className="text-muted-foreground"> · internal</span> : null}
                     {row.test ? <span className="text-muted-foreground"> · test</span> : null}
                     {row.demo ? <span className="text-muted-foreground"> · demo</span> : null}
                   </td>

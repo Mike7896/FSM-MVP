@@ -49,7 +49,7 @@ function check(label: string, condition: boolean, detail?: unknown) {
 }
 
 const DAY = 86_400_000;
-const RUN = `membership-scenarios-${Date.now()}`;
+const RUN = `membership-scenarios-check-${Date.now()}`;
 const orgIds: string[] = [];
 const prices = new Map<string, string>();
 

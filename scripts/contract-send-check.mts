@@ -199,7 +199,7 @@ try {
 
     const [other] = await db.execute<{ id: string }>(
       sql`insert into organizations (name, slug)
-          values ('Somebody Else', ${`other-${Date.now()}`}) returning id`
+          values ('Somebody Else', ${`other-check-${Date.now()}`}) returning id`
     );
     await refuses(
       "another shop's contract, by id",

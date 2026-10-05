@@ -15,7 +15,7 @@ function check(value: unknown, label: string) {
 try {
   await db.transaction(async (tx) => {
     const [a, b] = await tx.execute<{ id: string }>(
-      sql`insert into organizations(name,slug) values ('Tag test',${randomUUID()}),('Tag test other',${randomUUID()}) returning id`,
+      sql`insert into organizations(name,slug) values ('Tag test',${`tags-check-${randomUUID()}`}),('Tag test other',${`tags-check-${randomUUID()}`}) returning id`,
     );
     const [customer] = await tx.execute<{ id: string }>(
       sql`insert into customers(organization_id,name) values (${a.id},'Tag fixture') returning id`,

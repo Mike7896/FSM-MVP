@@ -6,6 +6,7 @@ import { and, eq } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { memberships, organizations, profiles } from "@/lib/db/schema";
+import { identify } from "@/lib/observability";
 import { createClient } from "@/lib/supabase/server";
 
 /**
@@ -32,6 +33,7 @@ export const verifySession = cache(async () => {
   } = await supabase.auth.getUser();
 
   if (error || !user) return null;
+  identify(user.id);
   return { userId: user.id, email: user.email ?? "" };
 });
 

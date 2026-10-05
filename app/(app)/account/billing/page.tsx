@@ -14,6 +14,7 @@ import { getBillingOverview } from "@/lib/membership/overview";
 import { reconcileCheckoutSession } from "@/lib/membership/reconcile";
 import { safeNextPath } from "@/lib/safe-next";
 import { formatMoney } from "@/lib/quote/money";
+import { reportError } from "@/lib/observability";
 
 export const metadata: Metadata = { title: "Billing" };
 
@@ -39,7 +40,7 @@ export default async function BillingPage({ searchParams }: PageProps<"/account/
 
   if (params.checkout === "success" && sessionId) {
     await reconcileCheckoutSession(sessionId, org.id).catch((error) =>
-      console.error("[billing] couldn't reconcile the checkout session:", error)
+      reportError("[billing] couldn't reconcile the checkout session:", error)
     );
     // Render again from the reconciled state — the whole page, the app
     // shell's bill included, reads it fresh — and drop the session id.

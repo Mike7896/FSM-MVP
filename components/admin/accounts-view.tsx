@@ -28,6 +28,7 @@ const FILTERS: { filter: AccountFilter; label: string }[] = [
   { filter: "all", label: "Everyone" },
   { filter: "admins", label: "Admins" },
   { filter: "testers", label: "Testers" },
+  { filter: "internal", label: "Internal" },
   { filter: "invited", label: "Invited" },
   { filter: "suspended", label: "Suspended" },
 ];
@@ -159,6 +160,7 @@ export function Badges({ account }: { account: AccountRow }) {
     <span className="flex flex-wrap gap-1">
       {account.owner ? <Badge tone="violet">Owner</Badge> : account.admin ? <Badge tone="violet">Admin</Badge> : null}
       {account.policy?.kind === "tester" ? <Badge tone="sky">Tester{account.policy.accessUntil ? ` · to ${account.policy.accessUntil}` : ""}</Badge> : null}
+      {account.policy?.internal ? <Badge tone="muted">Internal</Badge> : null}
       {account.founding ? <Badge tone="amber">Founding</Badge> : null}
       {inviteStatus(account) === "pending" ? <Badge tone="muted">Invited · not accepted</Badge> : null}
       {inviteStatus(account) === "expired" ? <Badge tone="red">Invite expired</Badge> : null}

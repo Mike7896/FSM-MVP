@@ -5,6 +5,7 @@ import { and, asc, count, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { captureArtifacts, jobs } from "@/lib/db/schema";
 import { BUCKETS, createSignedDownloadUrl } from "@/lib/supabase/storage";
+import { reportError } from "@/lib/observability";
 
 /**
  * What was recorded on site, for the panel beside the editor.
@@ -105,7 +106,7 @@ async function signQuietly(path: string): Promise<string | null> {
   try {
     return await createSignedDownloadUrl(BUCKETS.jobAttachments, path);
   } catch (error) {
-    console.error("[captures] couldn't sign a capture file:", error);
+    reportError("[captures] couldn't sign a capture file:", error);
     return null;
   }
 }
