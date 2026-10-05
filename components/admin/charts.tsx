@@ -14,6 +14,7 @@ export function Bars({
   className,
   tone = "bg-primary",
   highlightLast = true,
+  summary,
 }: {
   values: number[];
   labels: string[];
@@ -21,6 +22,8 @@ export function Bars({
   className?: string;
   tone?: string;
   highlightLast?: boolean;
+  /** Replaces "max · total" — for a series where a total means nothing, like MRR by day. */
+  summary?: string;
 }) {
   const max = Math.max(1, ...values);
   const total = values.reduce((sum, value) => sum + value, 0);
@@ -43,7 +46,7 @@ export function Bars({
       <div className="text-muted-foreground flex justify-between text-[10px] tabular-nums">
         <span>{labels[0]}</span>
         <span>
-          max {format(max === 1 && total === 0 ? 0 : max)} · total {format(total)}
+          {summary ?? `max ${format(max === 1 && total === 0 ? 0 : max)} · total ${format(total)}`}
         </span>
         <span>{labels[labels.length - 1]}</span>
       </div>

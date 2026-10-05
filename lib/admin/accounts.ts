@@ -9,6 +9,7 @@ import { DomainError } from "@/lib/errors";
 import { createAdminClient } from "@/lib/supabase/server";
 
 import { isOwnerEmail, type Admin } from "./owners";
+import { reportError } from "@/lib/observability";
 
 /**
  * ACCOUNTS — the admin panel's view of every person, and what it can do to one.
@@ -31,6 +32,8 @@ import { isOwnerEmail, type Admin } from "./owners";
 export type AccountPolicyView = {
   kind: "standard" | "tester";
   compPlan: boolean;
+  /** One of ours — left out of every number on the dashboard. */
+  internal: boolean;
   accessUntil: string | null;
   dailySendLimit: number | null;
   note: string | null;
@@ -61,7 +64,7 @@ export type AccountRow = {
   invite: { sentAt: string; expiresAt: string; by: string; acceptedAt: string | null } | null;
 };
 
-export type AccountFilter = "all" | "admins" | "testers" | "invited" | "suspended";
+export type AccountFilter = "all" | "admins" | "testers" | "internal" | "invited" | "suspended";
 
 /* ── Reading ──────────────────────────────────────────────────────────── */
 
@@ -76,7 +79,7 @@ export async function listAccounts({ q, filter = "all" }: { q?: string; filter?:
       (select s.status::text from subscriptions s join memberships m on m.organization_id = s.organization_id
          where m.user_id = u.id order by s.created_at desc limit 1) as plan,
       exists (select 1 from platform_admins a where a.user_id = u.id) as admin,
-      ap.kind, ap.comp_plan, ap.access_until, ap.daily_send_limit, ap.note, ap.banned_at, ap.banned_reason,
+      ap.kind, ap.comp_plan, ap.internal, ap.access_until, ap.daily_send_limit, ap.note, ap.banned_at, ap.banned_reason,
       (select count(*) from document_sends s where s.sent_by = u.id and s.sent_at > now() - interval '7 days')::int as sends_7d,
       (select up.last_seen from user_presence up where up.user_id = u.id) as last_seen,
       coalesce((u.raw_app_meta_data ->> 'founding_member')::boolean, false) as founding_member,
@@ -91,6 +94,7 @@ export async function listAccounts({ q, filter = "all" }: { q?: string; filter?:
       and (${filter} = 'all'
         or (${filter} = 'admins' and exists (select 1 from platform_admins a where a.user_id = u.id))
         or (${filter} = 'testers' and ap.kind = 'tester')
+        or (${filter} = 'internal' and ap.internal)
         or (${filter} = 'invited' and u.raw_app_meta_data ? 'invite')
         or (${filter} = 'suspended' and (ap.banned_at is not null or u.banned_until > now())))
     order by u.created_at desc
@@ -109,7 +113,7 @@ export async function getAccount(userId: string) {
       (select s.status::text from subscriptions s join memberships m on m.organization_id = s.organization_id
          where m.user_id = u.id order by s.created_at desc limit 1) as plan,
       exists (select 1 from platform_admins a where a.user_id = u.id) as admin,
-      ap.kind, ap.comp_plan, ap.access_until, ap.daily_send_limit, ap.note, ap.banned_at, ap.banned_reason,
+      ap.kind, ap.comp_plan, ap.internal, ap.access_until, ap.daily_send_limit, ap.note, ap.banned_at, ap.banned_reason,
       (select count(*) from document_sends s where s.sent_by = u.id and s.sent_at > now() - interval '7 days')::int as sends_7d,
       (select up.last_seen from user_presence up where up.user_id = u.id) as last_seen,
       coalesce((u.raw_app_meta_data ->> 'founding_member')::boolean, false) as founding_member,
@@ -197,31 +201,40 @@ export async function createTestAccount(
 export async function updatePolicy(
   admin: Admin,
   userId: string,
-  change: Partial<Pick<AccountPolicyView, "kind" | "compPlan" | "accessUntil" | "dailySendLimit" | "note">>
+  change: Partial<Pick<AccountPolicyView, "kind" | "compPlan" | "internal" | "accessUntil" | "dailySendLimit" | "note">>
 ) {
   const target = await mustFind(userId);
-  await db
-    .insert(accountPolicies)
-    .values({
-      userId,
-      kind: change.kind ?? "standard",
-      compPlan: change.compPlan ?? false,
-      accessUntil: change.accessUntil ?? null,
-      dailySendLimit: change.dailySendLimit ?? null,
-      note: change.note ?? null,
-      createdBy: admin.userId,
-    })
-    .onConflictDoUpdate({
-      target: accountPolicies.userId,
-      set: {
-        ...(change.kind !== undefined ? { kind: change.kind } : {}),
-        ...(change.compPlan !== undefined ? { compPlan: change.compPlan } : {}),
-        ...(change.accessUntil !== undefined ? { accessUntil: change.accessUntil } : {}),
-        ...(change.dailySendLimit !== undefined ? { dailySendLimit: change.dailySendLimit } : {}),
-        ...(change.note !== undefined ? { note: change.note } : {}),
-        updatedAt: new Date(),
-      },
-    });
+  // Switching internal re-marks what's already in the log about them and
+  // their shops, in the same transaction, so the history agrees with the switch.
+  await db.transaction(async (tx) => {
+    await tx
+      .insert(accountPolicies)
+      .values({
+        userId,
+        kind: change.kind ?? "standard",
+        compPlan: change.compPlan ?? false,
+        internal: change.internal ?? false,
+        accessUntil: change.accessUntil ?? null,
+        dailySendLimit: change.dailySendLimit ?? null,
+        note: change.note ?? null,
+        createdBy: admin.userId,
+      })
+      .onConflictDoUpdate({
+        target: accountPolicies.userId,
+        set: {
+          ...(change.kind !== undefined ? { kind: change.kind } : {}),
+          ...(change.compPlan !== undefined ? { compPlan: change.compPlan } : {}),
+          ...(change.internal !== undefined ? { internal: change.internal } : {}),
+          ...(change.accessUntil !== undefined ? { accessUntil: change.accessUntil } : {}),
+          ...(change.dailySendLimit !== undefined ? { dailySendLimit: change.dailySendLimit } : {}),
+          ...(change.note !== undefined ? { note: change.note } : {}),
+          updatedAt: new Date(),
+        },
+      });
+    if (change.internal !== undefined) {
+      await tx.execute(sql`select public.admin_refresh_internal(${userId}::uuid)`);
+    }
+  });
   await log("account.policy_changed", "activity", userId, `${admin.email} changed ${target.email}'s account settings`, admin, change);
 }
 
@@ -338,7 +351,7 @@ export async function endExpiredTesters() {
     );
   for (const tester of expired) {
     await suspendAccount(null, tester.userId, `Tester access ended ${tester.until}`).catch((error) =>
-      console.error("Ending tester access failed", tester.userId, error)
+      reportError("[accounts] Ending tester access failed", error, { extra: { userId: tester.userId } })
     );
   }
   return expired.length;
@@ -394,6 +407,7 @@ function toRow(row: Record<string, unknown>): AccountRow {
       ? {
           kind: row.kind as "standard" | "tester",
           compPlan: Boolean(row.comp_plan),
+          internal: Boolean(row.internal),
           accessUntil: day(row.access_until),
           dailySendLimit: row.daily_send_limit === null || row.daily_send_limit === undefined ? null : Number(row.daily_send_limit),
           note: row.note ? String(row.note) : null,

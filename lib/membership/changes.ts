@@ -22,6 +22,7 @@ import {
 import { getPriceBook, priceIdFor } from "./prices";
 import { configOf, reconcileSubscription, roleOf } from "./reconcile";
 import { getReleases } from "./releases";
+import { reportError } from "@/lib/observability";
 
 /**
  * CHANGING A MEMBERSHIP (§5.2).
@@ -290,7 +291,7 @@ async function applyChangeLocked(input: {
           interval: previousScheduled.interval,
           packs: previousScheduled.packs as PackId[],
         }, founding).catch((error) =>
-          console.error("[membership] couldn't restore the scheduled change:", error)
+          reportError("[membership] couldn't restore the scheduled change:", error)
         );
       }
       await reconcileSubscription(subscription.id);

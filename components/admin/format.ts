@@ -52,3 +52,12 @@ export function n(row: Row | undefined, key: string) {
   const value = Number(row?.[key] ?? 0);
   return Number.isFinite(value) ? value : 0;
 }
+
+/** The later of two timestamps, either of which may be missing. */
+export function latest(a: unknown, b: unknown) {
+  const time = (value: unknown) => (value ? new Date(String(value)).getTime() : NaN);
+  const [x, y] = [time(a), time(b)];
+  if (!Number.isFinite(x)) return Number.isFinite(y) ? b : null;
+  if (!Number.isFinite(y)) return a;
+  return x >= y ? a : b;
+}

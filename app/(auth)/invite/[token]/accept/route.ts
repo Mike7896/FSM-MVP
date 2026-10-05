@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { acceptInvite, markInviteAccepted } from "@/lib/admin/invites";
 import { createClient } from "@/lib/supabase/server";
+import { reportError, reportWarning } from "@/lib/observability";
 
 /**
  * `POST /invite/[token]/accept` — the invite page's button.
@@ -22,12 +23,12 @@ export async function POST(request: NextRequest, ctx: RouteContext<"/invite/[tok
   const supabase = await createClient();
   const { error } = await supabase.auth.verifyOtp({ type: "magiclink", token_hash: accepted.tokenHash });
   if (error) {
-    console.error("[invites] Sign-in from invite failed:", error.message);
+    reportWarning("[invites] Sign-in from invite failed:", error);
     return NextResponse.redirect(`${base}/auth/auth-code-error`, 303);
   }
 
   await markInviteAccepted(accepted.userId).catch((failure) =>
-    console.error("[invites] Couldn't mark the invite accepted", accepted.userId, failure)
+    reportError("[invites] Couldn't mark the invite accepted", failure, { extra: { userId: accepted.userId } })
   );
   return NextResponse.redirect(`${base}/join`, 303);
 }

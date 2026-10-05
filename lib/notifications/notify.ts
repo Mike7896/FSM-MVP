@@ -14,6 +14,7 @@ import { compose, type NotificationEvent } from "./compose";
 import { deliver } from "./deliver";
 import { planDeliveries } from "./plan";
 import { settingsFor, wantsChannel } from "./preferences";
+import { reportError } from "@/lib/observability";
 
 /** The roles an Office's money and paperwork answer to. */
 const TOLD_BY_ROLE = new Set(["owner", "admin"]);
@@ -123,7 +124,7 @@ export async function notify(
 
     return written.length;
   } catch (error) {
-    console.error(`[notifications] ${event.kind} didn't go out:`, error);
+    reportError(`[notifications] ${event.kind} didn't go out:`, error);
     return 0;
   }
 }

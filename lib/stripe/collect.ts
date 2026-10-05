@@ -18,6 +18,7 @@ import { formatMoney } from "@/lib/quote/money";
 import { getConnectedAccount, railsFor } from "./connect";
 import { onChargeSucceeded, type EventContext } from "./connect-events";
 import { stripe } from "./server";
+import { reportWarning } from "@/lib/observability";
 
 /**
  * COLLECTING A HOMEOWNER INVOICE ONLINE — Billing §8, §11.3.
@@ -390,7 +391,7 @@ async function checkAttempt(attempt: PaymentAttempt) {
       await onChargeSucceeded(charge, context);
     }
   } catch (error) {
-    console.warn(
+    reportWarning(
       `[collect] Couldn't check ${attempt.paymentIntentId} with Stripe.`,
       error
     );

@@ -4,6 +4,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { safeEqual } from "@/lib/connectors/crypto";
 import { serverEnv } from "@/lib/env";
+import { reportError } from "@/lib/observability";
 
 /**
  * The check every cron route starts with.
@@ -18,7 +19,7 @@ export function refuseUnlessCron(request: NextRequest): NextResponse | null {
   const { CRON_SECRET } = serverEnv();
 
   if (!CRON_SECRET) {
-    console.error("[cron] CRON_SECRET is not set; refusing to run.");
+    reportError("[cron] CRON_SECRET is not set; refusing to run.");
     return NextResponse.json({ error: "Not configured" }, { status: 500 });
   }
 

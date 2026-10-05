@@ -12,6 +12,7 @@ import { serverEnv } from "@/lib/env";
 import type { CreateSupportRequestInput } from "@/lib/schemas";
 
 import { supportKind, type SupportRequestView } from "./types";
+import { reportError } from "@/lib/observability";
 
 /**
  * SUPPORT — what a contractor sends us, kept and passed on.
@@ -55,7 +56,7 @@ export async function createSupportRequest(input: {
 
   const emailed = await emailSupport(row.id).catch((error) => {
     // Saved either way; a failed email is a log line, not the sender's problem.
-    console.error("Support email failed", error);
+    reportError("[support] Support email failed", error);
     return false;
   });
 

@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { stripeCustomers } from "@/lib/db/schema";
 import { stripe } from "@/lib/stripe/server";
+import { reportError } from "@/lib/observability";
 
 /**
  * What the shop has been charged and the card it's charged to — read from
@@ -69,7 +70,7 @@ export async function listReceipts(
         hostedUrl: invoice.hosted_invoice_url ?? null,
       }));
   } catch (error) {
-    console.error("[billing] couldn't load receipts from Stripe:", error);
+    reportError("[billing] couldn't load receipts from Stripe:", error);
     return [];
   }
 }
@@ -129,7 +130,7 @@ export async function getDefaultPaymentMethod(
       expYear: method.card?.exp_year ?? null,
     };
   } catch (error) {
-    console.error("[billing] couldn't load the payment method:", error);
+    reportError("[billing] couldn't load the payment method:", error);
     return null;
   }
 }

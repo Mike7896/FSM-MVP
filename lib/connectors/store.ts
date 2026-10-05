@@ -12,6 +12,7 @@ import {
   type TokenSet,
 } from "./oauth";
 import { findConnector, type ConnectorProvider } from "./registry";
+import { reportError } from "@/lib/observability";
 
 /**
  * The only module that touches a connector credential.
@@ -346,7 +347,7 @@ export async function disconnect(
         refreshToken: row.refreshToken ? decryptSecret(row.refreshToken) : null,
       })
       .catch((error) => {
-        console.error(`[connectors] revoke failed for ${provider}:`, error);
+        reportError(`[connectors] revoke failed for ${provider}:`, error);
       });
   }
 

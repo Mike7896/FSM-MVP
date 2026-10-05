@@ -366,6 +366,55 @@ export const paymentAttempts = pgTable(
   ]
 );
 
+/**
+ * Every change to a membership's monthly revenue — the history behind MRR
+ * movement, churn and the MRR trend on the admin dashboard.
+ *
+ * Written by a trigger when reconcile changes `billing_accounts.mrr_cents`
+ * (drizzle/0050), never by app code, so no path can move revenue without a
+ * row. `kind` is how the change counts: `new` (a first paid month),
+ * `reactivation` (paid again after churning), `expansion`, `contraction`,
+ * `churn` (to nothing), or `baseline` — the revenue each membership already
+ * had when tracking began, which is a starting point, not a movement.
+ */
+export const mrrChanges = pgTable(
+  "mrr_changes",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    fromCents: integer("from_cents").notNull(),
+    toCents: integer("to_cents").notNull(),
+    kind: text("kind")
+      .$type<"baseline" | "new" | "reactivation" | "expansion" | "contraction" | "churn">()
+      .notNull(),
+    changedAt: timestamp("changed_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("mrr_changes_changed_idx").on(t.changedAt),
+    index("mrr_changes_org_idx").on(t.organizationId, t.changedAt),
+  ]
+);
+
+/**
+ * What ServiceClerk actually collected — each paid membership invoice, from
+ * `invoice.paid` (Stripe is the authority; this is the dashboard's copy). MRR
+ * is what's promised each month; this is the cash that arrived.
+ */
+export const platformInvoices = pgTable(
+  "platform_invoices",
+  {
+    id: text("id").primaryKey(),
+    organizationId: uuid("organization_id").references(() => organizations.id, { onDelete: "cascade" }),
+    amountPaidCents: integer("amount_paid_cents").notNull(),
+    currency: text("currency").notNull(),
+    billingReason: text("billing_reason"),
+    paidAt: timestamp("paid_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [index("platform_invoices_paid_idx").on(t.paidAt)]
+);
+
 export type BillingAccount = typeof billingAccounts.$inferSelect;
 export type JobActivation = typeof jobActivations.$inferSelect;
 export type PackEvaluation = typeof packEvaluations.$inferSelect;

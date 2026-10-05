@@ -4,6 +4,7 @@ import type { NextRequest } from "next/server";
 import { ZodError, type ZodType } from "zod";
 
 import { DomainError, type DomainErrorKind } from "@/lib/errors";
+import { reportError } from "@/lib/observability";
 
 import { ApiError, fail, invalid, type ApiErrorCode } from "./response";
 
@@ -14,8 +15,8 @@ import { ApiError, fail, invalid, type ApiErrorCode } from "./response";
  * 500 looks like, and the API stops being predictable — which is the whole
  * point of having one. A thrown `ApiError` becomes its status; a `DomainError`
  * from a module becomes the status its kind names; a Zod failure becomes a
- * field list; anything else is logged and becomes a flat 500 that leaks
- * nothing.
+ * field list; anything else is reported to Sentry and becomes a flat 500
+ * that leaks nothing.
  */
 export function handler(
   fn: (request: NextRequest) => Promise<Response>
@@ -61,25 +62,30 @@ const DOMAIN_CODES: Record<DomainErrorKind, ApiErrorCode> = {
 };
 
 function failure(request: NextRequest, error: unknown): Response {
+  const route = { method: request.method, path: new URL(request.url).pathname };
   if (error instanceof ApiError) {
     return fail(error.code, error.message, error.details);
   }
   if (error instanceof DomainError) {
+    // Something outside us didn't work — an email provider, a card network.
+    // The contractor is told in the module's own words; we need to know too.
+    if (error.kind === "failed") {
+      reportError(`[api] ${route.method} ${route.path}: ${error.message}`, error, { level: "warning", extra: route });
+    }
     return fail(DOMAIN_CODES[error.kind], error.message, error.details);
   }
   if (error instanceof ZodError) {
     return invalid(error);
   }
-  // Never surface a driver message to a client — it names tables.
+  // Never surface a driver message to a client — it names tables. It goes to
+  // Sentry instead: catching it here means Next never sees it fail, so this
+  // is the only place it can be reported.
   //
   // Content Design §7.4: "something went wrong" is not an error message. If
   // the product cannot say what happened, it says what it will do about it,
   // and the thing a contractor actually needs to know is whether their work
   // survived.
-  console.error(
-    `[api] ${request.method} ${new URL(request.url).pathname} failed:`,
-    error
-  );
+  reportError(`[api] ${route.method} ${route.path} failed:`, error, { extra: route });
   return fail(
     "internal",
     "That didn't save — the problem is on our end, and it's logged. Nothing you'd entered was lost. Try again in a moment."

@@ -14,6 +14,7 @@ import { log } from "./accounts";
 import { inviteOrigin } from "./invite-origin";
 import { INVITE_DAYS, inviteToken, newNonce, readInviteToken } from "./invite-token";
 import type { Admin } from "./owners";
+import { reportError } from "@/lib/observability";
 
 /**
  * INVITATIONS — an admin sets up a real account for someone and mails them the
@@ -190,7 +191,7 @@ async function mailInvite(admin: Admin, userId: string, link: string) {
     });
     return { emailed: true, emailError: null };
   } catch (error) {
-    console.error("[invites] Email failed", userId, error);
+    reportError("[invites] Email failed", error, { extra: { userId } });
     const message = error instanceof Error ? error.message : "The email didn't send.";
     const emailError = /not authorized to send emails from/i.test(message)
       ? "Resend rejected the sender domain. Set EMAIL_FROM to an address on the exact verified domain allowed by RESEND_API_KEY, or replace that key with one authorized for the sender domain. Then open this account and send a new invite."
@@ -234,7 +235,7 @@ export async function acceptInvite(token: string): Promise<{ ok: true; userId: s
 
   const { data, error } = await createAdminClient().auth.admin.generateLink({ type: "magiclink", email: user.email! });
   if (error || !data.properties?.hashed_token) {
-    console.error("[invites] Couldn't make a sign-in link", user.id, error);
+    reportError("[invites] Couldn't make a sign-in link", error ?? undefined, { extra: { userId: user.id } });
     return { ok: false, state: "invalid" };
   }
 

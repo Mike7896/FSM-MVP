@@ -43,6 +43,8 @@ export const updateAccountPolicySchema = z
     accessUntil: day.nullable(),
     dailySendLimit: z.number().int().min(0).max(1000).nullable(),
     note: z.string().trim().max(500).nullable(),
+    /** One of ours: never counted on the admin dashboard. */
+    internal: z.boolean(),
     /** Founding pricing (§6), kept on the sign-in account rather than the policy row. */
     foundingMember: z.boolean(),
   })
@@ -57,5 +59,5 @@ export const suspendSchema = z.object({
 
 export const listAccountsSchema = z.object({
   q: z.string().trim().max(100).optional(),
-  filter: z.enum(["all", "admins", "testers", "invited", "suspended"]).optional(),
+  filter: z.enum(["all", "admins", "testers", "internal", "invited", "suspended"]).optional(),
 });

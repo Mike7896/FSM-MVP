@@ -5,6 +5,7 @@ import { consumeState, isConnectorError } from "@/lib/connectors/oauth";
 import { saveConnection } from "@/lib/connectors/store";
 import { verifySession } from "@/lib/dal";
 import { absoluteUrl } from "@/lib/env";
+import { reportError } from "@/lib/observability";
 
 /**
  * `GET /api/connections/[provider]/callback` — finish a handshake.
@@ -85,7 +86,7 @@ export async function GET(
         ? "not-configured"
         : "exchange-failed";
 
-    console.error(`[connectors] ${provider} callback failed:`, error);
+    reportError(`[connectors] ${provider} callback failed:`, error);
     return back(`error=${reason}`);
   }
 

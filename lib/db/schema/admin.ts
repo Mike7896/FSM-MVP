@@ -9,6 +9,7 @@ import {
   integer,
   jsonb,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uuid,
@@ -46,6 +47,7 @@ export const platformAdmins = pgTable("platform_admins", {
  *   `accessUntil` ends it (the hourly sweep suspends it that day) and
  *   `dailySendLimit` caps how many documents it can send a day.
  * - `compPlan` — treated as paying, charged nothing.
+ * - `internal` — the team's own account; never counted on the dashboard.
  * - `bannedAt` — suspended. Supabase Auth's ban is what stops them signing in;
  *   this is the record of why and by whom.
  */
@@ -57,6 +59,12 @@ export const accountPolicies = pgTable(
       .references(() => authUsers.id, { onDelete: "cascade" }),
     kind: text("kind").$type<"standard" | "tester">().notNull().default("standard"),
     compPlan: boolean("comp_plan").notNull().default(false),
+    /**
+     * One of ours — the team's own account. Its shops, payments and activity
+     * never count on the admin dashboard; they still show in the feed, marked
+     * internal. See `admin_is_internal_org` (drizzle/0048).
+     */
+    internal: boolean("internal").notNull().default(false),
     accessUntil: date("access_until"),
     dailySendLimit: integer("daily_send_limit"),
     note: text("note"),
@@ -98,6 +106,8 @@ export const adminEvents = pgTable(
     test: boolean("test").notNull().default(false),
     /** About demo work — practice, not real business. */
     demo: boolean("demo").notNull().default(false),
+    /** From the team's own accounts — real use, not real business. */
+    internal: boolean("internal").notNull().default(false),
     data: jsonb("data").$type<Record<string, unknown>>().notNull().default({}),
   },
   (t) => [
@@ -119,6 +129,30 @@ export const userPresence = pgTable(
     lastSeen: timestamp("last_seen", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("user_presence_last_seen_idx").on(t.lastSeen.desc())]
+);
+
+/**
+ * Who used the app in which hour — the history `user_presence` doesn't keep.
+ *
+ * One row per person per clock hour they had it open, written by the presence
+ * beacon (`insert … on conflict do nothing`, so the minute-by-minute pings
+ * cost one row an hour). Hours rather than days so daily, weekly and monthly
+ * active users can be cut on the viewer's own clock, and so the dashboard can
+ * say when in the day contractors work. Read only by the admin dashboard.
+ */
+export const userActivityHours = pgTable(
+  "user_activity_hours",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => authUsers.id, { onDelete: "cascade" }),
+    hour: timestamp("hour", { withTimezone: true }).notNull(),
+    organizationId: uuid("organization_id"),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userId, t.hour] }),
+    index("user_activity_hours_hour_idx").on(t.hour),
+  ]
 );
 
 export type AdminEvent = typeof adminEvents.$inferSelect;

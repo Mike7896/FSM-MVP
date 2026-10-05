@@ -24,6 +24,7 @@ import { letterheadFor } from "@/lib/email/letterhead";
 import { emailConfigured, sendEmail } from "@/lib/email/send";
 import { withDocumentActivation } from "@/lib/membership/activation";
 import { createInvoice } from "@/lib/documents/operations/create-invoice";
+import { reportError } from "@/lib/observability";
 
 export async function readChangeOrder(id: string, organizationId: string, on: Executor = db) {
   const doc = await loadDocument(id, organizationId, on);
@@ -152,7 +153,7 @@ async function sendChangeOrderNow(organizationId: string, id: string, input: z.i
           attachments: enclosure.pdf ? [enclosure.pdf] : [],
         });
       } catch (error) {
-        console.error("[change-order] email failed", error);
+        reportError("[change-order] email failed", error);
         deliveryError = "The change is saved and ready to share, but email failed. Copy the link or retry.";
       }
     }
@@ -166,7 +167,7 @@ async function sendChangeOrderNow(organizationId: string, id: string, input: z.i
     documentId: id,
     channel: emailed ? "email" : "link",
     recipient: emailed ? input.email! : null,
-  }).catch((error) => console.error("[change-order] couldn't record the send", error));
+  }).catch((error) => reportError("[change-order] couldn't record the send", error));
   return { ...result, deliveryError };
 }
 

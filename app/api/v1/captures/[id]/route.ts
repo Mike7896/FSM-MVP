@@ -6,6 +6,7 @@ import { ApiError, noContent } from "@/lib/api/response";
 import { db } from "@/lib/db";
 import { captureArtifacts, jobs } from "@/lib/db/schema";
 import { BUCKETS, removeObjects } from "@/lib/supabase/storage";
+import { reportError } from "@/lib/observability";
 
 /**
  * `/api/v1/captures/[id]` — removing one.
@@ -61,7 +62,7 @@ export const DELETE = handlerWithParams<{ id: string }>(
       try {
         await removeObjects(BUCKETS.jobAttachments, [capture.fileUrl]);
       } catch (error) {
-        console.error("[captures] row deleted, file left behind:", error);
+        reportError("[captures] row deleted, file left behind:", error);
       }
     }
 

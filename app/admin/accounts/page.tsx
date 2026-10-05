@@ -6,7 +6,7 @@ import { listAccounts, type AccountFilter } from "@/lib/admin/accounts";
 
 export const metadata: Metadata = { title: "Accounts" };
 
-const FILTERS = new Set<AccountFilter>(["all", "admins", "testers", "invited", "suspended"]);
+const FILTERS = new Set<AccountFilter>(["all", "admins", "testers", "internal", "invited", "suspended"]);
 
 /** Every account, searchable — and the door to making a test one. */
 export default async function AccountsPage({ searchParams }: PageProps<"/admin/accounts">) {

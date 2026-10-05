@@ -9,6 +9,7 @@ import { DomainError } from "@/lib/errors";
 
 import { readAccess } from "./access";
 import { POLICY } from "./catalog";
+import { reportError } from "@/lib/observability";
 
 /**
  * FREE USAGE — three newly activated jobs per UTC calendar month (§3.1).
@@ -299,7 +300,7 @@ export async function withActivation<T>(
     return result;
   } catch (error) {
     if (!delivered) await releaseActivation(reservation).catch((release) =>
-      console.error("[membership] couldn't release an activation:", release)
+      reportError("[membership] couldn't release an activation:", release)
     );
     throw error;
   }

@@ -5,6 +5,7 @@ import { and, desc, eq, gt, inArray, isNull } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { documents, shareLinkViews, shareLinks } from "@/lib/db/schema";
 import { notifyLater } from "@/lib/notifications";
+import { reportError } from "@/lib/observability";
 
 /**
  * A customer opened her link.
@@ -88,7 +89,7 @@ export async function recordShareView(token: string): Promise<{
 
     return { documentId: link.documentId, firstView: advanced !== undefined };
   } catch (error) {
-    console.error("[share] couldn't record the view:", error);
+    reportError("[share] couldn't record the view:", error);
     return null;
   }
 }

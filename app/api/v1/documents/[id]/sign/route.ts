@@ -6,6 +6,7 @@ import { clientIp } from "@/lib/api/request";
 import { ApiError, ok } from "@/lib/api/response";
 import { issueDepositInvoice, loadDocument } from "@/lib/documents";
 import { SigningError, signDocument } from "@/lib/signing";
+import { reportError } from "@/lib/observability";
 
 /**
  * `POST /api/v1/documents/[id]/sign` — the in-app signing path.
@@ -67,7 +68,7 @@ export const POST = handlerWithParams<{ id: string }>(
       // whichever party signed last. A failure there never costs the signature.
       if (document.type === "contract" && document.status === "signed") {
         await issueDepositInvoice({ organizationId, contractId: document.id }).catch(
-          (error) => console.error("[sign] signed, but the deposit didn't issue:", error)
+          (error) => reportError("[sign] signed, but the deposit didn't issue:", error)
         );
       }
 

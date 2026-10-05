@@ -21,6 +21,7 @@ import {
   onAttemptReversed,
   onPaymentIntentEvent,
 } from "@/lib/stripe/collect";
+import { reportError, reportWarning } from "@/lib/observability";
 
 /**
  * The Connect webhook — contractors charging homeowners.
@@ -60,7 +61,7 @@ const RELEVANT_EVENTS = new Set<Stripe.Event.Type>([
 export async function POST(request: NextRequest) {
   const { STRIPE_CONNECT_WEBHOOK_SECRET } = serverEnv();
   if (!STRIPE_CONNECT_WEBHOOK_SECRET) {
-    console.error("[connect] STRIPE_CONNECT_WEBHOOK_SECRET is not set.");
+    reportError("[connect] STRIPE_CONNECT_WEBHOOK_SECRET is not set.");
     return NextResponse.json({ error: "Not configured" }, { status: 500 });
   }
 
@@ -82,7 +83,9 @@ export async function POST(request: NextRequest) {
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
-    console.error(`[connect] Signature verification failed: ${message}`);
+    // A probe, or a signing secret that's wrong — which silently stops every
+    // Connect event, so it's worth seeing when it repeats.
+    reportWarning("[connect] Signature verification failed", undefined, { reason: message });
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
   }
 
@@ -103,7 +106,7 @@ export async function POST(request: NextRequest) {
     });
     return NextResponse.json({ received: true, ...(duplicate ? { duplicate: true } : {}) });
   } catch (error) {
-    console.error(`[stripe] Failed handling ${event.type} (${event.id}):`, error);
+    reportError(`[stripe] Failed handling ${event.type} (${event.id}):`, error);
     return NextResponse.json({ error: "Event processing failed" }, { status: 500 });
   }
 }
@@ -119,10 +122,11 @@ async function handleEvent(event: Stripe.Event) {
     // An event from an account we have no row for. Acknowledged rather than
     // retried: Stripe would redeliver this for days, and no amount of retrying
     // will make an unknown account known.
-    console.warn(
-      `[connect] ${event.type} (${event.id}) from unknown account ` +
-        `${event.account ?? "<none>"}; acknowledged without recording.`
-    );
+    reportWarning("[connect] Event from an unknown account; acknowledged without recording.", undefined, {
+      type: event.type,
+      event: event.id,
+      account: event.account ?? null,
+    });
     return;
   }
 

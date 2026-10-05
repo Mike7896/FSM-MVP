@@ -4,6 +4,7 @@ import { requireSameOrigin } from "@/lib/api/auth";
 import { absoluteUrl } from "@/lib/env";
 import { safeNextPath } from "@/lib/safe-next";
 import { createClient } from "@/lib/supabase/server";
+import { reportError } from "@/lib/observability";
 
 /**
  * `POST /auth/google` — start Google sign-in.
@@ -54,7 +55,7 @@ export async function POST(request: NextRequest) {
   });
 
   if (error || !data.url) {
-    console.error("[auth] Could not start Google sign-in:", error?.message);
+    reportError("[auth] Could not start Google sign-in:", error ?? undefined);
     return fail();
   }
 

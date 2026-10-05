@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { safeNextPath } from "@/lib/safe-next";
 import { createClient } from "@/lib/supabase/server";
+import { reportWarning } from "@/lib/observability";
 
 /**
  * OAuth / PKCE callback. Exchanges the `code` query parameter for a session
@@ -25,9 +26,10 @@ export async function GET(request: NextRequest) {
 
   // The provider refused or the user cancelled before any code was issued.
   if (providerError) {
-    console.error(
-      `[auth] Provider returned "${providerError}": ${providerErrorDescription ?? "no description"}`
-    );
+    reportWarning("[auth] Sign-in provider refused", undefined, {
+      error: providerError,
+      description: providerErrorDescription ?? null,
+    });
     const reason =
       providerError === "access_denied" ? "cancelled" : "provider-error";
     return NextResponse.redirect(
@@ -48,7 +50,7 @@ export async function GET(request: NextRequest) {
     // The usual cause is a missing PKCE verifier cookie, which happens when the
     // flow was started somewhere that could not write one — see the note in
     // `app/auth/google/route.ts`.
-    console.error("[auth] Code exchange failed:", error.message);
+    reportWarning("[auth] Code exchange failed:", error);
     return NextResponse.redirect(
       `${origin}/auth/auth-code-error?reason=exchange-failed`
     );

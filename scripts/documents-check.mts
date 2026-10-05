@@ -720,7 +720,7 @@ try {
     // Wrong shop, right id. The scoping is the authorization.
     const [other] = await db.execute<{ id: string }>(
       sql`insert into organizations (name, slug)
-          values ('Somebody Else', ${`other-${Date.now()}`}) returning id`
+          values ('Somebody Else', ${`other-check-${Date.now()}`}) returning id`
     );
     check(
       "another shop cannot load it",

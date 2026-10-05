@@ -1,6 +1,7 @@
 import "server-only";
 
 import { stripe } from "@/lib/stripe/server";
+import { reportError } from "@/lib/observability";
 
 /**
  * Stripe account facts the membership flows depend on, read rarely and kept
@@ -24,7 +25,7 @@ export async function taxCalculationActive(): Promise<boolean> {
     const settings = await stripe().tax.settings.retrieve();
     active = settings.status === "active";
   } catch (error) {
-    console.error("[membership] couldn't read Stripe Tax settings:", error);
+    reportError("[membership] couldn't read Stripe Tax settings:", error);
   }
   taxCache = { at: Date.now(), active };
   return active;
@@ -38,7 +39,7 @@ export async function membershipPortalConfiguration(): Promise<string | null> {
     const list = await stripe().billingPortal.configurations.list({ active: true, limit: 100 });
     id = list.data.find((row) => row.metadata?.portal === "membership_v1")?.id ?? null;
   } catch (error) {
-    console.error("[membership] couldn't list portal configurations:", error);
+    reportError("[membership] couldn't list portal configurations:", error);
   }
   portalCache = { at: Date.now(), id };
   return id;

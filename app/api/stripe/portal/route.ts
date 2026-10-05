@@ -7,6 +7,7 @@ import { absoluteUrl } from "@/lib/env";
 import { membershipPortalConfiguration } from "@/lib/membership/stripe-context";
 import { stripe } from "@/lib/stripe/server";
 import { getOrCreateStripeCustomer } from "@/lib/stripe/sync";
+import { reportError } from "@/lib/observability";
 
 /**
  * Opens the Stripe Billing Portal, where customers manage payment methods,
@@ -72,7 +73,7 @@ export const POST = handler(async (request) => {
 
     return ok({ url: portal.url });
   } catch (error) {
-    console.error("[billing] couldn't open the Stripe portal:", error);
+    reportError("[billing] couldn't open the Stripe portal:", error);
     throw new ApiError(
       "internal",
       "Stripe couldn't open the billing page just now. Nothing has changed, and nothing has been cancelled."

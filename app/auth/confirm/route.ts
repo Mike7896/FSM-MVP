@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { safeNextPath } from "@/lib/safe-next";
 import { createClient } from "@/lib/supabase/server";
+import { reportWarning } from "@/lib/observability";
 
 /**
  * Email link confirmation — signup verification, email change and password
@@ -44,7 +45,7 @@ export async function GET(request: NextRequest) {
       token_hash: tokenHash,
     });
     if (error) {
-      console.error("[auth] OTP verification failed:", error.message);
+      reportWarning("[auth] OTP verification failed:", error);
       return failed("expired");
     }
   } else if (code) {
@@ -52,7 +53,7 @@ export async function GET(request: NextRequest) {
     if (error) {
       // Nearly always a missing verifier: the link was opened in a different
       // browser from the one that asked for it.
-      console.error("[auth] Code exchange failed:", error.message);
+      reportWarning("[auth] Code exchange failed:", error);
       return failed("other-browser");
     }
   } else {

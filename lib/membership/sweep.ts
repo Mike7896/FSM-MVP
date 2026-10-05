@@ -1,15 +1,16 @@
 import "server-only";
 
-import { and, eq, gt, inArray, isNotNull, isNull, lt, or } from "drizzle-orm";
+import { and, eq, gt, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
-import { adminEvents, billingAccounts, billingEvents, packEvaluations } from "@/lib/db/schema";
+import { billingAccounts, billingEvents, packEvaluations } from "@/lib/db/schema";
 import { stripe } from "@/lib/stripe/server";
 
 import { DAY_MS, PACK_LABEL, POLICY, type PackId } from "./catalog";
 import { expireCredits, organizationsWithCredits } from "./credits";
 import { sendNotice } from "./notices";
 import { reconcileSubscription } from "./reconcile";
+import { reportError } from "@/lib/observability";
 
 /**
  * THE MEMBERSHIP SWEEP — the parts of the policy that are about time passing.
@@ -49,19 +50,19 @@ export async function runMembershipSweep(now = new Date()): Promise<SweepReport>
 
   for (const before of stale) {
     const after = await reconcileSubscription(before.subscriptionId!).catch((error) => {
-      console.error(`[membership] sweep couldn't reconcile ${before.subscriptionId}:`, error);
+      reportError(`[membership] sweep couldn't reconcile ${before.subscriptionId}:`, error);
       return null;
     });
     report.reconciled += 1;
     if (after && (after.subscriptionStatus !== before.subscriptionStatus || after.tier !== before.tier || after.packs.join() !== before.packs.join())) {
       // Our copy disagreed with Stripe — an event went missing. Say so (§11.2).
       report.diverged.push(before.organizationId);
-      await db.insert(adminEvents).values({
-        kind: "billing.divergence",
-        level: "problem",
-        organizationId: before.organizationId,
-        title: `Billing was out of step with Stripe (${before.subscriptionStatus} → ${after.subscriptionStatus}) and has been corrected.`,
-      }).catch(() => undefined);
+      // Through admin_log, like every other line: it names the business and
+      // knows a check script's shop from a real one.
+      await db.execute(
+        sql`select public.admin_log('billing.divergence', 'problem', ${before.organizationId}::uuid, null,
+          ${`{org}'s billing was out of step with Stripe (${before.subscriptionStatus} → ${after.subscriptionStatus}) and has been corrected.`})`
+      ).catch(() => undefined);
     }
   }
 
@@ -160,7 +161,7 @@ async function writeOff(organizationId: string, subscriptionId: string, invoiceI
       try {
         await stripe().invoices.voidInvoice(invoiceId);
       } catch (error) {
-        console.error(`[membership] couldn't void ${invoiceId}; re-reading instead:`, error);
+        reportError(`[membership] couldn't void ${invoiceId}; re-reading instead:`, error);
         await reconcileSubscription(subscriptionId);
         return "recovered";
       }

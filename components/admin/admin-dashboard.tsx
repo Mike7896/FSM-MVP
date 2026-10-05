@@ -33,6 +33,8 @@ import { cn } from "@/lib/utils";
 
 import {
   ActivityPanels,
+  FounderKpis,
+  FounderPanels,
   BusinessesPanel,
   FunnelPanel,
   HealthPanels,
@@ -59,10 +61,21 @@ import { useLive, type LiveEvent, type PresenceRow } from "./use-live";
 /**
  * THE ADMIN DASHBOARD — ServiceClerk, live.
  *
- * Built to sit open on a second monitor: the feed and the alerts run on
- * Supabase Realtime, so a purchase in Ohio is a sound and a banner here within
- * a second of the webhook landing. The numbers around them are re-read every
- * minute, and a few seconds after anything happens.
+ * Built to sit open on a second monitor, and live all the way through:
+ *
+ * - **The feed and the alerts** are the event log's rows, pushed by Supabase
+ *   Realtime — a purchase in Ohio is a sound and a banner here within a second
+ *   of the webhook landing.
+ * - **Who's online right now** is counted here from presence rows Realtime
+ *   pushes as they're touched.
+ * - **Every other number** — the founder's revenue and usage numbers first —
+ *   is re-read the moment the database says a table it counts from changed (a
+ *   trigger signal, `useLive`), and whenever the connection comes back.
+ *   Missed feed lines are caught up at the same moments.
+ *
+ * The one timer left is the clock: "today", "last 7 days" and the hourly pulse
+ * move because time passes, not because anything is written, so nothing could
+ * push them. The numbers are re-read on each five-minute mark for that.
  *
  * Visual polish was deliberately traded for more numbers — it's for the people
  * who build the product, not the people who use it.
@@ -81,6 +94,8 @@ const LEVEL_LOOK: Record<AdminEventLevel, { dot: string; text: string; Icon: typ
   problem: { dot: "bg-destructive", text: "text-destructive", Icon: AlertTriangle },
   activity: { dot: "bg-muted-foreground", text: "text-muted-foreground", Icon: Zap },
 };
+
+const MINUTE = 60_000;
 
 const TESTS: { level: AdminEventLevel; title: string; amount?: number }[] = [
   { level: "money", title: "Test: Reyes Electric bought Pro — $49.00/month", amount: 4900 },
@@ -127,7 +142,6 @@ function Dashboard({
       if (!response.ok || !body?.data) throw new Error(body?.error?.message ?? "The numbers didn't load.");
       return body.data;
     },
-    refetchInterval: 60_000,
     placeholderData: (previous) => previous,
   });
 
@@ -135,7 +149,11 @@ function Dashboard({
   const [shownLevels, setShownLevels] = useState<Set<AdminEventLevel>>(() => new Set(LEVELS.map((entry) => entry.level)));
   const [showTest, setShowTest] = useState(false);
   const [showDemo, setShowDemo] = useState(true);
-  const [spotlight, setSpotlight] = useState<LiveEvent | null>(() => initialEvents.find((event) => event.level === "money" && !event.test) ?? null);
+  // Shown by default: the team's own use, worth watching land, never counted.
+  const [showInternal, setShowInternal] = useState(true);
+  const [spotlight, setSpotlight] = useState<LiveEvent | null>(
+    () => initialEvents.find((event) => event.level === "money" && !event.test && !event.internal) ?? null
+  );
   const [fresh, setFresh] = useState<Set<number>>(new Set());
   const [unseen, setUnseen] = useState(0);
   const [prefs, setPrefs] = useAlertPrefs();
@@ -143,12 +161,63 @@ function Dashboard({
   const permission = useDesktopPermission();
   const now = useNow(15_000);
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Every line already in the feed, so one that arrives twice — pushed, and
+  // fetched by a catch-up — is shown and announced once.
+  const seen = useRef(new Set(initialEvents.map((event) => event.id)));
+  const lastId = useRef(initialEvents.reduce((max, event) => Math.max(max, event.id), 0));
+  const catchUpRef = useRef<() => void>(() => undefined);
+
+  /*
+   * Re-read the numbers, and catch the feed up, soon. A burst of writes — a
+   * checkout touches four tables — becomes one read. A signal that lands while
+   * a read is running waits for it and reads again after, so a write committed
+   * mid-read is never left out.
+   */
+  const refreshSoon = useCallback(() => {
+    if (refreshTimer.current) return;
+    const run = () => {
+      if (client.isFetching({ queryKey: ["admin-metrics"] })) {
+        refreshTimer.current = setTimeout(run, 400);
+        return;
+      }
+      refreshTimer.current = null;
+      void client.refetchQueries({ queryKey: ["admin-metrics"] });
+      catchUpRef.current();
+    };
+    refreshTimer.current = setTimeout(run, 600);
+  }, [client]);
+
+  // The clock: windows that move with time alone, on each five-minute mark.
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    const schedule = () => {
+      const next = new Date();
+      next.setMinutes(Math.floor(next.getMinutes() / 5) * 5 + 5, 0, 0);
+      timer = setTimeout(() => {
+        refreshSoon();
+        schedule();
+      }, next.getTime() - Date.now());
+    };
+    schedule();
+    return () => clearTimeout(timer);
+  }, [refreshSoon]);
 
   /* ── Something happened ───────────────────────────────────────────── */
 
   const onEvent = useCallback(
-    (event: LiveEvent, options: { local?: boolean } = {}) => {
-      setEvents((current) => [event, ...current.filter((existing) => existing.id !== event.id)].slice(0, 500));
+    (event: LiveEvent, options: { local?: boolean; quiet?: boolean } = {}) => {
+      if (!options.local) {
+        if (seen.current.has(event.id)) return;
+        seen.current.add(event.id);
+        lastId.current = Math.max(lastId.current, event.id);
+      }
+      // Newest first by when it happened — a caught-up line takes its place
+      // in time, not the top of the list.
+      setEvents((current) =>
+        [event, ...current.filter((existing) => existing.id !== event.id)]
+          .sort((a, b) => b.occurred_at.localeCompare(a.occurred_at) || b.id - a.id)
+          .slice(0, 500)
+      );
       setFresh((current) => new Set(current).add(event.id));
       setTimeout(() => setFresh((current) => {
         const next = new Set(current);
@@ -156,7 +225,15 @@ function Dashboard({
         return next;
       }), 4000);
 
-      if (event.test && !options.local) return;
+      // In the feed, but no sound, banner or spotlight: not real business.
+      if ((event.test || event.internal) && !options.local) {
+        if (!event.test) refreshSoon();
+        return;
+      }
+      if (options.quiet) {
+        if (event.level === "money" || event.level === "milestone") setSpotlight(event);
+        return;
+      }
 
       const channel = prefs[event.level];
       const heading = event.level === "money" ? `💰 ${money(event.amount_cents)}` : LEVELS.find((entry) => entry.level === event.level)!.label.replace(/s$/, "");
@@ -169,16 +246,56 @@ function Dashboard({
       if (event.level === "money" || event.level === "milestone") setSpotlight(event);
       if (document.visibilityState !== "visible") setUnseen((count) => count + 1);
 
-      if (!options.local) {
-        // The numbers follow a few seconds behind, in one read for a burst.
-        if (refreshTimer.current) clearTimeout(refreshTimer.current);
-        refreshTimer.current = setTimeout(() => void client.invalidateQueries({ queryKey: ["admin-metrics"] }), 3000);
-      }
+      // The counts by kind, the pulse and "most active" are read from the log.
+      if (!options.local) refreshSoon();
     },
-    [prefs, client]
+    [prefs, refreshSoon]
   );
 
-  const { status, presence } = useLive({ onEvent, initialPresence });
+  /*
+   * Catch the feed up: everything after the last line it has. A push can be
+   * missed — the connection blinks, the laptop sleeps, a line lands while the
+   * page is still loading — and this is what makes "missed" mean "late".
+   * A few missed lines alert as usual; a pile becomes one summary.
+   */
+  const catching = useRef<"idle" | "busy" | "again">("idle");
+  useEffect(() => {
+    catchUpRef.current = () => {
+      if (catching.current !== "idle") {
+        catching.current = "again";
+        return;
+      }
+      catching.current = "busy";
+      void (async () => {
+        try {
+          const response = await fetch(`/api/v1/admin/events?after=${lastId.current}`, { cache: "no-store" });
+          const body = (await response.json().catch(() => null)) as { data?: { events: LiveEvent[]; more: boolean } } | null;
+          if (!response.ok || !body?.data) return;
+          const missed = body.data.events.filter((event) => !seen.current.has(event.id));
+          const quiet = missed.length > 3;
+          for (const event of missed) onEvent(event, { quiet });
+          const counted = missed.filter((event) => !event.test && !event.internal).length;
+          if (quiet && counted) {
+            toast(`Caught up on ${counted} event${counted === 1 ? "" : "s"} the live feed missed`, {
+              description: body.data.more ? "Older ones are in the Event log." : undefined,
+              duration: 10_000,
+            });
+          }
+        } finally {
+          const rerun = catching.current === "again";
+          catching.current = "idle";
+          if (rerun) catchUpRef.current();
+        }
+      })();
+    };
+  }, [onEvent]);
+
+  const { status, presence } = useLive({
+    onEvent,
+    onChanged: refreshSoon,
+    onSynced: refreshSoon,
+    initialPresence,
+  });
 
   // Presence rows carry an organization id; names come from the first read
   // and from the newest-businesses list.
@@ -190,11 +307,20 @@ function Dashboard({
   }, [initialPresence, metrics.data]);
   // Check scripts and testers aren't users; Realtime delivers them anyway.
   const testUsers = useMemo(() => new Set(metrics.data?.testUserIds ?? []), [metrics.data]);
-  const online = Object.values(presence)
-    .filter((row) => !testUsers.has(row.user_id))
+  const people = Object.values(presence).filter((row) => !testUsers.has(row.user_id));
+  // A presence row is touched each minute the app is open, so two minutes
+  // without one means gone. Daily, weekly and monthly active users are the
+  // server's, from the hour-by-hour history.
+  const onlineNow = people.filter((row) => now - Date.parse(row.last_seen) < 2 * MINUTE).length;
+  const online = people
+    .filter((row) => now - Date.parse(row.last_seen) < 15 * MINUTE)
     .map((row) => ({ ...row, business: row.organization_id ? (businessNames[row.organization_id] ?? null) : null }))
     .sort((a, b) => b.last_seen.localeCompare(a.last_seen));
-  const onlineNow = online.filter((row) => now - new Date(row.last_seen).getTime() < 120_000).length;
+  const lastSeenByBusiness: Record<string, string> = {};
+  for (const row of people) {
+    const id = row.organization_id;
+    if (id && (!lastSeenByBusiness[id] || row.last_seen > lastSeenByBusiness[id])) lastSeenByBusiness[id] = row.last_seen;
+  }
 
   /* ── The tab says how much you missed ─────────────────────────────── */
 
@@ -209,7 +335,11 @@ function Dashboard({
   }, [unseen]);
 
   const feed = events.filter(
-    (event) => shownLevels.has(event.level) && (showTest || !event.test) && (showDemo || !event.demo)
+    (event) =>
+      shownLevels.has(event.level) &&
+      (showTest || !event.test) &&
+      (showInternal || !event.internal) &&
+      (showDemo || !event.demo)
   );
 
   return (
@@ -277,6 +407,7 @@ function Dashboard({
                         title: test.title,
                         amount_cents: test.amount ?? null,
                         test: true,
+                        internal: false,
                         demo: false,
                         data: {},
                       },
@@ -308,7 +439,10 @@ function Dashboard({
       {spotlight ? <Spotlight event={spotlight} now={now} /> : null}
 
       {metrics.data ? (
-        <KpiGrid metrics={metrics.data} online={onlineNow} />
+        <>
+          <FounderKpis metrics={metrics.data} />
+          <KpiGrid metrics={metrics.data} online={onlineNow} />
+        </>
       ) : metrics.isError ? (
         <p className="text-destructive rounded-lg border p-3 text-sm">{metrics.error.message}</p>
       ) : (
@@ -319,6 +453,7 @@ function Dashboard({
 
       <div className="grid min-h-0 gap-2 xl:grid-cols-[minmax(0,1fr)_26rem]">
         <div className="flex min-w-0 flex-col gap-2">
+          {metrics.data ? <FounderPanels metrics={metrics.data} /> : null}
           {metrics.data ? <TrendPanels metrics={metrics.data} /> : null}
           <div className="grid gap-2 lg:grid-cols-2">
             {metrics.data ? <FunnelPanel metrics={metrics.data} /> : null}
@@ -366,6 +501,10 @@ function Dashboard({
               Demo
             </label>
             <label className="text-muted-foreground flex items-center gap-1.5 text-[11px]">
+              <Checkbox checked={showInternal} onCheckedChange={(checked) => setShowInternal(checked === true)} className="size-3.5" />
+              Internal
+            </label>
+            <label className="text-muted-foreground flex items-center gap-1.5 text-[11px]">
               <Checkbox checked={showTest} onCheckedChange={(checked) => setShowTest(checked === true)} className="size-3.5" />
               Test shops
             </label>
@@ -384,7 +523,7 @@ function Dashboard({
 
       {metrics.data ? (
         <>
-          <BusinessesPanel metrics={metrics.data} now={now} />
+          <BusinessesPanel metrics={metrics.data} lastSeen={lastSeenByBusiness} now={now} />
           <div className="grid gap-2 lg:grid-cols-2">
             <SupportPanel rows={metrics.data.support} onChanged={() => void metrics.refetch()} />
             <div className="grid gap-2">
@@ -451,7 +590,7 @@ function FeedRow({ event, now, fresh }: { event: LiveEvent; now: number; fresh: 
       className={cn(
         "flex shrink-0 gap-2 border-b py-1.5 text-xs transition-colors duration-1000",
         fresh && (event.level === "money" ? "bg-emerald-500/15" : "bg-primary/10"),
-        (event.test || event.demo) && "opacity-60"
+        (event.test || event.internal || event.demo) && "opacity-60"
       )}
     >
       <look.Icon className={cn("mt-0.5 size-3.5 shrink-0", look.text)} />
@@ -459,6 +598,7 @@ function FeedRow({ event, now, fresh }: { event: LiveEvent; now: number; fresh: 
         <p className="leading-snug [overflow-wrap:anywhere]">
           {event.title}
           {event.demo ? <span className="text-muted-foreground"> · demo</span> : null}
+          {event.internal ? <span className="text-muted-foreground"> · internal</span> : null}
           {event.test ? <span className="text-muted-foreground"> · test</span> : null}
         </p>
         <p className="text-muted-foreground text-[10px] [overflow-wrap:anywhere]">
@@ -546,7 +686,7 @@ function AlertSettings({
         <p className="text-muted-foreground mt-3 text-xs leading-relaxed">
           Money is purchases and payments. Milestones are signups, new businesses, trials, first quotes and
           wins. Problems are failed payments, cancellations, bug reports and failed deliveries. Activity is
-          everything else.
+          everything else. Internal accounts never alert — they&apos;re in the feed, not the business.
         </p>
       </PopoverContent>
     </Popover>

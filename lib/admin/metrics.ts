@@ -5,6 +5,9 @@ import { sql, type SQL } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { serverEnv } from "@/lib/env";
 
+import { COUNTED, REAL_ORG, realUser } from "./counting";
+import { getFounderMetrics } from "./founder-metrics";
+
 /**
  * Every number on the admin dashboard, in one read.
  *
@@ -13,34 +16,20 @@ import { serverEnv } from "@/lib/env";
  * subscriptions, sends and the ledger know everything. The log is for what's
  * happening now — the feed, the hourly pulse, "last seen".
  *
- * **Test and demo never count.** Shops made by the check scripts (slug
- * "…-check-…") are left out everywhere; so are people who aren't real users
- * (`realUser`): the check scripts' throwaway accounts and testers made from the
- * panel. Demo work is left out of every business and activity number — the
- * same rule the product's own dashboard keeps.
+ * **Test, internal and demo never count.** What's a test (the check scripts'
+ * made-up data) and what's internal (the team's own accounts and shops) is
+ * decided in the database — `admin_is_test_org`/`_user` and
+ * `admin_is_internal_org`/`_user` (drizzle/0046–0048) — by the same functions
+ * the event log asks as it writes, so the feed and these numbers can't
+ * disagree. Testers made from the panel are left out of the people counts too
+ * (`realUser`). Demo work is left out of every business and activity number —
+ * the same rule the product's own dashboard keeps.
  *
  * Days are cut on the viewer's clock (`timeZone`), because "today" on a Friday
  * night in Ohio is not today in UTC.
  */
 
-const REAL_ORG = sql.raw(`o.slug !~ '(^|-)check-'`);
-
-/** Addresses at reserved domains (RFC 2606 / 6761) — only the check scripts sign up with them. */
-const TEST_EMAIL = String.raw`(@example\.(com|net|org)|\.(local|localhost|invalid|test|example))$`;
-
-/**
- * A real person, by user id: not a check script's throwaway account (a
- * reserved email domain, or a member of a check shop), and not a tester made
- * from the admin panel.
- */
-export function realUser(id: SQL) {
-  return sql`(
-    not exists (select 1 from profiles tp where tp.id = ${id} and tp.email ~* ${TEST_EMAIL})
-    and not exists (select 1 from account_policies tap where tap.user_id = ${id} and tap.kind = 'tester')
-    and not exists (select 1 from memberships tm join organizations o on o.id = tm.organization_id
-      where tm.user_id = ${id} and o.slug ~ '(^|-)check-')
-  )`;
-}
+export { realUser };
 
 export type AdminMetrics = Awaited<ReturnType<typeof getAdminMetrics>>;
 
@@ -60,7 +49,6 @@ export async function getAdminMetrics(timeZone: string) {
     byKind,
     newest,
     active,
-    online,
     testUsers,
     support,
     deliveries,
@@ -83,14 +71,11 @@ export async function getAdminMetrics(timeZone: string) {
         -- Sign-ins are logged by a trigger on auth.sessions, which a database
         -- without the privilege skips at migration time — then there are none.
         exists (select 1 from pg_trigger where tgname = 'admin_on_session' and not tgisinternal) as signins_logged,
-        -- Had the app open today: the presence beacon, not a fresh sign-in, so
-        -- someone still signed in from yesterday counts.
-        (select count(*) from user_presence up where up.last_seen >= ${today} and ${realUser(sql`up.user_id`)})::int as active_today,
-        (select count(*) from user_presence up where up.last_seen > now() - interval '2 minutes' and ${realUser(sql`up.user_id`)})::int as online,
-        (select count(*) from user_presence up where up.last_seen > now() - interval '24 hours' and ${realUser(sql`up.user_id`)})::int as active_24h,
-        (select count(*) from user_presence up where up.last_seen > now() - interval '7 days' and ${realUser(sql`up.user_id`)})::int as active_7d,
-        (select count(*) from admin_events where not test and not demo and occurred_at > now() - interval '1 hour')::int as events_hour,
-        (select count(*) from admin_events where not test and not demo and occurred_at >= ${today})::int as events_today,
+        -- Who's had the app open (now, today, 24h, 7d) isn't counted here: the
+        -- dashboard counts it from the presence rows Realtime streams to it,
+        -- so it moves the moment somebody opens the app.
+        (select count(*) from admin_events where ${COUNTED} and occurred_at > now() - interval '1 hour')::int as events_hour,
+        (select count(*) from admin_events where ${COUNTED} and occurred_at >= ${today})::int as events_today,
         (select count(*) from support_requests where status = 'open')::int as support_open,
         (select min(occurred_at) from admin_events) as log_since
     `),
@@ -218,7 +203,7 @@ export async function getAdminMetrics(timeZone: string) {
           join organizations o on o.id = l.organization_id left join jobs j on j.id = l.job_id
           where l.entry_type = 'payment_received' and not coalesce(j.is_demo, false) and ${REAL_ORG}
             and (l.occurred_at at time zone ${tz})::date = d.day)::bigint as collected,
-        (select count(*) from admin_events e where not e.test and not e.demo and (e.occurred_at at time zone ${tz})::date = d.day)::int as events
+        (select count(*) from admin_events e where ${COUNTED} and (e.occurred_at at time zone ${tz})::date = d.day)::int as events
       from days d
       order by d.day
     `),
@@ -228,14 +213,14 @@ export async function getAdminMetrics(timeZone: string) {
         select generate_series(date_trunc('hour', now()) - interval '23 hours', date_trunc('hour', now()), interval '1 hour') as hour
       )
       select h.hour,
-        (select count(*) from admin_events e where not e.test and not e.demo and e.occurred_at >= h.hour and e.occurred_at < h.hour + interval '1 hour')::int as events,
-        (select count(*) from admin_events e where not e.test and not e.demo and e.level in ('money', 'milestone') and e.occurred_at >= h.hour and e.occurred_at < h.hour + interval '1 hour')::int as big
+        (select count(*) from admin_events e where ${COUNTED} and e.occurred_at >= h.hour and e.occurred_at < h.hour + interval '1 hour')::int as events,
+        (select count(*) from admin_events e where ${COUNTED} and e.level in ('money', 'milestone') and e.occurred_at >= h.hour and e.occurred_at < h.hour + interval '1 hour')::int as big
       from hours h order by h.hour
     `),
 
     () => many(sql`
       select kind, level, count(*)::int as count
-      from admin_events where not test and not demo and occurred_at > now() - interval '24 hours'
+      from admin_events where ${COUNTED} and occurred_at > now() - interval '24 hours'
       group by 1, 2 order by 3 desc
     `),
 
@@ -271,15 +256,8 @@ export async function getAdminMetrics(timeZone: string) {
         count(*) filter (where level in ('money', 'milestone'))::int as big,
         max(occurred_at) as last
       from admin_events
-      where not test and not demo and occurred_at > now() - interval '7 days'
+      where ${COUNTED} and occurred_at > now() - interval '7 days'
       group by 1, 2 order by 3 desc limit 10
-    `),
-
-    () => many(sql`
-      select up.area, up.device, up.last_seen, o.name as business
-      from user_presence up left join organizations o on o.id = up.organization_id
-      where up.last_seen > now() - interval '15 minutes' and ${realUser(sql`up.user_id`)}
-      order by up.last_seen desc
     `),
 
     // Who the live presence feed should leave out — it arrives over Realtime
@@ -337,14 +315,18 @@ export async function getAdminMetrics(timeZone: string) {
     estimated: Number(row.estimated),
   }));
   const paying = revenue.filter((row) => row.status === "active");
+  const mrrCents = paying.reduce((sum, row) => sum + row.mrrCents, 0);
+  const payingCount = paying.reduce((sum, row) => sum + row.count, 0);
+  const founder = await getFounderMetrics(tz, { mrrCents, paying: payingCount });
 
   return {
     generatedAt: new Date().toISOString(),
     timeZone: tz,
     people,
+    founder,
     revenue: {
-      mrrCents: paying.reduce((sum, row) => sum + row.mrrCents, 0),
-      paying: paying.reduce((sum, row) => sum + row.count, 0),
+      mrrCents,
+      paying: payingCount,
       /** Paying memberships whose MRR is list price, not yet read from Stripe. */
       estimated: paying.reduce((sum, row) => sum + row.estimated, 0),
       trialing: count(revenue, "trialing"),
@@ -361,7 +343,6 @@ export async function getAdminMetrics(timeZone: string) {
     byKind,
     newest,
     active,
-    online,
     testUserIds: testUsers.map((row) => String(row.id)),
     support,
     deliveries,
@@ -410,7 +391,7 @@ function count(rows: { status: string; count: number }[], status: string) {
 }
 
 /**
- * One query at a time. Fired together, nineteen queries pile up on the single
+ * One query at a time. Fired together, the eighteen queries pile up on the single
  * dev connection through Supabase's transaction pooler and stall until the
  * statement timeout; one after another they take under a second.
  */
