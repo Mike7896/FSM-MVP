@@ -6,6 +6,9 @@ import { and, eq, isNull, lt, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { accountPolicies, platformAdmins } from "@/lib/db/schema";
 import { DomainError } from "@/lib/errors";
+import { compEndOf } from "@/lib/membership/access";
+import { reconcileSubscription } from "@/lib/membership/reconcile";
+import { stripe } from "@/lib/stripe/server";
 import { createAdminClient } from "@/lib/supabase/server";
 
 import { isOwnerEmail, type Admin } from "./owners";
@@ -236,6 +239,47 @@ export async function updatePolicy(
     }
   });
   await log("account.policy_changed", "activity", userId, `${admin.email} changed ${target.email}'s account settings`, admin, change);
+  if (change.accessUntil !== undefined || change.compPlan !== undefined) await syncFreeTrial(userId);
+}
+
+/**
+ * A free period moved after they'd already chosen a plan: the Stripe trial
+ * follows, so the first charge is still the day after the free time ends.
+ *
+ * Only a dated free period moves it. Turning the free plan off, or making it
+ * open-ended, leaves the trial on the date they signed up for — a change in
+ * the panel never charges anyone sooner by surprise, except a date set in the
+ * past, which ends the free time now as asked.
+ */
+export async function syncFreeTrial(userId: string) {
+  const [policy] = await db
+    .select({ compPlan: accountPolicies.compPlan, accessUntil: accountPolicies.accessUntil })
+    .from(accountPolicies)
+    .where(eq(accountPolicies.userId, userId))
+    .limit(1);
+  if (!policy?.compPlan || !policy.accessUntil) return 0;
+
+  const trials = [
+    ...(await db.execute<{ subscription_id: string }>(sql`
+      select b.subscription_id from memberships m join billing_accounts b on b.organization_id = m.organization_id
+      where m.user_id = ${userId} and m.role = 'owner'
+        and b.subscription_status = 'trialing' and b.subscription_id is not null
+    `)),
+  ];
+  const endsAt = compEndOf(policy.accessUntil);
+  for (const { subscription_id: id } of trials) {
+    try {
+      await stripe().subscriptions.update(id, {
+        trial_end: endsAt.getTime() <= Date.now() ? "now" : Math.floor(endsAt.getTime() / 1000),
+        proration_behavior: "none",
+      });
+      await reconcileSubscription(id);
+    } catch (error) {
+      reportError("[accounts] Couldn't move a free trial in Stripe", error, { extra: { userId, subscription: id } });
+      throw new DomainError("Saved — but Stripe didn't move their trial to the new date. Try saving again in a moment.", "failed");
+    }
+  }
+  return trials.length;
 }
 
 /* ── Admins ───────────────────────────────────────────────────────────── */
@@ -339,22 +383,36 @@ export async function resetPassword(admin: Admin, userId: string) {
 
 /** Testers past their last day are suspended, with that as the reason. */
 export async function endExpiredTesters() {
-  const expired = await db
-    .select({ userId: accountPolicies.userId, until: accountPolicies.accessUntil })
-    .from(accountPolicies)
-    .where(
-      and(
-        eq(accountPolicies.kind, "tester"),
-        isNull(accountPolicies.bannedAt),
-        lt(accountPolicies.accessUntil, sql`current_date`)
-      )
-    );
+  const expired = await expiredTesters();
   for (const tester of expired) {
     await suspendAccount(null, tester.userId, `Tester access ended ${tester.until}`).catch((error) =>
       reportError("[accounts] Ending tester access failed", error, { extra: { userId: tester.userId } })
     );
   }
   return expired.length;
+}
+
+/**
+ * Testers whose last day has passed — except any who became customers. A
+ * tester who chose a plan has a subscription on a shop they own, and access
+ * that's paid for (or trialing on their free time) isn't the panel's to end.
+ */
+export async function expiredTesters() {
+  return db
+    .select({ userId: accountPolicies.userId, until: accountPolicies.accessUntil })
+    .from(accountPolicies)
+    .where(
+      and(
+        eq(accountPolicies.kind, "tester"),
+        isNull(accountPolicies.bannedAt),
+        lt(accountPolicies.accessUntil, sql`current_date`),
+        sql`not exists (
+          select 1 from memberships m join billing_accounts b on b.organization_id = m.organization_id
+          where m.user_id = ${accountPolicies.userId} and m.role = 'owner'
+            and b.subscription_status in ('active', 'trialing', 'past_due', 'unpaid')
+        )`
+      )
+    );
 }
 
 /* ── Pieces ───────────────────────────────────────────────────────────── */
@@ -381,9 +439,11 @@ export async function log(
   admin: Admin | null,
   data: Record<string, unknown> = {}
 ) {
+  // An action on a check script's throwaway account is test, whoever took it.
   await db.execute(
     sql`select public.admin_log(${kind}, ${level}, null, ${admin?.userId ?? null}::uuid, ${title}, null, false,
-      ${JSON.stringify({ ...data, target, by: admin?.email ?? "system" })}::jsonb)`
+      ${JSON.stringify({ ...data, target, by: admin?.email ?? "system" })}::jsonb
+        || jsonb_build_object('test', public.admin_is_test_user(${target}::uuid)))`
   );
 }
 

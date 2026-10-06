@@ -16,6 +16,8 @@ import {
 } from "drizzle-orm";
 
 import { db } from "@/lib/db";
+import { readAccess } from "@/lib/membership/access";
+import { visibleQuoteStatus } from "@/lib/membership/quote-visibility";
 import {
   customers,
   documents,
@@ -73,12 +75,20 @@ export async function listQuotes(
     offset: number;
   }
 ) {
+  const { viewTracking } = (await readAccess(organizationId)).features;
   const filters = [
     eq(documents.organizationId, organizationId),
     eq(documents.type, "quote"),
   ];
   filters.push(tagPredicate(organizationId, "quote", options));
-  if (options.status) filters.push(eq(documents.status, options.status));
+  if (options.status) {
+    // Filtering must use the same public status as the returned rows. Otherwise
+    // a viewed-only query discloses tracking even when the timestamp is hidden.
+    if (!viewTracking && options.status === "viewed") return [];
+    filters.push(!viewTracking && options.status === "sent"
+      ? inArray(documents.status, ["sent", "viewed"])
+      : eq(documents.status, options.status));
+  }
   if (options.jobId) filters.push(eq(documents.jobId, options.jobId));
 
   // Searching the row text as well as the title is the point of the list — it
@@ -125,7 +135,8 @@ export async function listQuotes(
 
   return rows.map((row) => ({
     ...row,
-    status: row.status as QuoteDraft["status"],
+    status: visibleQuoteStatus(row.status, viewTracking) as QuoteDraft["status"],
+    viewedAt: viewTracking ? row.viewedAt : null,
     totalCents: Number(row.totalCents),
   }));
 }

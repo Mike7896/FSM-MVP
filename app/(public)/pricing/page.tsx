@@ -4,6 +4,7 @@ import { PlanComparison } from "@/components/billing/plan-comparison";
 import { PlanPicker } from "@/components/billing/plan-picker";
 import { POLICY, TIER_FEATURES } from "@/lib/membership/catalog";
 import { pickerPricing } from "@/lib/membership/bill";
+import { getReleases } from "@/lib/membership/releases";
 
 export const metadata: Metadata = { title: "Pricing" };
 
@@ -33,7 +34,7 @@ export const revalidate = 300;
  *   switches are on; until then the page offers what exists.
  */
 export default async function PricingPage() {
-  const pricing = await pickerPricing(null);
+  const [pricing, releases] = await Promise.all([pickerPricing(null), getReleases()]);
   const free = TIER_FEATURES.free;
 
   return (
@@ -74,7 +75,9 @@ export default async function PricingPage() {
           <dl className="mt-5 flex flex-col text-sm">
             {[
               ["Card", "Your Stripe processing rate. No ServiceClerk fee."],
-              ["ACH bank payment", "Your Stripe processing rate, plus a ServiceClerk fee of 0.2%, capped at $5 per successful payment."],
+              ["ACH bank payment", releases.ach_application_fee
+                ? "Your Stripe processing rate, plus a ServiceClerk fee of 0.2%, capped at $5 per successful payment."
+                : "Your Stripe processing rate. No ServiceClerk fee."],
               ["Cash, check or transfer you record", "No fee from us or from Stripe."],
             ].map(([rail, fee], index) => (
               <div key={rail} className={`flex flex-col gap-1 py-3 sm:flex-row sm:gap-6 ${index ? "border-t" : ""}`}>

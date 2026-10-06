@@ -5,6 +5,7 @@ import { handlerWithParams } from "@/lib/api/handler";
 import { ApiError, ok } from "@/lib/api/response";
 import { db } from "@/lib/db";
 import { savedItems } from "@/lib/db/schema";
+import { requireSavedItems } from "@/lib/membership/features";
 
 /**
  * `POST /api/v1/saved-items/[id]/used` — counts a drop into Scope, for the
@@ -15,6 +16,7 @@ export const POST = handlerWithParams<{ id: string }>(async (request, { id }) =>
   requireSameOrigin(request);
   const caller = await requireCaller(request);
   const { organizationId } = await requireOrg(request, caller);
+  await requireSavedItems(organizationId);
 
   const [row] = await db
     .update(savedItems)

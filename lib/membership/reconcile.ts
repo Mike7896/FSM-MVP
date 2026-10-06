@@ -4,6 +4,7 @@ import type Stripe from "stripe";
 import { and, eq, isNull, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
+import { withOperationLock } from "@/lib/db/operation-lock";
 import {
   billingAccounts,
   billingEvents,
@@ -109,13 +110,30 @@ const ENDED = new Set(["canceled", "incomplete_expired"]);
 const LIVE = new Set(["active", "trialing", "past_due", "unpaid"]);
 
 export async function reconcileSubscription(subscriptionId: string): Promise<BillingAccount | null> {
-  const subscription = await stripe().subscriptions.retrieve(subscriptionId, {
-    expand: ["latest_invoice", "schedule.phases.items.price", "discounts.source.coupon"],
+  // This first read identifies the lock only. Never project its snapshot: a
+  // different request may finish reconciling while this retrieve is in flight.
+  const identity = await stripe().subscriptions.retrieve(subscriptionId);
+  const organizationId = await organizationFor(identity);
+  if (!organizationId) return null;
+  return withOperationLock(organizationId, 27, async () => {
+    // Lock by shop, not subscription: a canceled subscription and its
+    // replacement both write the same billing account and pack entitlements.
+    const subscription = await stripe().subscriptions.retrieve(subscriptionId, {
+      expand: ["latest_invoice", "schedule.phases.items.price", "discounts.source.coupon"],
+    });
+    if (await organizationFor(subscription) !== organizationId) {
+      throw new Error("Subscription organization changed during reconciliation; retry required.");
+    }
+    return projectSubscription(subscription);
   });
-  return reconcileFrom(subscription);
 }
 
+/** Payloads identify a subscription; only a fresh, locked retrieve grants access. */
 export async function reconcileFrom(subscription: Stripe.Subscription): Promise<BillingAccount | null> {
+  return reconcileSubscription(subscription.id);
+}
+
+async function projectSubscription(subscription: Stripe.Subscription): Promise<BillingAccount | null> {
   const organizationId = await organizationFor(subscription);
   if (!organizationId) {
     reportError("[membership] A subscription has no organization; not projected.", undefined, {
@@ -217,12 +235,18 @@ export async function reconcileFrom(subscription: Stripe.Subscription): Promise<
   }
 
   const live = LIVE.has(status);
-  const firstInvoicePaid =
-    latest?.status === "paid" && latest.billing_reason === "subscription_create"
+  // The first money actually taken opens the 14-day guarantee (§5.4). A
+  // trial's $0 invoice is "paid" too, but nothing was charged: a free month
+  // must not spend the guarantee before the first real bill.
+  const charged =
+    latest?.status === "paid" && (latest.amount_paid ?? 0) > 0
       ? toDate(latest.status_transitions?.paid_at)
       : null;
   const firstPaidAt =
-    before?.firstPaidAt ?? (status === "active" || status === "trialing" ? (firstInvoicePaid ?? toDate(subscription.start_date)) : null);
+    before?.firstPaidAt ??
+    (status === "active"
+      ? (charged ?? (subscription.trial_end ? null : toDate(subscription.start_date)))
+      : null);
 
   // Founding enrollment is recorded when the first invoice is paid (§6).
   let foundingStatus = before?.foundingStatus ?? "none";
@@ -271,7 +295,8 @@ export async function reconcileFrom(subscription: Stripe.Subscription): Promise<
     .onConflictDoUpdate({ target: billingAccounts.organizationId, set: values })
     .returning();
 
-  await recordMrr(organizationId, ended ? 0 : monthlyRecurringCents(subscription));
+  // A trial isn't revenue yet: it counts the day it's first charged.
+  await recordMrr(organizationId, ended || status === "trialing" ? 0 : monthlyRecurringCents(subscription));
   await syncPackEntitlements(organizationId, live ? values.packs : [], items);
 
   // A purchased pack takes over from its evaluation.

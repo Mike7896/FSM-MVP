@@ -1,0 +1,25 @@
+[
+  {
+    "name": "Missing storage object accepted by completion size check",
+    "status": "confirmed-audit-finding"
+  },
+  {
+    "name": "Aging beyond 1000 invoices",
+    "status": "confirmed-audit-finding",
+    "expectedCount": 1001,
+    "actualCount": 1000,
+    "expectedCents": 10010000,
+    "actualCents": 10000000
+  },
+  {
+    "name": "Demo invoices in aging",
+    "status": "confirmed-audit-finding",
+    "actualCount": 1000
+  },
+  {
+    "name": "Release state",
+    "pro": true,
+    "electrical": false,
+    "achFee": false
+  }
+]

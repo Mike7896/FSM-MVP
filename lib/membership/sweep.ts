@@ -6,10 +6,11 @@ import { db } from "@/lib/db";
 import { billingAccounts, billingEvents, packEvaluations } from "@/lib/db/schema";
 import { stripe } from "@/lib/stripe/server";
 
-import { DAY_MS, PACK_LABEL, POLICY, type PackId } from "./catalog";
+import { DAY_MS, PACK_LABEL, POLICY, TIER_LABEL, type PackId } from "./catalog";
 import { expireCredits, organizationsWithCredits } from "./credits";
 import { sendNotice } from "./notices";
 import { reconcileSubscription } from "./reconcile";
+import { recoverPlanChanges } from "./changes";
 import { reportError } from "@/lib/observability";
 
 /**
@@ -34,6 +35,7 @@ export type SweepReport = {
 };
 
 export async function runMembershipSweep(now = new Date()): Promise<SweepReport> {
+  await recoverPlanChanges(now);
   const report: SweepReport = { reconciled: 0, diverged: [], notices: 0, writtenOff: [], skippedInFlight: [] };
 
   /* ── 1. Missed events: reconcile anything live that hasn't been read in a day ── */
@@ -130,7 +132,87 @@ export async function runMembershipSweep(now = new Date()): Promise<SweepReport>
     await expireCredits(organizationId, now);
   }
 
+  /* ── 5. Free periods ending: a week out, and the day before ── */
+  report.notices += await remindFreePeriodsEnding(now);
+
   return report;
+}
+
+/** Days before a free period's last day that the shop is told it's ending. */
+const FREE_REMINDER_DAYS = [7, 1] as const;
+
+/**
+ * A free period from the admin panel — an invite's free months, a tester's
+ * access — is about to run out. The owner hears a week before and the day
+ * before (or on the last day, if the sweep only gets there then), once each:
+ * what happens next if they've chosen a plan, and how to choose one if not.
+ * Keyed on the last day, so moving the date starts the reminders afresh.
+ *
+ * `only` narrows it to some shops — the check script, which runs it at
+ * made-up dates and must never remind a real customer.
+ */
+export async function remindFreePeriodsEnding(
+  now = new Date(),
+  { only }: { only?: string[] } = {}
+): Promise<number> {
+  if (only && only.length === 0) return 0;
+  const today = now.toISOString().slice(0, 10);
+  const scope = only ? sql`and m.organization_id in (${sql.join(only.map((id) => sql`${id}::uuid`), sql`, `)})` : sql``;
+  const rows = [
+    ...(await db.execute<{
+      organization_id: string;
+      last_day: string;
+      days_left: number;
+      kind: string;
+      status: string | null;
+      tier: string | null;
+    }>(sql`
+      select m.organization_id, ap.access_until::text as last_day,
+        (ap.access_until - ${today}::date)::int as days_left,
+        ap.kind, b.subscription_status as status, b.tier
+      from account_policies ap
+      join memberships m on m.user_id = ap.user_id and m.role = 'owner'
+      left join billing_accounts b on b.organization_id = m.organization_id
+      where ap.comp_plan and ap.banned_at is null and ap.access_until is not null
+        and ap.access_until between ${today}::date and ${today}::date + 7
+        ${scope}
+    `)),
+  ];
+
+  let sent = 0;
+  for (const row of rows) {
+    const lastDay = dayLabel(row.last_day);
+    const firstCharge = dayLabel(new Date(Date.parse(`${row.last_day}T00:00:00Z`) + DAY_MS).toISOString().slice(0, 10));
+    const when = row.days_left === 0 ? "today" : row.days_left === 1 ? "tomorrow" : `on ${lastDay}`;
+    const chosen = row.status === "trialing" || row.status === "active";
+    const plan = row.tier && row.tier !== "free" ? TIER_LABEL[row.tier as keyof typeof TIER_LABEL] : "your plan";
+    const notice = chosen
+      ? {
+          title: `Your free time ends ${when}`,
+          body: `Your ${plan} membership starts ${firstCharge}, and the card you added is charged then. You can change or cancel it in Billing before that.`,
+        }
+      : row.kind === "tester"
+        ? {
+            title: `Your ServiceClerk access ends ${when}`,
+            body: `Choose a plan to keep your account going after ${lastDay} — nothing is charged until ${firstCharge}.`,
+          }
+        : {
+            title: `Your free Pro ends ${when}`,
+            body: `Choose a plan to keep going after ${lastDay} — nothing is charged until ${firstCharge}. If you don't, you'll move to Free, and everything you've made stays.`,
+          };
+    for (const threshold of FREE_REMINDER_DAYS) {
+      if (row.days_left > threshold) continue;
+      // The tighter reminder covers the wider one: a week out isn't news the day before.
+      const key = `free:${row.last_day}:${threshold}`;
+      if (threshold === 7 && row.days_left <= 1) continue;
+      if (await sendNotice(row.organization_id, { key, ...notice, href: chosen ? "/account/billing" : "/account/billing/plan" })) sent += 1;
+    }
+  }
+  return sent;
+}
+
+function dayLabel(day: string) {
+  return new Date(`${day}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 }
 
 /**

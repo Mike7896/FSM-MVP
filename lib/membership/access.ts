@@ -96,6 +96,14 @@ export type Access = {
    * unpaid, and not while another payment-requiring change is in flight.
    */
   canChangePlan: boolean;
+  /**
+   * A complimentary plan from the admin panel, while it applies. `endsAt` is
+   * when it stops (null: no end). Choosing a plan before then starts the
+   * subscription with the rest of it as a Stripe trial (./checkout).
+   */
+  comp: { endsAt: Date | null } | null;
+  /** The subscription is in a Stripe trial, and this is when it's first charged. */
+  trialEndsAt: Date | null;
   founding: {
     status: "none" | "held" | "enrolled" | "reversed" | "lapsed";
     /** The core line on the subscription is a founding price. */
@@ -113,6 +121,11 @@ export type AccessInput = {
   /** Pack id → the owner's switch. Missing means on. */
   enablement: Map<string, boolean>;
   comp: boolean;
+  /**
+   * When a complimentary plan with an end date stops — the start of the day
+   * after its last day, UTC. Null for one with no end (or none at all).
+   */
+  compEndsAt?: Date | null;
   now: Date;
 };
 
@@ -235,6 +248,8 @@ export function deriveAccess(input: AccessInput): Access {
     scheduled,
     pending: hasSubscription ? (account!.pendingChange ?? null) : null,
     canChangePlan: standing === "paid" && !account?.pendingChange,
+    comp: input.comp ? { endsAt: input.compEndsAt ?? null } : null,
+    trialEndsAt: hasSubscription && status === "trialing" ? periodEnd : null,
     founding: {
       status: foundingStatus,
       price: hasSubscription && (account?.foundingPrice ?? false),
@@ -278,7 +293,7 @@ export async function loadAccessInput(
     // A complimentary plan is set on the owner, from the admin panel — for
     // good, or free until a date (the last day it counts).
     on
-      .select({ compPlan: accountPolicies.compPlan })
+      .select({ compPlan: accountPolicies.compPlan, accessUntil: accountPolicies.accessUntil })
       .from(memberships)
       .innerJoin(accountPolicies, eq(accountPolicies.userId, memberships.userId))
       .where(
@@ -298,8 +313,18 @@ export async function loadAccessInput(
     evaluations,
     enablement: new Map(enablement.map((row) => [row.packId, row.enabled])),
     comp: Boolean(comp?.compPlan),
+    compEndsAt: comp?.accessUntil ? compEndOf(comp.accessUntil) : null,
     now,
   };
+}
+
+/**
+ * When a complimentary plan whose last day is `lastDay` stops: midnight UTC
+ * after it, matching `access_until >= current_date` on a UTC database.
+ */
+export function compEndOf(lastDay: string | Date) {
+  const day = typeof lastDay === "string" ? lastDay.slice(0, 10) : lastDay.toISOString().slice(0, 10);
+  return new Date(Date.parse(`${day}T00:00:00Z`) + DAY_MS);
 }
 
 /** What this shop may do right now. Once per request. */

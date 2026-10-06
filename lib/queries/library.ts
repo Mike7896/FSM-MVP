@@ -4,6 +4,8 @@ import { and, desc, eq } from "drizzle-orm";
 
 import { ApiError } from "@/lib/api/response";
 import { db } from "@/lib/db";
+import { readAccess } from "@/lib/membership/access";
+import { requireSavedItems } from "@/lib/membership/features";
 import { jobItemSettings, jobs, savedItems, type SavedItemRow } from "@/lib/db/schema";
 import type { JobItemSettings, SavedItem } from "@/lib/library/types";
 
@@ -28,6 +30,9 @@ export function toSavedItem(row: SavedItemRow): SavedItem {
 
 /** The Office's Library, newest first. The panel sorts and filters it on the client. */
 export async function listSavedItems(organizationId: string): Promise<SavedItem[]> {
+  // Retain stored rows for export/deletion, but don't distribute reusable
+  // templates to an editor whose plan no longer includes the library.
+  if (!(await readAccess(organizationId)).features.savedItems) return [];
   const rows = await db
     .select()
     .from(savedItems)
@@ -42,6 +47,7 @@ export async function getSavedItem(
   id: string,
   organizationId: string
 ): Promise<SavedItem | null> {
+  if (!(await readAccess(organizationId)).features.savedItems) return null;
   if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
   const [row] = await db
     .select()
@@ -55,6 +61,7 @@ export async function requireSavedItem(
   id: string,
   organizationId: string
 ): Promise<SavedItemRow> {
+  await requireSavedItems(organizationId);
   const [row] = await db
     .select()
     .from(savedItems)

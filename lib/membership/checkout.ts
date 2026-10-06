@@ -9,7 +9,7 @@ import { DomainError } from "@/lib/errors";
 import { stripe } from "@/lib/stripe/server";
 import { getOrCreateStripeCustomer } from "@/lib/stripe/sync";
 
-import { readAccess } from "./access";
+import { readAccess, type Access } from "./access";
 import {
   PACK_LABEL,
   POLICY,
@@ -103,6 +103,7 @@ async function startCheckoutLocked(request: CheckoutRequest) {
 
   const tax = await taxCalculationActive();
   const back = request.returnPath ?? "/account/billing";
+  const trialEnd = trialEndFor(access, now);
 
   const session = await stripe().checkout.sessions.create({
     mode: "subscription",
@@ -128,6 +129,9 @@ async function startCheckoutLocked(request: CheckoutRequest) {
     subscription_data: {
       metadata: { organizationId, founding: String(founding) },
       description: "ServiceClerk membership",
+      // The rest of a free period, as a trial: the card is taken now and
+      // first charged when the free time is up.
+      ...(trialEnd ? { trial_end: trialEnd } : {}),
     },
     metadata: { organizationId, founding: String(founding) },
     success_url: absoluteUrl(
@@ -146,8 +150,29 @@ async function startCheckoutLocked(request: CheckoutRequest) {
     organizationId,
     actorUserId: request.caller.userId,
     kind: "checkout.started",
-    detail: { sessionId: session.id, tier, interval, packs, founding, tax },
+    detail: { sessionId: session.id, tier, interval, packs, founding, tax, trialEnd },
   });
 
-  return { url: session.url, founding };
+  return { url: session.url, founding, trialEnd };
+}
+
+/** Stripe Checkout won't take a trial shorter than 48 hours; an hour of margin on top. */
+const MIN_TRIAL_SECONDS = 49 * 3600;
+
+/**
+ * When a new subscription is first charged, as a Unix time — or null to
+ * charge today.
+ *
+ * A shop on a complimentary plan with an end date (an invite's "free for a
+ * month", a tester's access) keeps every day of it: choosing a plan early
+ * starts the subscription now, with the rest of the free time as a Stripe
+ * trial. The founding price and the card are settled at checkout, so the
+ * first charge needs nothing from them. With under two days left, the trial
+ * runs the two days Checkout requires — a day or so extra, never less.
+ */
+export function trialEndFor(access: Pick<Access, "comp">, now: Date): number | null {
+  const endsAt = access.comp?.endsAt;
+  if (!endsAt || endsAt.getTime() <= now.getTime()) return null;
+  const nowSeconds = Math.floor(now.getTime() / 1000);
+  return Math.max(Math.floor(endsAt.getTime() / 1000), nowSeconds + MIN_TRIAL_SECONDS);
 }

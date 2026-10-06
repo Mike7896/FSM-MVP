@@ -44,7 +44,8 @@
     "change-orders:http-check": "tsx --env-file=.env.local --conditions=react-server scripts/change-orders-http-check.mts",
     "collection:check": "tsx --env-file=.env.local --conditions=react-server scripts/collection-check.mts",
     "membership:check": "tsx --env-file=.env.local --conditions=react-server scripts/membership-check.mts",
-    "membership:scenarios": "tsx --env-file=.env.local --conditions=react-server scripts/membership-scenarios.mts"
+    "membership:scenarios": "tsx --env-file=.env.local --conditions=react-server scripts/membership-scenarios.mts",
+    "invite:check": "tsx --env-file=.env.local --conditions=react-server scripts/invite-billing-check.mts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

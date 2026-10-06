@@ -1,0 +1,100 @@
+[
+  {
+    "name": "Annual pricing displays the full annual Starter bill",
+    "status": "passed"
+  },
+  {
+    "name": "Pricing CTA preserves plan and interval",
+    "status": "passed"
+  },
+  {
+    "name": "Google entry preserves purchase destination",
+    "status": "passed"
+  },
+  {
+    "name": "Signup validates an empty submission",
+    "status": "passed"
+  },
+  {
+    "name": "Login, welcome, Office creation, and selected annual checkout work",
+    "status": "passed"
+  },
+  {
+    "name": "Real sandbox hosted checkout opens with selected Starter plan",
+    "status": "passed"
+  },
+  {
+    "name": "Free library renders an upgrade explanation",
+    "status": "passed"
+  },
+  {
+    "name": "Native printing before activation",
+    "status": "confirmed-audit-finding",
+    "detail": "Activation present: false; draft label present: false"
+  },
+  {
+    "name": "Homeowner quote opens without a session",
+    "status": "passed"
+  },
+  {
+    "name": "Homeowner sees quoted amount and no internal unit cost",
+    "status": "passed"
+  },
+  {
+    "name": "Quote HTML does not serialize the internal unit cost",
+    "status": "passed"
+  },
+  {
+    "name": "Homeowner mobile layout has no horizontal overflow",
+    "status": "passed"
+  },
+  {
+    "name": "Homeowner approval records acceptance",
+    "status": "passed"
+  },
+  {
+    "name": "Anonymous homeowner invoice shows the outstanding balance",
+    "status": "passed"
+  },
+  {
+    "name": "Recorded payment updates the homeowner invoice to paid",
+    "status": "passed"
+  },
+  {
+    "name": "Invoice ledger shows zero outstanding after payment",
+    "status": "passed"
+  },
+  {
+    "name": "Revoked homeowner link stops exposing the quote",
+    "status": "passed"
+  },
+  {
+    "name": "Authenticated page renders: /account/billing",
+    "status": "passed"
+  },
+  {
+    "name": "Authenticated page renders: /office/connections",
+    "status": "passed"
+  },
+  {
+    "name": "Authenticated page renders: /office/branding",
+    "status": "passed"
+  },
+  {
+    "name": "Authenticated page renders: /analytics",
+    "status": "passed"
+  },
+  {
+    "name": "Missing-file capture HTTP completion",
+    "status": "confirmed-audit-finding",
+    "httpStatus": 201
+  },
+  {
+    "name": "Connected-account setup opens Stripe hosted onboarding",
+    "status": "passed"
+  },
+  {
+    "name": "No uncaught browser JavaScript errors",
+    "status": "passed"
+  }
+]

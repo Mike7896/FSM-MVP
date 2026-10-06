@@ -1,6 +1,7 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { and, eq, gt, ne, or, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
@@ -21,7 +22,8 @@ import { reportError } from "@/lib/observability";
  * row already exists and one row per job is the whole rule.
  *
  * **Reserve, then commit.** The slot is reserved before the send and committed
- * once it has gone; a send that fails releases it. The reservation is taken
+ * atomically with its customer link. Failures before publication release it;
+ * failures after publication retain it. The reservation is taken
  * under a per-shop advisory lock, so two sends racing for the last slot
  * resolve to exactly one.
  *
@@ -78,6 +80,8 @@ function holdCutoff(now: Date) {
 }
 
 type Executor = Pick<typeof db, "select">;
+type Writer = Pick<typeof db, "select" | "update" | "execute">;
+const publication = new AsyncLocalStorage<Reservation>();
 
 /** Slots taken this month: committed, or reserved by a send still in flight. */
 async function countUsed(
@@ -243,31 +247,34 @@ export async function reserveActivation(input: {
   });
 }
 
-export async function commitActivation(reservation: Reservation, now = new Date()) {
-  if (reservation.kind === "exempt") return;
-  // Idempotent, and an upsert so a send that rode on another's reservation is
-  // still recorded if that other send failed and let its slot go: a job that
-  // went out is an activated job, whichever request carried it.
-  await db
-    .insert(jobActivations)
-    .values({
-      jobId: reservation.jobId,
-      organizationId: reservation.organizationId,
-      period: periodOf(now),
-      status: "committed",
-      action: reservation.action,
-      token: reservation.kind === "reserved" ? reservation.token : randomUUID(),
-      reservedAt: now,
-      committedAt: now,
-      actorUserId: reservation.actorUserId,
-    })
-    .onConflictDoUpdate({
-      target: jobActivations.jobId,
-      set: {
-        status: "committed",
-        committedAt: sql`coalesce(${jobActivations.committedAt}, ${now.toISOString()}::timestamptz)`,
-      },
-    });
+export async function commitActivation(reservation: Reservation, now = new Date(), on?: Writer): Promise<void> {
+  if (reservation.kind !== "reserved") return;
+  if (!on) return db.transaction(tx => commitActivation(reservation, now, tx));
+  await on.execute(sql`select pg_advisory_xact_lock(hashtextextended(${reservation.organizationId}::text, 7))`);
+  const [row] = await on.select().from(jobActivations).where(eq(jobActivations.jobId, reservation.jobId)).limit(1);
+  if (row?.status === "committed") return;
+  if (!row || row.token !== reservation.token) {
+    throw new DomainError("This publication reservation expired. Please retry.", "conflict");
+  }
+  // A slow publication may cross a month or outlive its hold. Recheck while
+  // locked before it becomes accessible, rather than stealing another slot.
+  if (row.period !== periodOf(now) || row.reservedAt <= holdCutoff(now)) {
+    const limit = (await readAccess(reservation.organizationId, now, on)).features.monthlyActivations;
+    const used = await countUsed(reservation.organizationId, now, on, reservation.jobId);
+    if (limit !== null && used >= limit) {
+      throw new ActivationLimitError({ period: periodOf(now), used, limit, remaining: 0, resetsAt: nextReset(now) });
+    }
+  }
+  await on.update(jobActivations).set({ status: "committed", committedAt: now, period: periodOf(now) })
+    .where(and(eq(jobActivations.jobId, reservation.jobId), eq(jobActivations.token, reservation.token)));
+}
+
+/** Called in the very transaction that publishes a customer link. */
+export async function commitDocumentPublication(jobId: string, on: Writer) {
+  const reservation = publication.getStore();
+  if (!reservation || reservation.kind === "exempt") return;
+  if (reservation.jobId !== jobId) throw new DomainError("Publication belongs to another job.", "conflict");
+  await commitActivation(reservation, new Date(), on);
 }
 
 export async function releaseActivation(reservation: Reservation) {
@@ -294,7 +301,7 @@ export async function withActivation<T>(
   const reservation = await reserveActivation(input);
   let delivered = false;
   try {
-    const result = await send();
+    const result = await publication.run(reservation, send);
     delivered = true;
     await commitActivation(reservation);
     return result;

@@ -5,6 +5,8 @@ import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { customers } from "@/lib/db/schema";
 import type { QuoteRecord } from "@/lib/quote";
+import { readAccess } from "@/lib/membership/access";
+import { visibleQuoteStatus } from "@/lib/membership/quote-visibility";
 
 import { loadDocument, type Executor } from "./repository";
 import type { QuoteDocument } from "./types";
@@ -43,7 +45,9 @@ export async function readQuoteRecord(
         .limit(1)
     : [];
 
-  return toQuoteRecord(document, customer ?? null);
+  const record = toQuoteRecord(document, customer ?? null);
+  const { viewTracking } = (await readAccess(organizationId, new Date(), on)).features;
+  return { ...record, status: visibleQuoteStatus(record.status, viewTracking) };
 }
 
 export function toQuoteRecord(

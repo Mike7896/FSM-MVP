@@ -12,6 +12,9 @@ import {
 import { inkFor } from "@/components/documents/ink";
 import { ContractModeSwitch } from "@/components/documents/mode-switch";
 import { PrintButton } from "@/components/documents/print-button";
+import { PrintBoundary } from "@/components/documents/print-boundary";
+import { isJobActivated } from "@/lib/membership/activation";
+import { getAccess } from "@/lib/membership/access";
 import { QuoteProjection } from "@/components/quote/projection";
 import { SignBlock } from "@/components/signing/sign-block";
 import { Button } from "@/components/ui/button";
@@ -57,6 +60,8 @@ export default async function ContractDocumentPage({
     awaitingYou ? getCurrentUser() : Promise.resolve(null),
   ]);
   if (!paper) notFound();
+  const access = await getAccess(org.id);
+  const requiresActivation = access.features.monthlyActivations !== null && !(await isJobActivated(id));
 
   const standing = signed
     ? {
@@ -73,6 +78,7 @@ export default async function ContractDocumentPage({
   return (
     // Out to the edges of the content area — the layout pads it px-4 py-6,
     // md:px-8 md:py-8 — so the desk runs up to the sidebar with no white rim.
+    <PrintBoundary requiresActivation={requiresActivation}>
     <div className="-mx-4 -my-6 flex min-h-0 flex-1 flex-col md:-mx-8 md:-my-8">
       {/* The app's furniture, and none of it prints. */}
       <div
@@ -166,6 +172,7 @@ export default async function ContractDocumentPage({
         </div>
       </DocumentDesk>
     </div>
+    </PrintBoundary>
   );
 }
 

@@ -7,8 +7,18 @@ import { formatMoney } from "@/lib/quote/money";
 
 import { releaseFoundingHold } from "./founding";
 import { sendNotice } from "./notices";
-import { reconcileCheckoutSession, reconcileSubscription } from "./reconcile";
+import { reconcileCheckoutSession, reconcileSubscription as projectSubscription } from "./reconcile";
+import { recoverPlanChange } from "./changes";
 import { recordPlatformInvoice } from "./revenue";
+
+async function reconcileSubscription(subscriptionId: string) {
+  const account = await projectSubscription(subscriptionId);
+  if (!account) return null;
+  // A paid pending upgrade may also carry a saved renewal change. Finish it
+  // before acknowledging this event; failure lets Stripe retry the event.
+  await recoverPlanChange(account.organizationId);
+  return projectSubscription(subscriptionId);
+}
 
 /**
  * The membership's half of the platform webhook.

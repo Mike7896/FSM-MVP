@@ -2,6 +2,8 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 import { clientEnv } from "@/lib/env";
+import { purchaseQuery, signupDestination } from "@/lib/membership/purchase-intent";
+import { safeNextPath } from "@/lib/safe-next";
 
 /**
  * Signed-out visitors may reach these; everything else requires a session.
@@ -84,6 +86,16 @@ export async function updateSession(request: NextRequest) {
   const { data } = await supabase.auth.getClaims();
   const claims = data?.claims ?? null;
 
+  const redirectWithSession = (url: URL) => {
+    const redirected = NextResponse.redirect(url);
+    for (const cookie of response.cookies.getAll()) redirected.cookies.set(cookie);
+    for (const name of ["cache-control", "expires", "pragma"]) {
+      const value = response.headers.get(name);
+      if (value) redirected.headers.set(name, value);
+    }
+    return redirected;
+  };
+
   const { pathname } = request.nextUrl;
 
   /**
@@ -105,15 +117,21 @@ export async function updateSession(request: NextRequest) {
   if (!claims && !isPublic(pathname)) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
-    url.searchParams.set("next", pathname);
-    return NextResponse.redirect(url);
+    url.search = "";
+    url.searchParams.set("next", `${pathname}${request.nextUrl.search}`);
+    return redirectWithSession(url);
   }
 
   if (claims && (pathname === "/login" || pathname === "/signup")) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/dashboard";
-    url.search = "";
-    return NextResponse.redirect(url);
+    const params = Object.fromEntries(request.nextUrl.searchParams);
+    const next = pathname === "/signup" && purchaseQuery(params)
+      ? signupDestination(params) : safeNextPath(params.next);
+    const url = new URL(next, request.nextUrl.origin);
+    if (url.pathname === "/login" || url.pathname === "/signup") {
+      url.pathname = "/dashboard";
+      url.search = "";
+    }
+    return redirectWithSession(url);
   }
 
   return response;

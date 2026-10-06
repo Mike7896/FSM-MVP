@@ -16,6 +16,7 @@ export const signInSchema = z.object({
 export type SignInInput = z.infer<typeof signInSchema>;
 
 export const signUpSchema = z.object({
+  next: z.string().max(500).optional(),
   fullName: z
     .string()
     .trim()

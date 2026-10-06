@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { SignupForm } from "@/components/auth/signup-form";
+import { signupDestination } from "@/lib/membership/purchase-intent";
 
 export const metadata: Metadata = { title: "Create an account" };
 
@@ -12,11 +13,7 @@ export const metadata: Metadata = { title: "Create an account" };
 export default async function SignupPage({
   searchParams,
 }: PageProps<"/signup">) {
-  const { trade } = await searchParams;
-  const next =
-    typeof trade === "string" && /^[a-z-]{1,40}$/.test(trade)
-      ? `/welcome?trade=${trade}`
-      : "/welcome";
+  const next = signupDestination(await searchParams);
 
   return <SignupForm next={next} />;
 }

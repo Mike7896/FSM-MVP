@@ -9,6 +9,8 @@ import {
 } from "@/components/documents/document-sheet";
 import { DocumentModeSwitch, StandingLink } from "@/components/documents/mode-switch";
 import { PrintButton } from "@/components/documents/print-button";
+import { PrintBoundary } from "@/components/documents/print-boundary";
+import { isJobActivated } from "@/lib/membership/activation";
 import { getAccess } from "@/lib/membership/access";
 import { QuoteProjection } from "@/components/quote/projection";
 import { Button } from "@/components/ui/button";
@@ -49,6 +51,7 @@ export default async function QuoteDocumentPage({
     getAccess(org.id),
   ]);
   if (!record) notFound();
+  const requiresActivation = features.monthlyActivations !== null && !(await isJobActivated(record.jobId));
 
   // The lines as they stand: recorded once accepted, the stored signature on
   // the business's line before that. A printed copy keeps her line blank for
@@ -60,6 +63,7 @@ export default async function QuoteDocumentPage({
   return (
     // Out to the edges of the content area — the layout pads it px-4 py-6,
     // md:px-8 md:py-8 — so the desk runs up to the sidebar with no white rim.
+    <PrintBoundary requiresActivation={requiresActivation}>
     <div className="-mx-4 -my-6 flex min-h-0 flex-1 flex-col md:-mx-8 md:-my-8">
       {/* The app's furniture, and none of it prints. */}
       <div
@@ -112,5 +116,6 @@ export default async function QuoteDocumentPage({
         </DocumentSheet>
       </DocumentDesk>
     </div>
+    </PrintBoundary>
   );
 }

@@ -437,7 +437,8 @@
 
   /* A draft copy printed past the Free job limit (Billing §3.1): marked on
      every page so it can't pass for the real thing. */
-  body[data-print-draft="true"]::after {
+  body[data-print-draft="true"]::after,
+  [data-print-unactivated="true"]::after {
     content: "DRAFT — NOT FOR SENDING";
     position: fixed;
     inset: 40% 0 auto 0;

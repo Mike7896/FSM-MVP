@@ -1,0 +1,50 @@
+[
+  {
+    "name": "Connect rejects unsigned event",
+    "status": "passed"
+  },
+  {
+    "name": "Connect rejects wrong signing secret",
+    "status": "passed"
+  },
+  {
+    "name": "Connect rejects stale signature",
+    "status": "passed"
+  },
+  {
+    "name": "Connect rejects tampered raw bytes",
+    "status": "passed"
+  },
+  {
+    "name": "Connect accepts signed charge event",
+    "status": "passed"
+  },
+  {
+    "name": "Repeated event acknowledged as duplicate",
+    "status": "passed"
+  },
+  {
+    "name": "Distinct event for same charge accepted",
+    "status": "passed"
+  },
+  {
+    "name": "Repeated charge posts one payment only",
+    "status": "passed"
+  },
+  {
+    "name": "Foreign invoice metadata event handled",
+    "status": "passed"
+  },
+  {
+    "name": "Foreign metadata cannot post to another tenant",
+    "status": "passed"
+  },
+  {
+    "name": "Unknown Connect account acknowledged",
+    "status": "passed"
+  },
+  {
+    "name": "Other tenant ledger remains untouched",
+    "status": "passed"
+  }
+]

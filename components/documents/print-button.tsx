@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { flushSync } from "react-dom";
+import { useConfirmPrintActivation } from "./print-boundary";
 import { toast } from "sonner";
 import { Loader2, Printer } from "lucide-react";
 
@@ -28,6 +30,7 @@ export function PrintButton({
 }) {
   const [pending, setPending] = useState(false);
   const [limited, setLimited] = useState(false);
+  const confirmActivation = useConfirmPrintActivation();
 
   async function print() {
     if (!jobId) {
@@ -49,6 +52,8 @@ export function PrintButton({
         }
         throw new Error("Could not confirm this job's PDF allowance. Please try again.");
       }
+      // Commit the server-confirmed state before the browser captures print.
+      flushSync(() => confirmActivation?.());
       window.print();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not prepare the PDF. Please try again.");

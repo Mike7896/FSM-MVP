@@ -338,7 +338,7 @@ function PolicyForm({
         <span>
           Complimentary plan
           <span className="text-muted-foreground block text-xs">
-            Pro, charged nothing{!tester && until ? ` — through ${longDate(until)}, then Free until they subscribe` : ""}.
+            Pro, charged nothing{until ? ` — through ${longDate(until)}. A plan chosen before then is first charged after it` : ""}.
           </span>
         </span>
       </label>

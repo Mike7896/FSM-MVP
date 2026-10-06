@@ -69,6 +69,7 @@ try {
   organizationId = org.id;
   const accountId = `acct_check_${randomUUID()}`;
   await db.execute(sql`insert into connected_accounts (organization_id, stripe_account_id, charges_enabled) values (${org.id}, ${accountId}, true)`);
+  await db.execute(sql`insert into connections (organization_id, provider, kind, status, external_account_id) values (${org.id}, 'stripe_connect', 'processor', 'connected', ${accountId})`);
   const [customer] = await db.execute<{ id: string }>(sql`insert into customers (organization_id, name) values (${org.id}, 'Test customer') returning id`);
   async function invoice() {
     const [job] = await db.execute<{ id: string }>(sql`insert into jobs (organization_id, customer_id, name) values (${org.id}, ${customer.id}, 'Test job') returning id`);

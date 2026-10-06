@@ -4,7 +4,6 @@ import { and, eq, gte, inArray, isNotNull, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { COLLECTION_TYPES, documents, jobs, ledgerEntries } from "@/lib/db/schema";
-import { listInvoices } from "@/lib/queries/invoices";
 
 /**
  * BUSINESS ANALYTICS — the Pro set named in Billing §2.2: quote acceptance,
@@ -96,7 +95,33 @@ export type AgingBucket = { label: string; count: number; cents: number };
 
 /** What's owed, by how late it is. */
 export async function agingBalances(organizationId: string): Promise<AgingBucket[]> {
-  const invoices = await listInvoices(organizationId, { limit: 1000 });
+  // Aggregate the complete receivable set. UI pagination must never limit a
+  // financial total; refunds and chargebacks use the same fold as invoices.
+  const today = new Date().toISOString().slice(0, 10);
+  const rows = await db.execute<{ bucket: number; count: number; cents: string }>(sql`
+    with balances as (
+      select greatest(0, i.amount_due_cents - coalesce(p.collected, 0)) as owed,
+        greatest(0, ${today}::date - i.due_on) as days
+      from documents d
+      join invoice_details i on i.document_id = d.id
+      join jobs j on j.id = d.job_id
+      left join (
+        select invoice_id, sum(amount_cents) as collected from ledger_entries
+        where organization_id = ${organizationId}
+          and entry_type in (${sql.join(COLLECTION_TYPES.map(type => sql`${type}`), sql`, `)})
+        group by invoice_id
+      ) p on p.invoice_id = d.id
+      where d.organization_id = ${organizationId} and d.type = 'invoice'
+        and d.status not in ('draft', 'void') and i.voided_at is null
+        and j.is_demo = false
+    ), aged as (
+      select owed, case when days <= 0 then 0 when days <= 30 then 1
+        when days <= 60 then 2 when days <= 90 then 3 else 4 end as bucket
+      from balances where owed > 0
+    )
+    select bucket, count(*)::int as count, sum(owed)::text as cents
+    from aged group by bucket
+  `);
   const buckets: AgingBucket[] = [
     { label: "Not due yet", count: 0, cents: 0 },
     { label: "1–30 days late", count: 0, cents: 0 },
@@ -104,12 +129,9 @@ export async function agingBalances(organizationId: string): Promise<AgingBucket
     { label: "61–90 days late", count: 0, cents: 0 },
     { label: "Over 90 days late", count: 0, cents: 0 },
   ];
-  for (const invoice of invoices) {
-    if (invoice.outstandingCents <= 0 || invoice.status === "draft" || invoice.effectiveStatus === "void") continue;
-    const days = invoice.daysPastDue;
-    const index = days <= 0 ? 0 : days <= 30 ? 1 : days <= 60 ? 2 : days <= 90 ? 3 : 4;
-    buckets[index].count += 1;
-    buckets[index].cents += invoice.outstandingCents;
+  for (const row of rows) {
+    buckets[row.bucket].count = row.count;
+    buckets[row.bucket].cents = Number(row.cents);
   }
   return buckets;
 }

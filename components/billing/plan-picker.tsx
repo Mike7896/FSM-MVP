@@ -63,7 +63,12 @@ export type CurrentConfig = {
 
 type Mode =
   | { kind: "public"; signUpHref: string }
-  | { kind: "checkout"; returnPath?: string }
+  | {
+      kind: "checkout";
+      returnPath?: string;
+      /** A free period is running: the first charge waits for it (ISO, UTC midnight). */
+      firstChargeAt?: string | null;
+    }
   | { kind: "change"; current: CurrentConfig; canChange: boolean; blockedReason?: string };
 
 export type Preview = {
@@ -90,6 +95,11 @@ function featureLines(tier: PaidTier | "free") {
     ...(tier === "pro" ? ["Everything in Starter", "Your logo on documents", "Quote-view tracking", "Business analytics", "Priority email support"] : []),
     `${Math.round(f.storageBytes / GB)} GB of attachment storage`,
   ];
+}
+
+/** A free period's first-charge day — a whole UTC day, named in UTC so it's never a day early. */
+function utcDay(date: Date) {
+  return date.toLocaleDateString("en-US", { month: "long", day: "numeric", timeZone: "UTC" });
 }
 
 function per(interval: BillingInterval) {
@@ -153,7 +163,7 @@ export function PlanPicker({
       const preview = await post<Preview>("/api/v1/membership/preview", target);
       setConfirming({ tier, preview });
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "That didn't work. Nothing was charged.");
+      toast.error(error instanceof Error ? error.message : "We couldn't confirm the result. Refresh your bill before trying again.");
     } finally {
       setBusy(null);
     }
@@ -177,7 +187,7 @@ export function PlanPicker({
       setConfirming(null);
       router.refresh();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "That didn't work. Nothing was charged.");
+      toast.error(error instanceof Error ? error.message : "We couldn't confirm the result. Refresh your bill before trying again.");
     } finally {
       setBusy(null);
     }
@@ -209,6 +219,14 @@ export function PlanPicker({
           </Label>
         ) : null}
       </div>
+
+      {mode.kind === "checkout" && mode.firstChargeAt ? (
+        <p className="rounded-lg border border-emerald-500/40 bg-emerald-500/[0.06] px-4 py-3 text-sm">
+          <strong className="font-medium">Your free time carries over.</strong> Choose a plan now and nothing is
+          charged until {utcDay(new Date(mode.firstChargeAt))} — your card is saved at checkout, and you can change or
+          cancel before then.
+        </p>
+      ) : null}
 
       {pricing.founding ? (
         <p className="border-primary/40 bg-primary/[0.04] rounded-lg border px-4 py-3 text-sm">
@@ -440,7 +458,7 @@ export async function post<T>(url: string, body: unknown): Promise<T> {
   });
   const payload = (await response.json().catch(() => null)) as { data?: T; error?: { message?: string } } | null;
   if (!response.ok || !payload?.data) {
-    throw new Error(payload?.error?.message ?? "That didn't work. Nothing was charged.");
+    throw new Error(payload?.error?.message ?? "We couldn't confirm the result. Refresh your bill before trying again.");
   }
   return payload.data;
 }
