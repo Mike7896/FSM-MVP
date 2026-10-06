@@ -13,6 +13,7 @@ import {
   ledgerEntries,
   permits,
   receipts,
+  savedItems,
 } from "@/lib/db/schema";
 import { quoteTotalExpression } from "@/lib/queries/scope-sql";
 
@@ -37,6 +38,7 @@ import { dollars, stamp, type CsvRow } from "./csv";
  */
 
 export const EXPORT_TABLES = [
+  { id: "saved-items", label: "Saved items", file: "saved-items" },
   { id: "customers", label: "Customers", file: "customers" },
   { id: "jobs", label: "Jobs", file: "jobs" },
   { id: "quotes", label: "Quotes", file: "quotes" },
@@ -481,6 +483,15 @@ const BUILDERS: Record<
   ExportTable,
   (organizationId: string) => Promise<ExportSet>
 > = {
+  "saved-items": async organizationId => {
+    const rows = await db.select().from(savedItems).where(eq(savedItems.organizationId, organizationId));
+    return {
+      columns: ["Id", "Name", "Template", "Settings", "Defaults", "Summary", "Source", "Pack"],
+      rows: rows.map(row => ({ Id: row.id, Name: row.name, Template: JSON.stringify(row.template),
+        Settings: JSON.stringify(row.settings), Defaults: JSON.stringify(row.defaults), Summary: row.summary,
+        Source: row.source, Pack: row.packId })),
+    };
+  },
   customers: customerRows,
   jobs: jobRows,
   quotes: quoteRows,

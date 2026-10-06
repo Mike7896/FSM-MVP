@@ -232,7 +232,7 @@ export function FounderPanels({ metrics }: { metrics: AdminMetrics }) {
           format={(value) => `${value} person-hour${value === 1 ? "" : "s"}`}
         />
       </Panel>
-      <Panel title="Plans and packs" aside="paying and past-due memberships">
+      <Panel title="Plans and packs" aside="paying, trialing and past-due memberships">
 
         {revenue.planMix.length ? (
           <Table

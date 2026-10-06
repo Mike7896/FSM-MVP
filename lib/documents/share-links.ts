@@ -7,6 +7,7 @@ import { and, desc, eq, gt, isNull, or } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { shareLinks } from "@/lib/db/schema";
 import { absoluteUrl } from "@/lib/env";
+import { commitDocumentPublication } from "@/lib/membership/activation";
 
 import type { Executor } from "./repository";
 
@@ -56,6 +57,10 @@ export async function ensureShareLink(
   scopes: ShareScope[],
   on: Executor = db
 ): Promise<{ token: string; url: string }> {
+  if (on === db) return db.transaction(tx => ensureShareLink(document, scopes, tx));
+  // The link and its activation either commit together or both roll back.
+  // Later delivery/recording failures cannot release a published job's slot.
+  await commitDocumentPublication(document.jobId, on);
   const live = await liveShareLink(document.id, on);
 
   if (live) {

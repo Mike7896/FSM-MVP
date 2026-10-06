@@ -51,7 +51,7 @@ export function SignupForm({ next = "/welcome" }: { next?: string }) {
       const response = await fetch("/api/v1/auth/sign-up", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(values),
+        body: JSON.stringify({ ...values, next }),
       }).catch(() => null);
 
       const body = (await response?.json().catch(() => null)) as {
@@ -168,7 +168,7 @@ export function SignupForm({ next = "/welcome" }: { next?: string }) {
       <CardFooter>
         <p className="text-muted-foreground w-full text-center text-sm">
           Already have an account?{" "}
-          <Link href="/login" className="underline underline-offset-4">
+          <Link href={`/login?next=${encodeURIComponent(next)}`} className="underline underline-offset-4">
             Sign in
           </Link>
         </p>

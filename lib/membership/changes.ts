@@ -1,6 +1,8 @@
 import "server-only";
 
 import type Stripe from "stripe";
+import { randomUUID } from "node:crypto";
+import { and, desc, eq, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { withOperationLock } from "@/lib/db/operation-lock";
@@ -23,6 +25,7 @@ import { getPriceBook, priceIdFor } from "./prices";
 import { configOf, reconcileSubscription, roleOf } from "./reconcile";
 import { getReleases } from "./releases";
 import { reportError } from "@/lib/observability";
+import { runPlanTransition, sameConfig, type PlanTransition } from "./transition";
 
 /**
  * CHANGING A MEMBERSHIP (§5.2).
@@ -31,9 +34,9 @@ import { reportError } from "@/lib/observability";
  * tier, interval, packs. That one target splits into two changes:
  *
  * - **Now**, for whatever costs more: a higher tier or an added pack, prorated
- *   to the renewal date and paid before it is granted. Stripe holds the update
- *   as *pending* until its invoice is paid, so a declined card leaves the old
- *   configuration exactly as it was.
+ *   to the renewal date and paid before it is granted. Stripe holds ordinary
+ *   updates pending payment. An existing renewal choice instead uses an atomic
+ *   decline so its schedule can be restored immediately when payment fails.
  * - **At renewal**, for whatever costs less or changes the interval: a lower
  *   tier, a removed pack, monthly ↔ annual. Kept in a Stripe subscription
  *   schedule so the change is on Stripe's side as well as ours.
@@ -240,6 +243,14 @@ async function applyChangeLocked(input: {
   now?: Date;
 }): Promise<ChangeResult> {
   const now = input.now ?? new Date();
+  const existing = await latestTransition(input.organizationId);
+  if (existing && (existing.phase !== "complete" && existing.phase !== "aborted" ||
+    existing.prorationDate === input.prorationDate && sameConfig(existing.target, input.target))) {
+    if (!sameConfig(existing.target, input.target) || existing.prorationDate !== input.prorationDate) {
+      throw new DomainError("Your previous plan change is still finishing. Please retry it or wait for its payment.", "conflict");
+    }
+    return transitionResult(await executeTransition(input.organizationId, existing, now));
+  }
   const age = now.getTime() / 1000 - input.prorationDate;
   if (age < 0 || age > 30 * 60) {
     throw new DomainError("That price check is out of date. Review the change again.", "conflict");
@@ -260,73 +271,38 @@ async function applyChangeLocked(input: {
 
   const founding = access.founding.price;
   const split = splitTarget(current, input.target);
-  const schedule =
-    subscription.schedule && typeof subscription.schedule !== "string" ? subscription.schedule : null;
   const previousScheduled = access.scheduled;
+  const transition: PlanTransition = {
+    id: randomUUID(), subscriptionId: subscription.id, target: input.target,
+    immediate: split.immediate, scheduled: split.scheduled,
+    previous: previousScheduled?.tier && previousScheduled.interval
+      ? { tier: previousScheduled.tier, interval: previousScheduled.interval, packs: previousScheduled.packs as PackId[] } : null,
+    previousCancel: access.cancelAtPeriodEnd, founding, prorationDate: input.prorationDate,
+    periodEnd: subscription.items.data[0].current_period_end,
+    update: split.immediate ? {
+      items: await itemUpdates(subscription, split.immediate, founding),
+      proration_behavior: "always_invoice", proration_date: input.prorationDate,
+      // Stripe cannot restore a schedule while an update is pending. Protect
+      // an existing renewal choice with an atomic decline, then restore it.
+      payment_behavior: previousScheduled || access.cancelAtPeriodEnd ? "error_if_incomplete" : "pending_if_incomplete",
+      expand: ["latest_invoice"],
+    } : {},
+    phase: "prepared", invoiceUrl: null,
+  };
+  await saveTransition(input.organizationId, transition, input.actorUserId);
+  return transitionResult(await executeTransition(input.organizationId, transition, now));
+}
 
-  // One scheduled configuration per shop: the old one goes, and the new one
-  // (if any) is written after the immediate part has been paid for.
-  if (schedule && schedule.status !== "released" && schedule.status !== "canceled") {
-    await stripe().subscriptionSchedules.release(schedule.id);
-  }
-
-  if (split.immediate) {
-    const updated = await stripe().subscriptions.update(
-      subscription.id,
-      {
-        items: await itemUpdates(subscription, split.immediate, founding),
-        proration_behavior: "always_invoice",
-        proration_date: input.prorationDate,
-        payment_behavior: "pending_if_incomplete",
-        expand: ["latest_invoice"],
-      },
-      { idempotencyKey: `membership:${input.organizationId}:${input.prorationDate}:${JSON.stringify(split.immediate)}` }
-    );
-
-    if (updated.pending_update) {
-      // Not paid, so not granted. Put the old renewal plan back as it was.
-      if (previousScheduled && previousScheduled.tier && previousScheduled.interval) {
-        await writeSchedule(subscription.id, {
-          tier: previousScheduled.tier,
-          interval: previousScheduled.interval,
-          packs: previousScheduled.packs as PackId[],
-        }, founding).catch((error) =>
-          reportError("[membership] couldn't restore the scheduled change:", error)
-        );
-      }
-      await reconcileSubscription(subscription.id);
-      const invoice =
-        updated.latest_invoice && typeof updated.latest_invoice !== "string" ? updated.latest_invoice : null;
-      await log(input.organizationId, input.actorUserId, "change.payment_required", { target: input.target });
-      return {
-        status: "payment_required",
-        invoiceUrl: invoice?.hosted_invoice_url ?? null,
-        message:
-          "Your card didn't go through, or your bank wants to confirm it. Nothing has changed yet — finish the payment and the change applies straight away.",
-      };
-    }
-  }
-
-  if (split.scheduled) {
-    await writeSchedule(subscription.id, split.scheduled, founding);
-  }
-
-  // Choosing a plan is choosing to stay: a pending cancellation is undone.
-  if (access.cancelAtPeriodEnd) {
-    await stripe().subscriptions.update(subscription.id, { cancel_at_period_end: false });
-  }
-
-  await reconcileSubscription(subscription.id);
-  await log(input.organizationId, input.actorUserId, "change.applied", {
-    target: input.target,
-    immediate: split.immediate,
-    scheduled: split.scheduled,
-  });
-
+function transitionResult(state: PlanTransition): ChangeResult {
+  if (state.phase === "aborted") throw new DomainError("That change wasn't completed. Your previous renewal choice has been preserved. Review your plan and try again.", "conflict");
+  if (state.phase === "waiting") return {
+    status: "payment_required", invoiceUrl: state.invoiceUrl,
+    message: "Finish the payment to apply your change. Your requested renewal plan is saved too.",
+  };
   return {
     status: "applied",
     preview: {
-      current,
+      current: state.target,
       immediate: null,
       scheduled: null,
       renewalCents: null,
@@ -336,23 +312,89 @@ async function applyChangeLocked(input: {
   };
 }
 
+async function latestTransition(organizationId: string): Promise<PlanTransition | null> {
+  const [row] = await db.select({ detail: billingEvents.detail }).from(billingEvents)
+    .where(and(eq(billingEvents.organizationId, organizationId), eq(billingEvents.kind, "change.transition")))
+    .orderBy(desc(billingEvents.id)).limit(1);
+  return row?.detail ? row.detail as unknown as PlanTransition : null;
+}
+
+async function saveTransition(organizationId: string, state: PlanTransition, actorUserId: string | null = null) {
+  await log(organizationId, actorUserId, "change.transition", { ...state });
+}
+
+async function executeTransition(organizationId: string, state: PlanTransition, now?: Date) {
+  const result = await runPlanTransition(state, {
+    save: next => saveTransition(organizationId, next),
+    read: async () => {
+      const sub = await stripe().subscriptions.retrieve(state.subscriptionId, { expand: ["schedule", "latest_invoice"] });
+      return { config: currentConfig(sub), pending: Boolean(sub.pending_update),
+        ended: ["canceled", "incomplete_expired"].includes(sub.status),
+        scheduleId: typeof sub.schedule === "string" ? sub.schedule : sub.schedule?.id ?? null,
+        invoiceUrl: typeof sub.latest_invoice === "object" ? sub.latest_invoice?.hosted_invoice_url ?? null : null };
+    },
+    release: async id => { await stripe().subscriptionSchedules.release(id); },
+    update: async (params, key) => { await stripe().subscriptions.update(state.subscriptionId, params, { idempotencyKey: key }); },
+    schedule: config => writeSchedule(state.subscriptionId, config, state.founding),
+    cancelAtEnd: async cancel => {
+      const sub = await stripe().subscriptions.retrieve(state.subscriptionId);
+      const scheduleId = typeof sub.schedule === "string" ? sub.schedule : sub.schedule?.id;
+      if (scheduleId) {
+        await stripe().subscriptionSchedules.update(scheduleId, { end_behavior: cancel ? "cancel" : "release" });
+      } else if (sub.cancel_at_period_end !== cancel) {
+        await stripe().subscriptions.update(sub.id, { cancel_at_period_end: cancel });
+      }
+    },
+    now: () => Math.floor((now?.getTime() ?? Date.now()) / 1000),
+  });
+  await reconcileSubscription(state.subscriptionId);
+  return result;
+}
+
+/** Webhooks and the sweep resume the recorded command, never a new charge. */
+export async function recoverPlanChange(organizationId: string, now?: Date) {
+  return withOperationLock(organizationId, 26, async () => {
+    const state = await latestTransition(organizationId);
+    if (!state || state.phase === "complete" || state.phase === "aborted") return;
+    await executeTransition(organizationId, state, now);
+  });
+}
+
+export async function recoverPlanChanges(now = new Date()) {
+  const rows = await db.execute<{ organization_id: string }>(sql`
+    select organization_id from (
+      select distinct on (organization_id) organization_id, detail
+      from billing_events where kind = 'change.transition' and organization_id is not null
+      order by organization_id, id desc
+    ) latest where detail->>'phase' not in ('complete', 'aborted')
+  `);
+  for (const row of rows) await recoverPlanChange(row.organization_id, now).catch(error =>
+    reportError("[membership] plan change needs recovery", error, { extra: { organizationId: row.organization_id } }));
+}
+
 /**
  * The next renewal's configuration, as a Stripe subscription schedule: this
  * period as it is, then one period of `next`, then released to run on.
  */
-async function writeSchedule(subscriptionId: string, next: MembershipConfig, founding: boolean) {
-  const schedule = await stripe().subscriptionSchedules.create({ from_subscription: subscriptionId });
-  const phase = schedule.phases[0];
+export async function writeSchedule(subscriptionId: string, next: MembershipConfig, founding: boolean) {
+  const subscription = await stripe().subscriptions.retrieve(subscriptionId, { expand: ["schedule"] });
+  const attached = subscription.schedule;
+  const schedule = typeof attached === "string" ? await stripe().subscriptionSchedules.retrieve(attached)
+    : attached ?? await stripe().subscriptionSchedules.create({ from_subscription: subscriptionId });
+  // Stripe allows only one attached schedule. A lost create response is
+  // recovered from subscription.schedule. Do not reuse a create key after a
+  // restored schedule was later released: Stripe would return that dead one.
+  const phase = schedule.phases.find(p => p.start_date === schedule.current_phase?.start_date) ?? schedule.phases[0];
   if (!phase) throw new DomainError("Stripe didn't return the current phase.", "failed");
-  const subscription = await stripe().subscriptions.retrieve(subscriptionId);
   const currentInterval = configOf(subscription.items.data.map((item) => item.price)).interval;
 
   await stripe().subscriptionSchedules.update(schedule.id, {
     end_behavior: "release",
+    proration_behavior: "none",
     phases: [
       {
-        items: phase.items.map((item) => ({
-          price: typeof item.price === "string" ? item.price : item.price.id,
+        items: subscription.items.data.map((item) => ({
+          price: item.price.id,
           quantity: item.quantity ?? 1,
         })),
         start_date: phase.start_date,
@@ -378,6 +420,19 @@ export async function cancelMembership(organizationId: string, actorUserId: stri
 }
 
 async function cancelMembershipLocked(organizationId: string, actorUserId: string) {
+  const transition = await latestTransition(organizationId);
+  if (transition && !["complete", "aborted"].includes(transition.phase)) {
+    const sub = await stripe().subscriptions.retrieve(transition.subscriptionId, { expand: ["latest_invoice"] });
+    // A cancellation supersedes the saved purchase. Void an unpaid upgrade so
+    // paying its old link cannot resurrect it after cancellation.
+    if (sub.pending_update && sub.latest_invoice) {
+      const invoice = typeof sub.latest_invoice === "string"
+        ? await stripe().invoices.retrieve(sub.latest_invoice) : sub.latest_invoice;
+      if (invoice.status === "open") await stripe().invoices.voidInvoice(invoice.id);
+    }
+    await saveTransition(organizationId, { ...transition, phase: "aborted" }, actorUserId);
+    await reconcileSubscription(transition.subscriptionId);
+  }
   const access = await readAccess(organizationId);
   if (!access.subscriptionId) throw new DomainError("There's no membership to cancel.", "conflict");
 
@@ -398,6 +453,7 @@ export async function resumeMembership(organizationId: string, actorUserId: stri
 }
 
 async function resumeMembershipLocked(organizationId: string, actorUserId: string) {
+  await requireFinishedTransition(organizationId);
   const access = await readAccess(organizationId);
   if (!access.subscriptionId || !access.cancelAtPeriodEnd) {
     throw new DomainError("Your membership isn't set to end.", "conflict");
@@ -413,6 +469,7 @@ export async function keepCurrentPlan(organizationId: string, actorUserId: strin
 }
 
 async function keepCurrentPlanLocked(organizationId: string, actorUserId: string) {
+  await requireFinishedTransition(organizationId);
   const access = await readAccess(organizationId);
   if (!access.subscriptionId || !access.scheduled || access.scheduled.tier === null) {
     throw new DomainError("Nothing is scheduled to change.", "conflict");
@@ -425,6 +482,13 @@ async function keepCurrentPlanLocked(organizationId: string, actorUserId: string
   }
   await reconcileSubscription(subscription.id);
   await log(organizationId, actorUserId, "change.unscheduled", {});
+}
+
+async function requireFinishedTransition(organizationId: string) {
+  const state = await latestTransition(organizationId);
+  if (state && !["complete", "aborted"].includes(state.phase)) {
+    throw new DomainError("A plan change is still finishing. Finish its payment or cancel the membership before changing its renewal again.", "conflict");
+  }
 }
 
 /** The configuration the next renewal will bill — what a pack or plan button edits. */

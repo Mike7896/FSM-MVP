@@ -27,19 +27,25 @@ export function BillCard({
   const { access, bill, nextBill, card } = overview;
 
   if (!bill) {
+    const comp = access.standing === "comp" ? access.comp : null;
+    // A free period with an end: say when, and let them choose what comes
+    // after now — checkout turns the rest of it into a trial.
+    const freeEnds = comp?.endsAt ?? null;
     return (
       <div className="rounded-2xl border bg-card p-6 sm:p-8">
         <p className="font-medium">
-          {access.standing === "comp" ? "Complimentary Pro" : "You're on Free"}
+          {freeEnds ? `Free Pro through ${dayOf(lastDayBefore(freeEnds))}` : comp ? "Complimentary Pro" : "You're on Free"}
         </p>
         <p className="text-muted-foreground mt-1 text-sm">
-          {access.standing === "comp"
-            ? "You won't be charged for ServiceClerk."
-            : "Three new jobs a month, each one finished and paid for without using another. A plan lifts the limit."}
+          {freeEnds
+            ? `Choose the plan you'll keep after that — nothing is charged until ${dayOf(freeEnds)}. Or don't, and you'll move to Free; everything you've made stays.`
+            : comp
+              ? "You won't be charged for ServiceClerk."
+              : "Three new jobs a month, each one finished and paid for without using another. A plan lifts the limit."}
         </p>
-        {access.standing === "comp" ? null : (
+        {comp && !freeEnds ? null : (
           <Button asChild className="mt-4">
-            <Link href="/account/billing/plan">See the plans</Link>
+            <Link href="/account/billing/plan">{freeEnds ? "Choose your plan" : "See the plans"}</Link>
           </Button>
         )}
       </div>
@@ -47,24 +53,43 @@ export function BillCard({
   }
 
   const renews = access.currentPeriodEnd;
+  const trialEnds = access.trialEndsAt;
   const per = bill.interval === "year" ? "/yr" : "/mo";
 
   return (
     <div className="rounded-2xl border bg-card p-6 sm:p-8">
-      <p className="text-muted-foreground mb-3 text-xs font-medium uppercase tracking-wider">Membership total</p>
+      <p className="text-muted-foreground mb-3 text-xs font-medium uppercase tracking-wider">
+        {bill.upcoming ? "Next invoice estimate" : "Plan subtotal before discounts and tax"}
+      </p>
 
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <span className="text-3xl font-semibold tracking-tight tabular-nums">
-          {bill.totalCents === null ? "—" : formatMoney(bill.totalCents)}
-          <span className="text-muted-foreground text-sm font-normal">{per}</span>
-          <span className="text-muted-foreground mt-2 block text-xs font-normal">Plus applicable tax</span>
+          {bill.upcoming
+            ? new Intl.NumberFormat("en-US", { style: "currency", currency: bill.upcoming.currency }).format(bill.upcoming.amountDueCents / 100)
+            : bill.totalCents === null ? "—" : formatMoney(bill.totalCents)}
+          {bill.upcoming ? null : <span className="text-muted-foreground text-sm font-normal">{per}</span>}
+          <span className="text-muted-foreground mt-2 block text-xs font-normal">
+            {bill.upcoming
+              ? "Includes discounts, credits and estimated tax. The final invoice may change."
+              : access.cancelAtPeriodEnd ? "Your membership is set to end." : "Next invoice estimate unavailable. See Card and invoices for your bills."}
+          </span>
         </span>
         <span className="text-muted-foreground text-sm">
-          {access.cancelAtPeriodEnd ? "ends" : "renews"} {renews ? dateOf(renews) : "—"}
+          {trialEnds && !access.cancelAtPeriodEnd
+            ? `first charge ${dayOf(trialEnds)}`
+            : `${access.cancelAtPeriodEnd ? "ends" : "renews"} ${renews ? dateOf(renews) : "—"}`}
         </span>
       </div>
 
+      {trialEnds ? (
+        <p className="bg-muted/50 mt-4 rounded-lg p-3 text-sm">
+          Free through {dayOf(lastDayBefore(trialEnds))}. Your card isn&apos;t charged before {dayOf(trialEnds)}, and you can
+          change or cancel the plan until then.
+        </p>
+      ) : null}
+
       <Separator className="my-6" />
+      <p className="text-muted-foreground mb-3 text-xs">Plan prices before discounts and tax</p>
       <Lines bill={bill} />
 
       {card?.last4 ? (
@@ -103,7 +128,7 @@ export function BillCard({
               {describe(access.scheduled.tier!, access.scheduled.packs as PackId[])}
             </strong>
             {nextBill.totalCents !== null
-              ? `, ${formatMoney(nextBill.totalCents)}${nextBill.interval === "year" ? "/yr" : "/mo"} plus applicable tax`
+              ? `, ${formatMoney(nextBill.totalCents)}${nextBill.interval === "year" ? "/yr" : "/mo"} before discounts and tax`
               : ""}
             . You keep what you have until then.
           </p>
@@ -154,6 +179,20 @@ function describe(tier: "starter" | "pro", packs: PackId[]) {
 
 export function dateOf(date: Date) {
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+/**
+ * A free period's dates are whole UTC days (it runs through its last day,
+ * and the first charge is midnight UTC after it), so they're named in UTC —
+ * never a day early on a server or browser west of Greenwich.
+ */
+function dayOf(date: Date) {
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+}
+
+/** The last free day, for an end at midnight after it. */
+function lastDayBefore(end: Date) {
+  return new Date(end.getTime() - 1);
 }
 
 function titleCase(value: string) {

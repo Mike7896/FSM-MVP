@@ -425,7 +425,7 @@ export function comparisonGroups(options: {
     {
       title: "Working faster",
       rows: [
-        // Saved-item entitlement is reserved for paid plans, but its editor is not shipped yet.
+        { label: "Saved line items, groups and assemblies", values: each((f) => f.savedItems) },
         ...(options.electricalAddOn
           ? [{
               label: "Electrical presets and specialist inputs",

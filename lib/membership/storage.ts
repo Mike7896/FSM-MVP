@@ -65,7 +65,11 @@ export async function assertStoredFileWithinLimit(path: string) {
     where bucket_id = ${BUCKETS.jobAttachments} and name = ${path}
     limit 1
   `);
-  const size = Number(rows[0]?.size ?? 0);
+  const metadataSize = rows[0]?.size;
+  const size = Number(metadataSize);
+  if (metadataSize == null || !Number.isSafeInteger(size) || size <= 0) {
+    throw new DomainError("The uploaded file could not be verified. Upload it again before saving.", "invalid");
+  }
   if (size > POLICY.maxUploadBytes) {
     // Through the Storage API, never a SQL delete: that would orphan the bytes.
     await createAdminClient().storage.from(BUCKETS.jobAttachments).remove([path]).catch(() => undefined);

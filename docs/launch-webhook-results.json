@@ -1,0 +1,70 @@
+[
+  {
+    "name": "Configured Stripe sandbox webhook endpoints",
+    "endpoints": []
+  },
+  {
+    "name": "/api/stripe/webhook rejects unsigned requests",
+    "status": "passed"
+  },
+  {
+    "name": "/api/stripe/webhook rejects expired signatures",
+    "status": "passed"
+  },
+  {
+    "name": "/api/stripe/webhook accepts a valid signature without a login",
+    "status": "passed"
+  },
+  {
+    "name": "/api/stripe/webhook rejects changed raw bytes",
+    "status": "passed"
+  },
+  {
+    "name": "/api/stripe/connect/webhook signing configuration",
+    "status": "blocked",
+    "detail": "STRIPE_CONNECT_WEBHOOK_SECRET missing",
+    "httpStatus": 500
+  },
+  {
+    "name": "Membership sweep refuses an unauthenticated trigger",
+    "status": "passed"
+  },
+  {
+    "name": "Cron local configuration",
+    "secretConfigured": true,
+    "unauthorizedStatus": 401
+  },
+  {
+    "name": "Signed subscription event reconciles the real sandbox subscription",
+    "status": "passed"
+  },
+  {
+    "name": "Duplicate event is acknowledged without repeating effects",
+    "status": "passed"
+  },
+  {
+    "name": "Paid sandbox subscription grants Starter",
+    "status": "passed"
+  },
+  {
+    "name": "Discount billing display",
+    "status": "confirmed-audit-finding",
+    "displayedCents": 2900,
+    "upcomingCents": 1450,
+    "discount": "50% ongoing"
+  },
+  {
+    "name": "Only one webhook receipt is stored",
+    "status": "passed"
+  },
+  {
+    "name": "Later Pro snapshot was initially projected",
+    "status": "passed"
+  },
+  {
+    "name": "Overlapping retrieve/projection",
+    "status": "confirmed-audit-finding",
+    "expected": "pro",
+    "actual": "starter"
+  }
+]

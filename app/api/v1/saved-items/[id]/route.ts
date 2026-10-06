@@ -5,6 +5,7 @@ import { handlerWithParams, readJson } from "@/lib/api/handler";
 import { ApiError, ok } from "@/lib/api/response";
 import { db } from "@/lib/db";
 import { savedItems } from "@/lib/db/schema";
+import { requireSavedItems } from "@/lib/membership/features";
 import { requireSavedItem, toSavedItem } from "@/lib/queries/library";
 import { savedItemIssues, savedItemPatchSchema } from "@/lib/schemas/library";
 
@@ -21,6 +22,7 @@ export const PATCH = handlerWithParams<{ id: string }>(async (request, { id }) =
   const caller = await requireCaller(request);
   const { organizationId } = await requireOrg(request, caller);
   const body = await readJson(request, savedItemPatchSchema);
+  await requireSavedItems(organizationId);
 
   const current = await requireSavedItem(id, organizationId);
   const next = {

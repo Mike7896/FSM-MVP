@@ -3,9 +3,13 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { BUCKETS } from "@/lib/supabase/storage";
 import { DomainError } from "@/lib/errors";
 import { ATTACHMENT_TYPES, MAX_ATTACHMENT_BYTES, isAttachmentPath } from "@/lib/schemas/receipt";
+import { assertCanStoreAttachment } from "@/lib/membership/storage";
 
 // Call only after proving job ownership or possession of a live reply token.
 export async function attachmentSlot(prefix: string, fileName: string) {
+  // All prefixes are built after access validation and start with the shop.
+  // Apply the same full-quota guard to homeowner and contractor uploads.
+  await assertCanStoreAttachment(prefix.split("/")[0]);
   const safe = fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
   const path = `${prefix}/${crypto.randomUUID()}-${safe}`;
   const { data, error } = await createAdminClient().storage.from(BUCKETS.jobAttachments).createSignedUploadUrl(path);

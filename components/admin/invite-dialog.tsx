@@ -150,7 +150,7 @@ export function InviteDialog({ onClose, onInvited }: { onClose: () => void; onIn
               ) : null}
               <p className="text-muted-foreground text-xs">
                 {freeUntil
-                  ? `Everything in Pro, charged nothing, through ${longDate(freeUntil)}. After that they're on Free until they subscribe.`
+                  ? `Everything in Pro, charged nothing, through ${longDate(freeUntil)}. If they choose a plan before then, the first charge waits until it's over; if they don't, they move to Free.`
                   : "None: they start on Free, with the usual 14-day pack trials, and subscribe when they're ready."}
               </p>
             </div>

@@ -4,6 +4,7 @@ import { created } from "@/lib/api/response";
 import { absoluteUrl } from "@/lib/env";
 import { signUpSchema } from "@/lib/schemas";
 import { createClient } from "@/lib/supabase/server";
+import { validatedSignupDestination } from "@/lib/membership/purchase-intent";
 
 /**
  * `POST /api/v1/auth/sign-up`
@@ -28,7 +29,7 @@ export const POST = handler(async (request) => {
     options: {
       // Journey 0: a new account lands on its first quote, never on an empty
       // dashboard. A nav bar with nothing behind it is the named failure mode.
-      emailRedirectTo: absoluteUrl("/auth/confirm?next=/welcome"),
+      emailRedirectTo: absoluteUrl(`/auth/confirm?next=${encodeURIComponent(validatedSignupDestination(body.next))}`),
       data: { full_name: body.fullName || undefined },
     },
   });

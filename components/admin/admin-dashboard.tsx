@@ -46,6 +46,18 @@ import {
   TrendPanels,
 } from "./admin-panels";
 import {
+  ActivityPanelsSkeleton,
+  BusinessesPanelSkeleton,
+  DashboardSkeleton,
+  FounderKpisSkeleton,
+  FounderPanelsSkeleton,
+  FunnelPanelSkeleton,
+  KpiGridSkeleton,
+  RevenuePanelSkeleton,
+  SupportAndHealthSkeleton,
+  TrendPanelsSkeleton,
+} from "./dashboard-skeleton";
+import {
   askDesktopPermission,
   desktopPermission,
   notifyDesktop,
@@ -105,7 +117,8 @@ const TESTS: { level: AdminEventLevel; title: string; amount?: number }[] = [
 
 /**
  * Drawn in the browser only: nearly every line on it is "N minutes ago" or
- * the time now, which the server can't know.
+ * the time now, which the server can't know. Until then, the same skeleton
+ * the route shows while the server reads — so the hand-over doesn't move.
  */
 export function AdminDashboard(props: Parameters<typeof Dashboard>[0]) {
   const mounted = useSyncExternalStore(
@@ -113,13 +126,7 @@ export function AdminDashboard(props: Parameters<typeof Dashboard>[0]) {
     () => true,
     () => false
   );
-  if (!mounted) {
-    return (
-      <p className="text-muted-foreground flex items-center gap-2 p-6 text-sm">
-        <Loader2 className="size-4 animate-spin" /> Opening the live dashboard…
-      </p>
-    );
-  }
+  if (!mounted) return <DashboardSkeleton />;
   return <Dashboard {...props} />;
 }
 
@@ -334,6 +341,9 @@ function Dashboard({
     return () => document.removeEventListener("visibilitychange", seen);
   }, [unseen]);
 
+  // The first read is still on its way (not failed): hold every slot open.
+  const reading = !metrics.data && !metrics.isError;
+
   const feed = events.filter(
     (event) =>
       shownLevels.has(event.level) &&
@@ -438,6 +448,7 @@ function Dashboard({
       {/* The last big thing. */}
       {spotlight ? <Spotlight event={spotlight} now={now} /> : null}
 
+      {/* Each slot holds its skeleton until the first read lands, at the size it will be. */}
       {metrics.data ? (
         <>
           <FounderKpis metrics={metrics.data} />
@@ -446,20 +457,21 @@ function Dashboard({
       ) : metrics.isError ? (
         <p className="text-destructive rounded-lg border p-3 text-sm">{metrics.error.message}</p>
       ) : (
-        <p className="text-muted-foreground flex items-center gap-2 rounded-lg border p-3 text-sm">
-          <Loader2 className="size-4 animate-spin" /> Reading every number…
-        </p>
+        <>
+          <FounderKpisSkeleton />
+          <KpiGridSkeleton />
+        </>
       )}
 
       <div className="grid min-h-0 gap-2 xl:grid-cols-[minmax(0,1fr)_26rem]">
-        <div className="flex min-w-0 flex-col gap-2">
-          {metrics.data ? <FounderPanels metrics={metrics.data} /> : null}
-          {metrics.data ? <TrendPanels metrics={metrics.data} /> : null}
+        <div className="flex min-w-0 flex-col gap-2" aria-busy={reading || undefined}>
+          {metrics.data ? <FounderPanels metrics={metrics.data} /> : reading ? <FounderPanelsSkeleton /> : null}
+          {metrics.data ? <TrendPanels metrics={metrics.data} /> : reading ? <TrendPanelsSkeleton /> : null}
           <div className="grid gap-2 lg:grid-cols-2">
-            {metrics.data ? <FunnelPanel metrics={metrics.data} /> : null}
+            {metrics.data ? <FunnelPanel metrics={metrics.data} /> : reading ? <FunnelPanelSkeleton /> : null}
             <OnlinePanel rows={online} now={now} />
-            {metrics.data ? <RevenuePanel metrics={metrics.data} /> : null}
-            {metrics.data ? <ActivityPanels metrics={metrics.data} now={now} /> : null}
+            {metrics.data ? <RevenuePanel metrics={metrics.data} /> : reading ? <RevenuePanelSkeleton /> : null}
+            {metrics.data ? <ActivityPanels metrics={metrics.data} now={now} /> : reading ? <ActivityPanelsSkeleton /> : null}
           </div>
         </div>
 
@@ -530,6 +542,11 @@ function Dashboard({
               <HealthPanels metrics={metrics.data} now={now} />
             </div>
           </div>
+        </>
+      ) : reading ? (
+        <>
+          <BusinessesPanelSkeleton />
+          <SupportAndHealthSkeleton />
         </>
       ) : null}
     </div>

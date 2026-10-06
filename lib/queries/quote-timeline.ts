@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getAccess } from "@/lib/membership/access";
+import { visibleQuoteStatus } from "@/lib/membership/quote-visibility";
 
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 
@@ -167,7 +168,7 @@ export async function getQuoteTimeline(
       id: record.id,
       number: record.number,
       title: draft.title,
-      status: record.status,
+      status: visibleQuoteStatus(record.status, viewTracking),
       jobId: record.jobId,
       jobNumber: meta?.jobNumber ?? null,
       demo: meta?.demo ?? false,

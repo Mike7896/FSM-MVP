@@ -1,0 +1,29 @@
+[
+  {
+    "name": "Missing storage object accepted by completion size check",
+    "status": "passed"
+  },
+  {
+    "name": "Aging beyond 1000 invoices",
+    "status": "passed",
+    "expectedCount": 1001,
+    "actualCount": 1001,
+    "expectedCents": 10010000,
+    "actualCents": 10010000
+  },
+  {
+    "name": "Demo invoices in aging",
+    "status": "passed",
+    "actualCount": 0
+  },
+  {
+    "name": "Aging date boundaries, null due dates, draft/void exclusion, partial refunds and overpayments",
+    "status": "passed"
+  },
+  {
+    "name": "Release state",
+    "pro": true,
+    "electrical": false,
+    "achFee": false
+  }
+]

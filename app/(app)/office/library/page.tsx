@@ -1,4 +1,7 @@
 import type { Metadata } from "next";
+import Link from "next/link";
+import { getAccess } from "@/lib/membership/access";
+import { Button } from "@/components/ui/button";
 
 import { LibraryList } from "@/components/library/library-list";
 import { PageHeader } from "@/components/page-header";
@@ -18,6 +21,13 @@ export const metadata: Metadata = { title: "Library" };
  */
 export default async function LibraryPage() {
   const org = await requireActiveOrganization();
+  if (!(await getAccess(org.id)).features.savedItems) {
+    return <div className="flex flex-col gap-6">
+      <PageHeader title="Library" description="Save reusable line items, groups and assemblies with Starter or Pro." />
+      <p className="text-muted-foreground">Your saved items are kept for you, and existing quotes stay unchanged. They remain included in your data export.</p>
+      <Button asChild className="self-start"><Link href="/account/billing/plan">See plans</Link></Button>
+    </div>;
+  }
   const items = await listSavedItems(org.id);
 
   return (

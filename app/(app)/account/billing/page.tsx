@@ -146,7 +146,7 @@ export default async function BillingPage({ searchParams }: PageProps<"/account/
           <div>
             <p className="font-medium">Changed your mind?</p>
             <p className="text-muted-foreground mt-1 text-sm">
-              Until {dateOf(access.refund.until)} you can have your first payment back and return to Free. Once per
+              Until {dateOf(access.refund.until)} you can refund your membership payments from the first {POLICY.refundWindowDays} days and return to Free. Once per
               business.
             </p>
           </div>
@@ -155,7 +155,7 @@ export default async function BillingPage({ searchParams }: PageProps<"/account/
             label="Refund and return to Free"
             success="Refunded. You're back on Free, and everything you built is still here."
             confirm={{
-              title: "Refund your first payment?",
+              title: "Refund your membership payments?",
               lines: [
                 `Every membership payment from your first ${POLICY.refundWindowDays} days is refunded to your card — Stripe usually shows it within 5–10 days.`,
                 "Your plan and any packs end now, and you're back on Free straight away.",

@@ -1,6 +1,8 @@
 import "server-only";
 
 import { cache } from "react";
+import { stripe } from "@/lib/stripe/server";
+import { reportWarning } from "@/lib/observability";
 
 import { getAccess, type Access } from "./access";
 import {
@@ -38,7 +40,21 @@ export type Bill = {
   /** Pre-tax, per interval. Null when any line has no price here. */
   totalCents: number | null;
   interval: BillingInterval;
+  /** Stripe's next invoice estimate, including discounts, credits and tax. */
+  upcoming?: { amountDueCents: number; currency: string } | null;
 };
+
+const upcomingInvoice = cache(async (subscriptionId: string) => {
+  try {
+    const invoice = await stripe().invoices.createPreview({ subscription: subscriptionId });
+    return { amountDueCents: invoice.amount_due, currency: invoice.currency };
+  } catch (error) {
+    // Cancellation can legitimately leave no next invoice. Never disguise an
+    // unavailable estimate as the undiscounted catalog amount.
+    reportWarning("[billing] Next invoice estimate unavailable", error);
+    return null;
+  }
+});
 
 export async function billFor(
   config: { tier: PaidTier; interval: BillingInterval; packs: readonly PackId[] },
@@ -68,23 +84,29 @@ export async function billFor(
 export async function currentBill(access: Access): Promise<Bill | null> {
   if (access.configuredTier === "free" || !access.interval || access.standing === "free") return null;
   const packs = PACK_IDS.filter((pack) => access.configuredPacks.includes(pack));
-  return billFor(
+  const bill = await billFor(
     { tier: access.configuredTier as PaidTier, interval: access.interval, packs },
     access.founding.price
   );
+  return { ...bill, upcoming: access.subscriptionId && !access.cancelAtPeriodEnd
+    ? await upcomingInvoice(access.subscriptionId) : null };
 }
 
 /** "$37/mo" or "$370/yr" — the account menu's answer to "what am I paying?" */
 export const getBillSummary = cache(async (organizationId: string): Promise<string | null> => {
   const access = await getAccess(organizationId);
-  const bill = await currentBill(access);
+  // The navigation summary is a catalog subtotal, not an invoice quote. Keep
+  // Stripe invoice previews confined to the billing screen.
+  const bill = access.configuredTier !== "free" && access.standing !== "free" && access.interval
+    ? await billFor({ tier: access.configuredTier, interval: access.interval, packs: access.configuredPacks as PackId[] }, access.founding.price)
+    : null;
   if (!bill || bill.totalCents === null) return null;
   const dollars = new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
     minimumFractionDigits: bill.totalCents % 100 === 0 ? 0 : 2,
   }).format(bill.totalCents / 100);
-  return `${dollars}/${bill.interval === "year" ? "yr" : "mo"}`;
+  return `${dollars}/${bill.interval === "year" ? "yr" : "mo"} before discounts and tax`;
 });
 
 export type PublicPricing = {
