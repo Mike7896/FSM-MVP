@@ -137,17 +137,8 @@ const serverSchema = z.object({
   TWILIO_FROM: z.string().min(1).optional(),
 });
 
-function parse<T extends z.ZodType>(
-  schema: T,
-  values: Record<string, string | undefined>,
-  label: string
-) {
-  // A blank `KEY=` is a reminder that the value isn't filled in yet, so it reads
-  // as unset: optional settings stay off, required ones say they're missing.
-  const filled = Object.fromEntries(
-    Object.entries(values).map(([key, value]) => [key, value === "" ? undefined : value])
-  );
-  const result = schema.safeParse(filled);
+function parse<T extends z.ZodType>(schema: T, values: unknown, label: string) {
+  const result = schema.safeParse(values);
   if (!result.success) {
     const issues = result.error.issues
       .map((i) => `  - ${i.path.join(".") || "(root)"}: ${i.message}`)
