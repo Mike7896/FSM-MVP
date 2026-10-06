@@ -41,30 +41,31 @@ const EMPTY_QUOTE = emptyDraft();
  * there is no second button to forget.
  *
  * **The logo and the band are separate switches.** Either, both, or neither —
- * neither is Plain. The logo is Pro's (Billing §2.2), so without Pro its
- * switch is off and can't be turned on.
+ * neither is Plain. Both are Pro's (Billing §2.2), so without Pro they're
+ * off and can't be turned on.
  */
 export function BrandingForm({
   preset,
   identity,
   logoUrl,
-  canSave = true,
+  canSave,
 }: {
   preset: string | null;
   /** What the header actually carries today — business name, license, phone. */
   identity: OfficeIdentity;
   logoUrl: string | null;
-  canSave?: boolean;
+  canSave: boolean;
 }) {
   const router = useRouter();
   const [look, setLook] = useState<DocumentLook>(() => {
     const saved = lookOf(preset);
-    return { logo: canSave && saved.logo, bold: saved.bold };
+    return { logo: canSave && saved.logo, bold: canSave && saved.bold };
   });
   const [state, setState] = useState<SaveState>("idle");
   const [error, setError] = useState<string | null>(null);
 
   async function save(next: DocumentLook) {
+    if (!canSave) return;
     setState("saving");
     const body: UpdateOfficeBrandingInput = { documentPreset: presetOf(next) };
     const response = await fetch("/api/v1/office/branding", {
@@ -87,12 +88,17 @@ export function BrandingForm({
   }
 
   function choose(next: DocumentLook) {
+    if (!canSave) return;
     setLook(next);
-    if (canSave) void save(next);
+    void save(next);
   }
 
   const [plainOption, logoOption, boldOption] = DOCUMENT_PRESETS;
-  const plain = !look.logo && !look.bold;
+  const visibleLook = {
+    logo: canSave && look.logo,
+    bold: canSave && look.bold,
+  };
+  const plain = !visibleLook.logo && !visibleLook.bold;
 
   return (
     <div className="w-full max-w-6xl grid min-w-0 gap-6 @4xl/office:grid-cols-[minmax(0,1fr)_480px]">
@@ -105,7 +111,7 @@ export function BrandingForm({
           />
         ) : (
           <p className="text-muted-foreground text-sm">
-            Pro is required to save document branding.
+            Pro is required to use With logo or Bold header.
           </p>
         )}
 
@@ -122,15 +128,17 @@ export function BrandingForm({
             note={logoOption.note}
             reason={canSave ? logoOption.reason : "Your logo goes on documents with Pro."}
             pro={!canSave}
-            checked={look.logo}
+            checked={visibleLook.logo}
             disabled={!canSave}
             onCheckedChange={(on) => choose({ ...look, logo: on })}
           />
           <Option
             name={boldOption.name}
             note={boldOption.note}
-            reason={boldOption.reason}
-            checked={look.bold}
+            reason={canSave ? boldOption.reason : "A bold header goes on documents with Pro."}
+            pro={!canSave}
+            checked={visibleLook.bold}
+            disabled={!canSave}
             onCheckedChange={(on) => choose({ ...look, bold: on })}
           />
         </div>
@@ -199,9 +207,9 @@ export function BrandingForm({
             businessName={identity.businessName}
             license={identity.license}
             phone={identity.phone}
-            // Exactly what goes out: the look as picked, the logo only on Pro.
+            // Both premium options remain off without branding access.
             logoUrl={logoUrl}
-            look={{ logo: canSave && look.logo, bold: look.bold }}
+            look={visibleLook}
             action={null}
           />
         </OfficeDocumentPreview>
@@ -234,11 +242,18 @@ function Option({
   onCheckedChange: (checked: boolean) => void;
 }) {
   return (
-    <Label className="hover:bg-muted/50 has-data-[state=checked]:border-ring has-data-[state=checked]:bg-muted/40 has-disabled:hover:bg-transparent has-disabled:cursor-not-allowed has-disabled:opacity-60 flex cursor-pointer items-start gap-3 rounded-lg border p-4 font-normal">
+    <Label
+      aria-disabled={disabled || undefined}
+      className={`flex items-start gap-3 rounded-lg border p-4 font-normal ${disabled
+        ? "cursor-not-allowed opacity-60"
+        : "cursor-pointer hover:bg-muted/50 has-data-[state=checked]:border-ring has-data-[state=checked]:bg-muted/40"}`}
+    >
       <Checkbox
         checked={checked}
         disabled={disabled}
-        onCheckedChange={(value) => onCheckedChange(value === true)}
+        onCheckedChange={(value) => {
+          if (!disabled) onCheckedChange(value === true);
+        }}
         className="mt-0.5"
       />
       <span className="min-w-0 flex-1">
