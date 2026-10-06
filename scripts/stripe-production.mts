@@ -7,7 +7,7 @@ import { catalogPlan } from './stripe-catalog-setup.mjs';
 async function main() {
   const args=process.argv.slice(2);
   if(args.includes('--help')) {
-    console.log('Preview: npm run stripe:catalog:production\nApply: npm run stripe:catalog:production -- --apply --account acct_...\nMirror: npm run stripe:catalog:production -- --sync --account acct_... --project-ref YOUR_REF');
+    console.log('Preview: npm run stripe:catalog:production\nApply: npm run stripe:catalog:production -- --apply --account acct_... --project-ref YOUR_REF\nMirror: npm run stripe:catalog:production -- --sync --account acct_... --project-ref YOUR_REF');
     return;
   }
   const options=new Map<string,string>();
@@ -29,9 +29,9 @@ async function main() {
   console.log(`Live Stripe account: ${account.id} (${account.business_profile?.name ?? account.settings?.dashboard?.display_name ?? 'unnamed'})`);
   console.log(`Site: ${site.origin}. Credentials read exclusively from .env.production.`);
   if((options.has('--apply')||options.has('--sync')) && options.get('--account')!==account.id)throw new Error('Pass --account with the account ID printed by the read-only preview.');
-  if(options.has('--sync')) {
+  if(options.has('--sync') || options.has('--apply')) {
     const ref=options.get('--project-ref');
-    if(!ref || !/^[a-z0-9]+$/.test(ref))throw new Error('--project-ref is required for database synchronization.');
+    if(!ref || !/^[a-z0-9]+$/.test(ref))throw new Error('--project-ref is required before production writes.');
     const supabase=new URL(env.NEXT_PUBLIC_SUPABASE_URL ?? '');
     const database=new URL(env.DATABASE_URL ?? '');
     if(supabase.hostname!==`${ref}.supabase.co` || !(database.hostname===`db.${ref}.supabase.co` || (database.hostname.endsWith('.pooler.supabase.com') && decodeURIComponent(database.username)===`postgres.${ref}`)))throw new Error('Production Supabase URL/database do not both match --project-ref.');
@@ -51,15 +51,21 @@ async function main() {
       for(const row of accounts)await client.accounts.retrieve(row.id);
       const subscriptions=await db.execute<{id:string}>(sql`select subscription_id as id from billing_accounts where subscription_id is not null union select id from subscriptions`);
       for(const row of subscriptions)await client.subscriptions.retrieve(row.id);
-      const {syncCatalog}=await import('../lib/stripe/sync');
-      const result=await syncCatalog();
-      console.log(`Mirrored ${result.products} live products and ${result.prices} live prices. No customer or connected account was created.`);
+      if(options.has('--sync')) {
+        const {syncCatalog}=await import('../lib/stripe/sync');
+        const result=await syncCatalog();
+        console.log(`Mirrored ${result.products} live products and ${result.prices} live prices. No customer or connected account was created.`);
+      }
+    } catch(error) {
+      const code=(error as {code?:string}).code;
+      if(code==='resource_missing' || code==='account_invalid')throw new Error('Production database contains Stripe references unavailable in this live account. Review sandbox-era price/customer/subscription/connected-account mappings before applying or syncing. Nothing is automatically deleted.');
+      throw error;
     } finally {await globalThis.__fsmDbPool?.end({timeout:2});}
-    return;
+    if(options.has('--sync'))return;
   }
   const plan=await catalogPlan(client);
   for(const step of plan)console.log(step.label);
-  if(!options.has('--apply')) {console.log(`Read-only preview: ${plan.length} actions. No writes made. Run again with --apply --account ${account.id} to apply.`);return;}
+  if(!options.has('--apply')) {console.log(`Read-only preview: ${plan.length} actions. No writes made. Apply requires --apply --account ${account.id} --project-ref YOUR_PRODUCTION_REF and passes a database reference check first.`);return;}
   for(const step of plan) {await step.apply();console.log(`Done: ${step.label}`);}
   const remaining=await catalogPlan(client);
   if(remaining.length)throw new Error('Post-apply verification found remaining catalog changes. Rerun the read-only preview.');
