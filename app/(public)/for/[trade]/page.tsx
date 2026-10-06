@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
+import styles from "./trade.module.css";
 import type { Metadata } from "next";
 import { ArrowRight } from "lucide-react";
 
@@ -21,10 +23,13 @@ import { formatMoney } from "@/lib/quote/money";
 
 const TRADES: Record<
   string,
-  { name: string; headline: string; hook: string; jobs: string[] }
+  { name: string; headline: string; hook: string; coreHook: string; sample: string; scope: string[]; jobs: string[] }
 > = {
   electricians: {
     name: "Electricians",
+    coreHook: "Quote a service upgrade, schedule the visit, and bill as the work gets done. Keep the customer, scope, and payments on the same job.",
+    sample: "Kitchen electrical renovation",
+    scope: ["Recessed lighting and dedicated circuits", "Panel work, wiring, and installation", "Deposit, rough-in, and final billing"],
     headline: "Quoting software that knows what a panel upgrade is.",
     hook: "EV chargers, service upgrades and backup power — priced by wire gauge and footage, with permits as first-class lines and code-aware scope language.",
     jobs: [
@@ -36,9 +41,30 @@ const TRADES: Record<
   },
   plumbers: {
     name: "Plumbers",
+    coreHook: "From a water heater replacement to a bigger remodel, keep your scope, customer approvals, and invoices together. Spend less of the evening piecing the job back together.",
+    sample: "Bathroom plumbing remodel",
+    scope: ["Supply lines and fixture installation", "Drain work and finish connections", "Deposit, rough-in, and final billing"],
     headline: "Quoting software that prices by pipe, not by guess.",
     hook: "Water heaters, repipes and sewer lines — priced by pipe type and diameter, with backflow permits handled as named lines.",
     jobs: ["Water heater swap", "Repipe", "Sewer line", "Fixture set"],
+  },
+  roofers: {
+    name: "Roofers",
+    headline: "Keep the roof work and the paperwork together.",
+    hook: "",
+    coreHook: "Put the scope in writing, collect a deposit, and keep extra work and final billing connected to the roof you’re working on.",
+    sample: "Residential roof replacement",
+    scope: ["Tear-off and disposal", "Underlayment, flashing, and shingles", "Deposit and final billing"],
+    jobs: ["Roof replacement", "Leak repair", "Flashing repair", "Outbuilding roof"],
+  },
+  remodelers: {
+    name: "Remodelers",
+    headline: "A clear record for a job with moving parts.",
+    hook: "",
+    coreHook: "Keep a longer project organized from the first quote through the last invoice. Capture changes in writing and bill as the work progresses.",
+    sample: "Kitchen renovation",
+    scope: ["Demolition and preparation", "Cabinetry and finish installation", "Deposit, progress, and final billing"],
+    jobs: ["Kitchen remodel", "Bathroom remodel", "Basement finish", "Interior renovation"],
   },
 };
 
@@ -46,26 +72,24 @@ export async function generateMetadata({
   params,
 }: PageProps<"/for/[trade]">): Promise<Metadata> {
   const { trade } = await params;
-  const config = TRADES[trade];
+  const config = Object.hasOwn(TRADES, trade) ? TRADES[trade] : undefined;
   return {
-    title: config ? `For ${config.name}` : "For your trade",
+    title: config ? `Job management for ${config.name.toLowerCase()}` : "For your trade",
+    description: config?.coreHook,
   };
 }
 
 export default async function TradePage({ params }: PageProps<"/for/[trade]">) {
   const { trade } = await params;
-  const config = TRADES[trade] ?? {
-    name: trade.charAt(0).toUpperCase() + trade.slice(1),
-    headline: "Job management built around your trade.",
-    hook: "The core runs every trade's money workflow. Trade packs add the job types, templates and language specific to yours.",
-    jobs: [],
-  };
+  const config = Object.hasOwn(TRADES, trade) ? TRADES[trade] : undefined;
+  if (!config) notFound();
 
   const releases = await getReleases();
   const released = trade === "electricians" && releases.pack_electrical;
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6 sm:py-24">
+      <div className={styles.hero}>
       <div className="max-w-2xl">
         <p className="text-muted-foreground font-label text-xs uppercase">
           ServiceClerk for {config.name}
@@ -74,7 +98,7 @@ export default async function TradePage({ params }: PageProps<"/for/[trade]">) {
           {released ? config.headline : `From first quote to final payment, for ${config.name.toLowerCase()}.`}
         </h1>
         <p className="text-muted-foreground mt-5 text-lg leading-relaxed">
-          {released ? config.hook : "Keep quotes, contracts, invoices and customer payments together. Start free with the core tools, while specialized trade packs are in development."}
+          {released ? config.hook : config.coreHook}
         </p>
         <div className="mt-8 flex flex-wrap gap-3">
           <Button asChild size="lg">
@@ -87,6 +111,16 @@ export default async function TradePage({ params }: PageProps<"/for/[trade]">) {
             <Link href="/pricing">See pricing</Link>
           </Button>
         </div>
+        <p className="mt-5 text-sm text-muted-foreground">Three free jobs each month. No credit card needed.</p>
+      </div>
+      <figure className={styles.job}>
+        <figcaption>Illustrative job · Your scope, your prices</figcaption>
+        <h2>{config.sample}</h2>
+        <p>Prepared for the Morgan residence</p>
+        <ul>{config.scope.map((line) => <li key={line}>{line}</li>)}</ul>
+        <div><span>Quote</span><ArrowRight size={14} aria-hidden="true" /><span>Contract</span><ArrowRight size={14} aria-hidden="true" /><span>Invoice</span></div>
+        <p>One job record, from the first number to the last payment.</p>
+      </figure>
       </div>
 
       {config.jobs.length > 0 ? (
@@ -107,17 +141,30 @@ export default async function TradePage({ params }: PageProps<"/for/[trade]">) {
         </section>
       ) : null}
 
+      <section className={styles.workflow}>
+        <div><h2>Keep the work moving.<br />Keep the paperwork with it.</h2><p>The quote is only the beginning. ServiceClerk carries the job through the decisions, changes, and payments that follow.</p><Link href="/#product-tour" className="inline-flex items-center gap-2 py-3 text-sm font-medium underline underline-offset-4">Walk through a sample job <ArrowRight size={16} /></Link></div>
+        <dl>
+          <div><dt>A clear agreement</dt><dd>Generate a contract from the quote, collect a signature, and request a percentage-based deposit.</dd></div>
+          <div><dt>A record of extra work</dt><dd>Send a change order when the scope changes, so the added work and agreed price stay with the job.</dd></div>
+          <div><dt>Payments as you go</dt><dd>Bill in phases, track what has been received, and see what remains before the final invoice.</dd></div>
+          <div><dt>An easier handoff to the homeowner</dt><dd>Share documents through a browser link. Your customer can review, sign, and pay where enabled, without an account.</dd></div>
+        </dl>
+      </section>
       {trade === "electricians" ? <ElectricianPricing /> : null}
 
       <section className="mt-16 border-t pt-12">
         <h2 className="text-2xl font-semibold tracking-tight">
-          The same product, either way
+          Useful today. Room to grow.
         </h2>
         <p className="text-muted-foreground mt-2 max-w-2xl">
           The core runs the money workflow for every trade — quote, deposit,
-          change orders, progress billing, final invoice. The {config.name}{" "}
-          pack {released ? "adds specialist templates and language." : "is in development and is not included in a paid plan yet."}
+          change orders, progress billing, final invoice. Use your own line items and scope today.
+          {trade === "electricians" ? (released
+            ? " The Electrical pack adds specialist templates and language."
+            : " The Electrical pack is in development and is not included in a paid plan yet.") : ""}
         </p>
+        <p className="mt-4 text-sm text-muted-foreground">Saved items are included with Starter and Pro. Your logo is available on Pro. Online payments require an approved Stripe account; processing fees apply.</p>
+        <div className="mt-8 flex flex-wrap items-center gap-5"><Button asChild size="lg"><Link href={`/signup?trade=${trade}`}>Start your first quote <ArrowRight /></Link></Button><Link href="/pricing" className="text-sm underline underline-offset-4">Compare all plans</Link></div>
       </section>
     </div>
   );

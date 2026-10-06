@@ -25,7 +25,7 @@ export default function PublicLayout({ children }: LayoutProps<"/">) {
           </Link>
 
           <nav className="hidden items-center gap-6 text-sm md:flex">
-            <Link href="/#how-it-works" className="text-muted-foreground hover:text-foreground transition-colors">
+            <Link href="/#product-tour" className="text-muted-foreground hover:text-foreground transition-colors">
               How it works
             </Link>
             <Link
@@ -33,12 +33,6 @@ export default function PublicLayout({ children }: LayoutProps<"/">) {
               className="text-muted-foreground hover:text-foreground transition-colors"
             >
               Pricing
-            </Link>
-            <Link
-              href="/for/electricians"
-              className="text-muted-foreground hover:text-foreground transition-colors"
-            >
-              For electricians
             </Link>
           </nav>
 
@@ -52,6 +46,10 @@ export default function PublicLayout({ children }: LayoutProps<"/">) {
             </Button>
           </div>
         </div>
+        <nav aria-label="Explore ServiceClerk" className="flex items-center justify-center gap-6 border-t border-border/60 px-3 text-xs md:hidden">
+          <Link href="/#product-tour" className="py-3">How it works</Link>
+          <Link href="/pricing" className="py-3">Pricing</Link>
+        </nav>
       </header>
 
       <main className="flex-1">{children}</main>
@@ -73,11 +71,9 @@ export default function PublicLayout({ children }: LayoutProps<"/">) {
                 <span className="text-muted-foreground font-label text-[10px] uppercase">
                   Product
                 </span>
+                <Link href="/#product-tour" className="hover:underline">How it works</Link>
                 <Link href="/pricing" className="hover:underline">
                   Pricing
-                </Link>
-                <Link href="/for/electricians" className="hover:underline">
-                  For electricians
                 </Link>
                 <Link href="/support" className="hover:underline">
                   Support

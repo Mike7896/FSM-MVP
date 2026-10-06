@@ -1,0 +1,16 @@
+.hero { display: grid; grid-template-columns: 1.15fr .85fr; gap: 64px; align-items: center; }
+.job { background: var(--paper); color: var(--paper-ink); padding: 30px; border-radius: 12px; box-shadow: 0 16px 50px -20px rgb(22 32 42 / .25); }
+.job figcaption { font-size: 11px; color: var(--paper-ink-soft); border-bottom: 1px solid var(--brand-neutral-200); padding-bottom: 20px; }
+.job h2 { margin-top: 28px; font-size: 27px; font-weight: 550; letter-spacing: -.03em; line-height: 1.2; }
+.job p { font-size: 12px; line-height: 1.7; color: var(--paper-ink-soft); margin-top: 14px; }
+.job ul { margin-block: 26px; }
+.job li { padding-block: 13px; font-size: 13px; border-bottom: 1px solid var(--brand-neutral-200); }
+.job > div { display: flex; gap: 12px; align-items: center; color: var(--brand-amber-900); background: var(--brand-amber-100); border-radius: 6px; padding: 14px; font-size: 12px; }
+.workflow { display: grid; grid-template-columns: 1fr 1fr; gap: 80px; border-top: 1px solid var(--border); margin-top: 64px; padding-top: 48px; }
+.workflow h2 { font-size: clamp(26px, 3vw, 36px); font-weight: 550; letter-spacing: -.03em; line-height: 1.2; }
+.workflow p, .workflow dd { font-size: 14px; line-height: 1.8; color: var(--muted-foreground); margin-top: 15px; }
+.workflow dl > div { border-bottom: 1px solid var(--border); padding-bottom: 22px; margin-bottom: 22px; }
+.workflow dt { font-size: 16px; font-weight: 550; }
+.workflow dd { margin-top: 7px; }
+@media (max-width: 850px) { .hero { grid-template-columns: 1fr; gap: 40px; } .job { max-width: 550px; } .workflow { gap: 35px; } }
+@media (max-width: 600px) { .job { padding: 24px; } .workflow { grid-template-columns: 1fr; gap: 30px; } }

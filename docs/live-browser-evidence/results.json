@@ -1,0 +1,47 @@
+[
+  {
+    "name": "Live annual pricing shows $290 Starter and $490 Pro",
+    "passed": true
+  },
+  {
+    "name": "ACH pricing does not advertise a disabled ServiceClerk fee",
+    "passed": true
+  },
+  {
+    "name": "Live pricing selection reaches signup",
+    "passed": true
+  },
+  {
+    "name": "Google signup preserves selected plan",
+    "passed": true
+  },
+  {
+    "name": "Invalid signup is rejected before account creation",
+    "passed": true
+  },
+  {
+    "name": "Public bundle environment observation",
+    "productionSupabaseUrlPresent": false,
+    "productionPublicKeyPresent": false
+  },
+  {
+    "name": "Signup client bundle does not contain dev Supabase URL",
+    "passed": true
+  },
+  {
+    "name": "Mobile / has no horizontal overflow",
+    "passed": true
+  },
+  {
+    "name": "Mobile /pricing has no horizontal overflow",
+    "passed": true
+  },
+  {
+    "name": "Mobile /signup has no horizontal overflow",
+    "passed": true
+  },
+  {
+    "name": "Public browser flow has no uncaught JavaScript errors",
+    "passed": true
+  }
+]

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { Metadata } from "next";
 
 import { PlanComparison } from "@/components/billing/plan-comparison";
@@ -6,7 +7,7 @@ import { POLICY, TIER_FEATURES } from "@/lib/membership/catalog";
 import { pickerPricing } from "@/lib/membership/bill";
 import { getReleases } from "@/lib/membership/releases";
 
-export const metadata: Metadata = { title: "Pricing" };
+export const metadata: Metadata = { title: "Pricing", description: "Compare ServiceClerk Free, Starter, and Pro. See job limits, included features, annual billing, and payment processing fees before you sign up." };
 
 /**
  * Cached, but never for long: prices and what's on sale come from Stripe and
@@ -50,6 +51,7 @@ export default async function PricingPage() {
         </p>
       </div>
 
+      <p className="mt-6 text-center text-sm text-muted-foreground">Want to see the workflow first? <Link href="/#product-tour" className="text-foreground underline underline-offset-4">Explore a sample job</Link></p>
       <div className="mt-10 sm:mt-14">
         <PlanPicker pricing={pricing} mode={{ kind: "public", signUpHref: "/signup" }} showFree />
       </div>
