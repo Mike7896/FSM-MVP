@@ -164,11 +164,16 @@ export async function getOrCreateConnectedAccount(
     .where(eq(organizations.id, organizationId))
     .limit(1);
 
+  // Stripe rejects a blank string where it accepts a missing field, and a new
+  // Office can have no name or email yet. Onboarding asks for both.
+  const name = org?.name?.trim() || undefined;
+  const email = org?.email?.trim() || undefined;
+
   const created = await stripe().v2.core.accounts.create({
     // The full Stripe Dashboard. Fixed once set — see the module comment.
     dashboard: "full",
-    display_name: org?.name ?? undefined,
-    contact_email: org?.email ?? undefined,
+    display_name: name,
+    contact_email: email,
     identity: { country: "us" },
     configuration: {
       // The merchant configuration: he is the merchant of record on direct
@@ -187,7 +192,7 @@ export async function getOrCreateConnectedAccount(
       // processing fees from the contractor, at his rate (§8.1).
       responsibilities: { fees_collector: "stripe", losses_collector: "stripe" },
       profile: {
-        doing_business_as: org?.name ?? undefined,
+        doing_business_as: name,
         product_description: "Contracting services",
       },
     },
