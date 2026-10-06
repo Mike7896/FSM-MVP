@@ -17,6 +17,7 @@
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import {
   PRICES,
@@ -32,6 +33,7 @@ type Fixture = {
   params: Record<string, unknown>;
 };
 
+export function membershipFixtures(): Fixture[] {
 const fixtures: Fixture[] = [];
 
 for (const [key, product] of Object.entries(PRODUCTS) as [
@@ -128,6 +130,11 @@ fixtures.push({
   },
 });
 
+return fixtures;
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+const fixtures = membershipFixtures();
 const out = resolve(process.cwd(), "stripe/fixtures/membership.json");
 mkdirSync(dirname(out), { recursive: true });
 writeFileSync(
@@ -136,3 +143,4 @@ writeFileSync(
 );
 
 console.log(`Wrote ${fixtures.length} fixtures to ${out}`);
+}
