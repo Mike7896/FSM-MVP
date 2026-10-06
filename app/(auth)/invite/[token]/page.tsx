@@ -81,7 +81,11 @@ export default async function InvitePage({ params }: PageProps<"/invite/[token]"
           </Button>
         </form>
         <p className="text-muted-foreground text-xs leading-relaxed">
-          Next you&apos;ll choose a password, then set up your business — a couple of minutes.
+          Next you&apos;ll choose a password, then set up your business.
+        </p>
+        <p className="text-muted-foreground text-xs leading-relaxed">
+          Later, you can sign in with Google using the same email address shown above.
+          Use that address to keep your jobs and invite benefits on this account.
         </p>
       </CardContent>
     </Card>
