@@ -91,6 +91,8 @@ export type PaperDocument = {
     license: string | null;
     phone: string | null;
     logoUrl: string | null;
+    /** The bold header's band — the look the document went out with. */
+    bold: boolean;
   };
   preparedFor: string | null;
   jobAddress: string | null;
@@ -475,7 +477,8 @@ function letterheadOf(office: OfficeIdentity): PaperDocument["letterhead"] {
     name: office.businessName,
     license: office.license,
     phone: office.phone,
-    logoUrl: office.logoUrl ?? null,
+    logoUrl: office.look?.logo === false ? null : (office.logoUrl ?? null),
+    bold: office.look?.bold ?? false,
   };
 }
 

@@ -9,12 +9,14 @@ import { DocumentFooter } from "@/components/documents/document-sheet";
 import { OfficeDocumentPreview } from "@/components/office/document-preview";
 import { SaveStatus, type SaveState } from "@/components/office/save-status";
 import { QuoteProjection } from "@/components/quote/projection";
+import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   DOCUMENT_PRESETS,
-  normalizePreset,
-  type DocumentPreset,
+  lookOf,
+  presetOf,
+  type DocumentLook,
 } from "@/lib/branding";
 import { emptyDraft } from "@/lib/quote";
 import type { OfficeIdentity } from "@/lib/queries/office";
@@ -35,8 +37,12 @@ const EMPTY_QUOTE = emptyDraft();
  * experience, so her screen sits permanently on the right. It is the real
  * share surface — the same component the homeowner's page renders.
  *
- * **Picking a look saves it.** A click on one of three options is already a
- * deliberate choice, so there is no second button to forget.
+ * **Picking a look saves it.** A click is already a deliberate choice, so
+ * there is no second button to forget.
+ *
+ * **The logo and the band are separate switches.** Either, both, or neither —
+ * neither is Plain. The logo is Pro's (Billing §2.2), so without Pro its
+ * switch is off and can't be turned on.
  */
 export function BrandingForm({
   preset,
@@ -51,15 +57,16 @@ export function BrandingForm({
   canSave?: boolean;
 }) {
   const router = useRouter();
-  const [selected, setSelected] = useState<DocumentPreset>(
-    normalizePreset(preset)
-  );
+  const [look, setLook] = useState<DocumentLook>(() => {
+    const saved = lookOf(preset);
+    return { logo: canSave && saved.logo, bold: saved.bold };
+  });
   const [state, setState] = useState<SaveState>("idle");
   const [error, setError] = useState<string | null>(null);
 
-  async function save(next: DocumentPreset) {
+  async function save(next: DocumentLook) {
     setState("saving");
-    const body: UpdateOfficeBrandingInput = { documentPreset: next };
+    const body: UpdateOfficeBrandingInput = { documentPreset: presetOf(next) };
     const response = await fetch("/api/v1/office/branding", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -79,10 +86,13 @@ export function BrandingForm({
     router.refresh();
   }
 
-  function choose(next: DocumentPreset) {
-    setSelected(next);
+  function choose(next: DocumentLook) {
+    setLook(next);
     if (canSave) void save(next);
   }
+
+  const [plainOption, logoOption, boldOption] = DOCUMENT_PRESETS;
+  const plain = !look.logo && !look.bold;
 
   return (
     <div className="w-full max-w-6xl grid min-w-0 gap-6 @4xl/office:grid-cols-[minmax(0,1fr)_480px]">
@@ -91,7 +101,7 @@ export function BrandingForm({
           <SaveStatus
             state={state}
             error={error}
-            onRetry={() => void save(selected)}
+            onRetry={() => void save(look)}
           />
         ) : (
           <p className="text-muted-foreground text-sm">
@@ -99,29 +109,31 @@ export function BrandingForm({
           </p>
         )}
 
-        <RadioGroup
-          value={selected}
-          onValueChange={(value) => choose(value as DocumentPreset)}
-          className="gap-3"
-        >
-          {DOCUMENT_PRESETS.map((option) => (
-            <Label
-              key={option.id}
-              className="hover:bg-muted/50 has-data-[state=checked]:border-ring has-data-[state=checked]:bg-muted/40 flex cursor-pointer items-start gap-3 rounded-lg border p-4 font-normal"
-            >
-              <RadioGroupItem value={option.id} className="mt-0.5" />
-              <span className="min-w-0 flex-1">
-                <span className="block font-medium">{option.name}</span>
-                <span className="text-muted-foreground block text-sm">
-                  {option.note}
-                </span>
-                <span className="text-muted-foreground mt-1 block text-xs">
-                  {option.reason}
-                </span>
-              </span>
-            </Label>
-          ))}
-        </RadioGroup>
+        <div role="group" aria-label="How documents look" className="flex flex-col gap-3">
+          <Option
+            name={plainOption.name}
+            note={plainOption.note}
+            reason={plainOption.reason}
+            checked={plain}
+            onCheckedChange={() => choose({ logo: false, bold: false })}
+          />
+          <Option
+            name={logoOption.name}
+            note={logoOption.note}
+            reason={canSave ? logoOption.reason : "Your logo goes on documents with Pro."}
+            pro={!canSave}
+            checked={look.logo}
+            disabled={!canSave}
+            onCheckedChange={(on) => choose({ ...look, logo: on })}
+          />
+          <Option
+            name={boldOption.name}
+            note={boldOption.note}
+            reason={boldOption.reason}
+            checked={look.bold}
+            onCheckedChange={(on) => choose({ ...look, bold: on })}
+          />
+        </div>
 
         {/* The logo lives on business identity and is shown here because two of
             the three presets depend on there being one. */}
@@ -157,8 +169,9 @@ export function BrandingForm({
         </div>
 
         <p className="text-muted-foreground text-sm">
-          No fonts, no colours, no layout editor. Three looks that all read
-          cleanly on a phone in a driveway — that&apos;s the whole choice.
+          No fonts, no colours, no layout editor. Your logo, a bold band, both or
+          neither — each reads cleanly on a phone in a driveway, and that&apos;s
+          the whole choice.
         </p>
 
         <p className="text-muted-foreground rounded-lg border border-dashed p-5 text-sm">
@@ -186,8 +199,9 @@ export function BrandingForm({
             businessName={identity.businessName}
             license={identity.license}
             phone={identity.phone}
-            // Pro puts the logo on documents; the preview shows what's sent.
-            logoUrl={canSave ? logoUrl : null}
+            // Exactly what goes out: the look as picked, the logo only on Pro.
+            logoUrl={logoUrl}
+            look={{ logo: canSave && look.logo, bold: look.bold }}
             action={null}
           />
         </OfficeDocumentPreview>
@@ -197,5 +211,44 @@ export function BrandingForm({
         </p>
       </div>
     </div>
+  );
+}
+
+/** One switch: a look's name, what it changes, and what it costs. */
+function Option({
+  name,
+  note,
+  reason,
+  checked,
+  disabled = false,
+  pro = false,
+  onCheckedChange,
+}: {
+  name: string;
+  note: string;
+  reason: string;
+  checked: boolean;
+  disabled?: boolean;
+  /** Marks a switch that Pro unlocks. */
+  pro?: boolean;
+  onCheckedChange: (checked: boolean) => void;
+}) {
+  return (
+    <Label className="hover:bg-muted/50 has-data-[state=checked]:border-ring has-data-[state=checked]:bg-muted/40 has-disabled:hover:bg-transparent has-disabled:cursor-not-allowed has-disabled:opacity-60 flex cursor-pointer items-start gap-3 rounded-lg border p-4 font-normal">
+      <Checkbox
+        checked={checked}
+        disabled={disabled}
+        onCheckedChange={(value) => onCheckedChange(value === true)}
+        className="mt-0.5"
+      />
+      <span className="min-w-0 flex-1">
+        <span className="flex items-center gap-2 font-medium">
+          {name}
+          {pro ? <Badge variant="secondary">Pro</Badge> : null}
+        </span>
+        <span className="text-muted-foreground block text-sm">{note}</span>
+        <span className="text-muted-foreground mt-1 block text-xs">{reason}</span>
+      </span>
+    </Label>
   );
 }

@@ -40,7 +40,7 @@ export default async function BrandingPage() {
     <div className="flex flex-col gap-8">
       <PageHeader
         title="Document branding"
-        description="How your quotes, contracts and invoices look to a customer. Pick one — the panel on the right is what she sees on her phone."
+        description="How your quotes, contracts and invoices look to a customer. Your logo, a bold header, both or neither — the panel on the right is what she sees on her phone."
       />
       {access.features.branding ? null : (
         <p className="rounded-lg border px-4 py-3 text-sm">

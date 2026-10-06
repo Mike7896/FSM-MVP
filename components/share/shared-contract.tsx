@@ -43,6 +43,7 @@ export function ContractSheet({ shared }: { shared: SharedContract }) {
         license={shared.office.license}
         phone={shared.office.phone}
         logoUrl={shared.office.logoUrl}
+        look={shared.office.look}
         demo={shared.demo}
         action={null}
         documentLabel="Contract"

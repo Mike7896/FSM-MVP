@@ -11,6 +11,7 @@ import {
   organizations,
   type HeaderSnapshot,
 } from "@/lib/db/schema";
+import { lookOf, type DocumentLook } from "@/lib/branding";
 import { getAccess, type PackAccess } from "@/lib/membership/access";
 import { PACK_IDS as MEMBERSHIP_PACKS, packLookupKey, type PackId } from "@/lib/membership/catalog";
 import { getPriceBook } from "@/lib/membership/prices";
@@ -47,6 +48,12 @@ export type OfficeIdentity = {
   phone: string | null;
   /** A public image URL. Null until one is uploaded. */
   logoUrl?: string | null;
+  /**
+   * What the header carries — the logo, the band. Where it's set, the logo
+   * shows only when `look.logo` says so; the image itself stays on `logoUrl`
+   * because the identity forms edit it.
+   */
+  look?: DocumentLook;
   /** The document carries "Made with ServiceClerk" (Billing §2.2). */
   promoFooter?: boolean;
   /**
@@ -56,8 +63,28 @@ export type OfficeIdentity = {
   signature?: OfficeSignature | null;
 };
 
+/**
+ * The look the Office chose, as its plan lets it go out: branding is Pro
+ * (Billing §2.2), so without it a document is plain whatever was picked.
+ */
+export const getDocumentLook = cache(
+  async (organizationId: string): Promise<DocumentLook> => {
+    const [{ features }, [row]] = await Promise.all([
+      getAccess(organizationId),
+      db
+        .select({ preset: officeDefaults.documentPreset })
+        .from(officeDefaults)
+        .where(eq(officeDefaults.organizationId, organizationId))
+        .limit(1),
+    ]);
+    const look = lookOf(row?.preset);
+    return { logo: features.branding && look.logo, bold: features.branding && look.bold };
+  }
+);
+
 export const getOfficeIdentity = cache(
   async (organizationId: string): Promise<OfficeIdentity> => {
+    const look = await getDocumentLook(organizationId);
     const [org] = await db
       .select({
         name: organizations.name,
@@ -91,6 +118,7 @@ export const getOfficeIdentity = cache(
       license: license?.number ?? null,
       phone: org?.phone ?? null,
       logoUrl: org?.logoUrl ?? null,
+      look,
     };
   }
 );
@@ -102,6 +130,7 @@ export function officeFromHeader(header: HeaderSnapshot): OfficeIdentity {
     license: header.licenseNumber ?? null,
     phone: header.businessPhone ?? null,
     logoUrl: header.logoUrl ?? null,
+    look: { logo: Boolean(header.logoUrl), bold: header.boldHeader ?? false },
     // Documents from before plans existed carried the footer, and still do.
     promoFooter: header.promoFooter ?? true,
   };
@@ -115,7 +144,10 @@ export async function officeAsItStands(
   organizationId: string,
   licenseId: string | null
 ): Promise<OfficeIdentity> {
-  const { features } = await getAccess(organizationId);
+  const [{ features }, look] = await Promise.all([
+    getAccess(organizationId),
+    getDocumentLook(organizationId),
+  ]);
   const [org] = await db
     .select({
       name: organizations.name,
@@ -138,9 +170,10 @@ export async function officeAsItStands(
     businessName: org?.name?.trim() || null,
     license: license?.number ?? null,
     phone: org?.phone ?? null,
-    // A draft shows what sending it would: the logo only on a plan with
-    // branding, the footer on Free.
-    logoUrl: features.branding ? (org?.logoUrl ?? null) : null,
+    // A draft shows what sending it would: the logo and band only as the
+    // look and the plan allow, the footer on Free.
+    logoUrl: look.logo ? (org?.logoUrl ?? null) : null,
+    look,
     promoFooter: features.promoFooter,
   };
 }

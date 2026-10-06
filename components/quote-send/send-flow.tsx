@@ -12,6 +12,7 @@ import {
 } from "@/components/quote-send/office-intro";
 import { QuotePreviewSheet } from "@/components/quote-send/preview-sheet";
 import { QuoteSendSheet } from "@/components/quote-send/send-sheet";
+import type { DocumentLook } from "@/lib/branding";
 import { totals, type QuoteDraft } from "@/lib/quote";
 import type { OfficeSignature } from "@/lib/signing/lines";
 
@@ -34,6 +35,8 @@ export type SenderOffice = {
   license: string | null;
   phone: string | null;
   logoUrl?: string | null;
+  /** The Office's look, as its plan lets it go out. */
+  look?: DocumentLook;
   /** The adopted signature, for the lines at the foot of the preview. */
   signature?: OfficeSignature | null;
 };

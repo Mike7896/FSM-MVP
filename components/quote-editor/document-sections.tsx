@@ -29,6 +29,7 @@ import {
   type QuoteDraft,
   type QuoteTotals,
 } from "@/lib/quote";
+import type { DocumentLook } from "@/lib/branding";
 import { cn } from "@/lib/utils";
 
 /**
@@ -53,6 +54,8 @@ export type OfficeIdentity = {
   license: string | null;
   phone: string | null;
   logoUrl?: string | null;
+  /** The Office's look, as its plan lets it go out. */
+  look?: DocumentLook;
   /** The adopted signature — what Acceptance shows on the business's line. */
   signature?: OfficeSignature | null;
 };

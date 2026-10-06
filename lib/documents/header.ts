@@ -3,10 +3,12 @@ import "server-only";
 import { eq } from "drizzle-orm";
 
 import { db } from "@/lib/db";
+import { lookOf } from "@/lib/branding";
 import {
   customers,
   jobs,
   licenses,
+  officeDefaults,
   organizations,
   type HeaderSnapshot,
 } from "@/lib/db/schema";
@@ -29,7 +31,8 @@ import type { Executor } from "./repository";
  * he types his business name.
  *
  * **The plan is frozen too** (Billing §2.2): the logo goes on only for a shop
- * whose plan includes branding at the moment of sending, and a Free shop's
+ * whose plan includes branding at the moment of sending, and only if the
+ * Office's look includes it — the band the same — and a Free shop's
  * document carries the ServiceClerk footer. A later upgrade or downgrade
  * never restyles a document already in someone's hands.
  */
@@ -55,6 +58,13 @@ export async function captureHeader(
     .from(organizations)
     .where(eq(organizations.id, input.organizationId))
     .limit(1);
+
+  const [defaults] = await on
+    .select({ preset: officeDefaults.documentPreset })
+    .from(officeDefaults)
+    .where(eq(officeDefaults.organizationId, input.organizationId))
+    .limit(1);
+  const look = lookOf(defaults?.preset);
 
   const [job] = await on
     .select({ address: jobs.address, number: jobs.number })
@@ -88,7 +98,8 @@ export async function captureHeader(
     businessPhone: office?.phone ?? undefined,
     businessEmail: office?.email ?? undefined,
     businessAddress: office?.address ?? undefined,
-    logoUrl: features.branding ? (office?.logoUrl ?? undefined) : undefined,
+    logoUrl: features.branding && look.logo ? (office?.logoUrl ?? undefined) : undefined,
+    boldHeader: features.branding && look.bold,
     promoFooter: features.promoFooter,
     licenseNumber: license?.number ?? undefined,
     licenseKind: license?.kind ?? undefined,

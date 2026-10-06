@@ -105,30 +105,52 @@ export function DocumentPdf({
           </Text>
         ) : null}
 
-        {/* The letterhead — who this is from, and that they're licensed. */}
-        {logo ? (
-          // A PDF image, not an HTML one — react-pdf's has no alt to give.
-          // eslint-disable-next-line jsx-a11y/alt-text
-          <Image
-            src={logo}
-            style={{ height: 32, maxWidth: 160, objectFit: "contain", marginBottom: 8 }}
-          />
-        ) : null}
-        {letterhead.name ? (
-          <Text style={{ fontFamily: "Helvetica-Bold", fontSize: 13 }}>
-            {letterhead.name}
-          </Text>
-        ) : null}
-        {letterhead.license ? (
-          <Text style={{ color: SOFT, fontSize: 8.5, marginTop: 2 }}>
-            LIC #{letterhead.license}
-          </Text>
-        ) : null}
-        {letterhead.phone ? (
-          <Text style={{ color: SOFT, fontSize: 8.5, marginTop: 1 }}>
-            {letterhead.phone}
-          </Text>
-        ) : null}
+        {/* The letterhead — who this is from, and that they're licensed. The
+            logo beside the name; a bold header puts both on an ink band, the
+            logo on a white tile so a dark mark still reads. */}
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            ...(letterhead.bold
+              ? { backgroundColor: INK, color: "#ffffff", borderRadius: 4, padding: 12 }
+              : {}),
+          }}
+        >
+          {logo ? (
+            // A PDF image, not an HTML one — react-pdf's has no alt to give.
+            // eslint-disable-next-line jsx-a11y/alt-text
+            <Image
+              src={logo}
+              style={{
+                height: 32,
+                maxWidth: 160,
+                objectFit: "contain",
+                marginRight: 10,
+                ...(letterhead.bold
+                  ? { backgroundColor: "#ffffff", borderRadius: 3, padding: 3 }
+                  : {}),
+              }}
+            />
+          ) : null}
+          <View>
+            {letterhead.name ? (
+              <Text style={{ fontFamily: "Helvetica-Bold", fontSize: 13 }}>
+                {letterhead.name}
+              </Text>
+            ) : null}
+            {letterhead.license ? (
+              <Text style={{ color: letterhead.bold ? "#ffffffb3" : SOFT, fontSize: 8.5, marginTop: 2 }}>
+                LIC #{letterhead.license}
+              </Text>
+            ) : null}
+            {letterhead.phone ? (
+              <Text style={{ color: letterhead.bold ? "#ffffffb3" : SOFT, fontSize: 8.5, marginTop: 1 }}>
+                {letterhead.phone}
+              </Text>
+            ) : null}
+          </View>
+        </View>
 
         <View
           style={{

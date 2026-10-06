@@ -52,6 +52,7 @@ export default async function OfficePage() {
         license={identity.license}
         presetName={presetLabel(defaults?.documentPreset ?? null)}
         logoOnDocuments={access.features.branding}
+        look={identity.look ?? { logo: false, bold: false }}
       />
     </div>
   );
