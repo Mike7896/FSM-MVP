@@ -1,0 +1,65 @@
+{
+  "checkedAt": "2026-10-06T07:07:02.751Z",
+  "results": [
+    {
+      "name": "One homepage heading",
+      "passed": true
+    },
+    {
+      "name": "No unfinished QuickBooks claim",
+      "passed": true
+    },
+    {
+      "name": "Quote shows its own example",
+      "passed": true
+    },
+    {
+      "name": "Quote has one visible panel",
+      "passed": true
+    },
+    {
+      "name": "Contract & deposit shows its own example",
+      "passed": true
+    },
+    {
+      "name": "Contract & deposit has one visible panel",
+      "passed": true
+    },
+    {
+      "name": "Change order shows its own example",
+      "passed": true
+    },
+    {
+      "name": "Change order has one visible panel",
+      "passed": true
+    },
+    {
+      "name": "Progress billing shows its own example",
+      "passed": true
+    },
+    {
+      "name": "Progress billing has one visible panel",
+      "passed": true
+    },
+    {
+      "name": "Tour supports arrow-key navigation",
+      "passed": true
+    },
+    {
+      "name": "FAQ states browser availability honestly",
+      "passed": true
+    },
+    {
+      "name": "390px / loads",
+      "passed": true
+    },
+    {
+      "name": "390px / fits viewport",
+      "passed": true
+    },
+    {
+      "name": "390px / has one H1",
+      "passed": true
+    }
+  ]
+}

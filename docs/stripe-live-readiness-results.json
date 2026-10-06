@@ -1,0 +1,150 @@
+{
+  "checkedAt": "2026-10-06T06:44:53.745Z",
+  "base": "https://getserviceclerk.com",
+  "results": [
+    {
+      "name": "Platform readiness",
+      "chargesEnabled": true,
+      "payoutsEnabled": true,
+      "detailsSubmitted": true,
+      "capabilities": {
+        "acss_debit_payments": "active",
+        "affirm_payments": "active",
+        "afterpay_clearpay_payments": "active",
+        "amazon_pay_payments": "active",
+        "bancontact_payments": "active",
+        "blik_payments": "active",
+        "card_payments": "active",
+        "cartes_bancaires_payments": "pending",
+        "cashapp_payments": "active",
+        "eps_payments": "active",
+        "klarna_payments": "active",
+        "link_payments": "active",
+        "mb_way_payments": "active",
+        "pay_by_bank_payments": "active",
+        "pix_payments": "active",
+        "satispay_payments": "active",
+        "transfers": "active",
+        "us_bank_account_ach_payments": "active"
+      }
+    },
+    {
+      "name": "Database catalog matches live Stripe",
+      "rows": 12,
+      "matched": 12,
+      "mismatches": [],
+      "duplicateActiveKeys": []
+    },
+    {
+      "name": "Customer and subscription mappings",
+      "customers": 0,
+      "subscriptions": 0,
+      "invalidCustomers": 0,
+      "invalidSubscriptions": 0
+    },
+    {
+      "name": "Connected-account readiness",
+      "mappedAccounts": 0,
+      "accounts": []
+    },
+    {
+      "name": "Release switches",
+      "rows": [
+        {
+          "key": "pro",
+          "enabled": true
+        }
+      ]
+    },
+    {
+      "name": "Live webhooks",
+      "endpoints": [
+        {
+          "url": "https://getserviceclerk.com/api/stripe/connect/webhook",
+          "enabled": true,
+          "apiVersion": "2026-07-29.dahlia",
+          "missingEvents": []
+        },
+        {
+          "url": "https://getserviceclerk.com/api/stripe/webhook",
+          "enabled": true,
+          "apiVersion": "2026-07-29.dahlia",
+          "missingEvents": []
+        }
+      ]
+    },
+    {
+      "name": "Recent actual event processing",
+      "sampled": 77,
+      "relevant": 23,
+      "storedReceipts": 15,
+      "eventsWithPendingWebhooks": 0
+    },
+    {
+      "name": "Stripe Tax configuration",
+      "status": "pending",
+      "missingFields": [
+        "head_office"
+      ],
+      "activeRegistrationCount": 0
+    },
+    {
+      "name": "Deployed Google auth production target",
+      "httpStatus": 303,
+      "targetHost": "ktwxjcvvikbmlzeerled.supabase.co",
+      "matchesProduction": true,
+      "callbackMatchesProduction": true,
+      "providerRedirectHost": "accounts.google.com"
+    },
+    {
+      "name": "Deployed signature check /api/stripe/webhook",
+      "httpStatus": 200,
+      "verifiedIgnoredEvent": true
+    },
+    {
+      "name": "Deployed signature check /api/stripe/connect/webhook",
+      "httpStatus": 200,
+      "verifiedIgnoredEvent": true
+    },
+    {
+      "name": "Deployed GET /",
+      "status": 200,
+      "redirect": null
+    },
+    {
+      "name": "Deployed GET /pricing",
+      "status": 200,
+      "redirect": null
+    },
+    {
+      "name": "Deployed GET /signup",
+      "status": 200,
+      "redirect": null
+    },
+    {
+      "name": "Deployed GET /login",
+      "status": 200,
+      "redirect": null
+    },
+    {
+      "name": "Deployed GET /legal/privacy",
+      "status": 200,
+      "redirect": null
+    },
+    {
+      "name": "Deployed GET /legal/terms",
+      "status": 200,
+      "redirect": null
+    },
+    {
+      "name": "Deployed GET /account/billing",
+      "status": 307,
+      "redirect": "/login?next=%2Faccount%2Fbilling"
+    },
+    {
+      "name": "Deployed GET /api/cron/accounts",
+      "status": 401,
+      "redirect": null
+    }
+  ]
+}
