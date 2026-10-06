@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { ShieldCheck } from "lucide-react";
 
 import { inkFor } from "@/components/documents/ink";
+import { Letterhead } from "@/components/documents/letterhead";
 import { SignatureMark } from "@/components/signing/signature-mark";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -45,26 +46,20 @@ export function PaperView({
             Demo · not a real {paper.label.toLowerCase()}
           </p>
         ) : null}
-        {letterhead.logoUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element -- a public image the business uploaded, drawn at whatever size it is
-          <img
-            src={letterhead.logoUrl}
-            alt=""
-            className="mb-2 block h-10 w-auto max-w-[180px] object-contain"
-          />
-        ) : null}
-        {letterhead.name ? (
-          <p className="text-base font-semibold tracking-tight">{letterhead.name}</p>
-        ) : null}
-        {letterhead.license ? (
-          <p className="text-muted-foreground mt-1 flex items-center gap-1.5 text-xs">
-            <ShieldCheck className="size-3" />
-            LIC #{letterhead.license}
-          </p>
-        ) : null}
-        {letterhead.phone ? (
-          <p className="text-muted-foreground mt-1 text-xs">{letterhead.phone}</p>
-        ) : null}
+        <Letterhead logoUrl={letterhead.logoUrl} bold={letterhead.bold}>
+          {letterhead.name ? (
+            <p className="text-base font-semibold tracking-tight">{letterhead.name}</p>
+          ) : null}
+          {letterhead.license ? (
+            <p className="text-muted-foreground mt-1 flex items-center gap-1.5 text-xs">
+              <ShieldCheck className="size-3" />
+              LIC #{letterhead.license}
+            </p>
+          ) : null}
+          {letterhead.phone ? (
+            <p className="text-muted-foreground mt-1 text-xs">{letterhead.phone}</p>
+          ) : null}
+        </Letterhead>
         <p className="text-muted-foreground mt-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5 text-xs">
           <span>
             {[

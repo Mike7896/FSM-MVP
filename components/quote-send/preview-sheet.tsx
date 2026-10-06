@@ -27,6 +27,7 @@ import {
   unpricedRows,
   type QuoteDraft,
 } from "@/lib/quote";
+import type { DocumentLook } from "@/lib/branding";
 import {
   appliedSignature,
   signsOnQuote,
@@ -66,6 +67,7 @@ export function QuotePreviewSheet({
     license: string | null;
     phone: string | null;
     logoUrl?: string | null;
+    look?: DocumentLook;
     signature?: OfficeSignature | null;
   };
   demo: boolean;
@@ -143,6 +145,7 @@ export function QuotePreviewSheet({
                 license={office.license}
                 phone={office.phone}
                 logoUrl={office.logoUrl}
+                look={office.look}
                 demo={demo}
                 onGap={onFillHeader}
                 action={null}

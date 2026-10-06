@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { ShieldCheck } from "lucide-react";
 
 import { inkFor } from "@/components/documents/ink";
+import { Letterhead } from "@/components/documents/letterhead";
 import { SignatureLines } from "@/components/signing/signature-lines";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -21,6 +22,7 @@ import {
   type QuoteDraft,
   type ScopeNode,
 } from "@/lib/quote";
+import type { DocumentLook } from "@/lib/branding";
 import type { DocumentSignatures } from "@/lib/signing/lines";
 import { cn } from "@/lib/utils";
 
@@ -62,6 +64,7 @@ export function QuoteProjection({
   license,
   phone,
   logoUrl,
+  look,
   demo = false,
   onGap,
   action,
@@ -75,6 +78,11 @@ export function QuoteProjection({
   license: string | null;
   phone?: string | null;
   logoUrl?: string | null;
+  /**
+   * The Office's look: the logo beside the name, the band behind it. Left out,
+   * a logo given is drawn and there's no band.
+   */
+  look?: DocumentLook;
   demo?: boolean;
   /**
    * The contractor's preview only. Turns the unfilled letterhead into gaps he
@@ -141,34 +149,31 @@ export function QuoteProjection({
             Demo · not a real quote
           </p>
         ) : null}
-        {logoUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element -- a public image the business uploaded, drawn at whatever size it is
-          <img
-            src={logoUrl}
-            alt=""
-            className="mb-2 block h-10 w-auto max-w-[180px] object-contain"
-          />
-        ) : null}
-        {businessName ? (
-          <p className="text-base font-semibold tracking-tight">{businessName}</p>
-        ) : (
-          // The gap shows on the document rather than blocking the preview.
-          // That visibility is what makes the ask for it persuasive later.
-          <Gap onClick={onGap ? () => onGap("businessName") : undefined}>
-            Your business name
-          </Gap>
-        )}
-        {/* A license is optional — plenty of work doesn't need one — so no
-            license is no line, not a blank to fill. */}
-        {license ? (
-          <p className="text-muted-foreground mt-1 flex items-center gap-1.5 text-xs">
-            <ShieldCheck className="size-3" />
-            LIC #{license}
-          </p>
-        ) : null}
-        {phone ? (
-          <p className="text-muted-foreground mt-1 text-xs">{phone}</p>
-        ) : null}
+        <Letterhead
+          logoUrl={look?.logo === false ? null : logoUrl}
+          bold={look?.bold}
+        >
+          {businessName ? (
+            <p className="text-base font-semibold tracking-tight">{businessName}</p>
+          ) : (
+            // The gap shows on the document rather than blocking the preview.
+            // That visibility is what makes the ask for it persuasive later.
+            <Gap onClick={onGap ? () => onGap("businessName") : undefined}>
+              Your business name
+            </Gap>
+          )}
+          {/* A license is optional — plenty of work doesn't need one — so no
+              license is no line, not a blank to fill. */}
+          {license ? (
+            <p className="text-muted-foreground mt-1 flex items-center gap-1.5 text-xs">
+              <ShieldCheck className="size-3" />
+              LIC #{license}
+            </p>
+          ) : null}
+          {phone ? (
+            <p className="text-muted-foreground mt-1 text-xs">{phone}</p>
+          ) : null}
+        </Letterhead>
         {/* Who it is for and which document it is, on one line — the way a
             document says it, rather than as two interface labels. */}
         <p className="text-muted-foreground mt-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5 text-xs">

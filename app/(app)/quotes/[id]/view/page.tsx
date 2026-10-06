@@ -108,7 +108,8 @@ export default async function QuoteDocumentPage({
             businessName={office.businessName}
             license={office.license}
             phone={office.phone}
-            logoUrl={features.branding ? office.logoUrl : null}
+            logoUrl={office.logoUrl}
+            look={office.look}
             action={null}
             documentLabel="Quote"
             signatures={signatures}

@@ -179,6 +179,7 @@ export default async function SharePage({ params }: PageProps<"/share/[token]">)
                 license={shared.office.license}
                 phone={shared.office.phone}
                 logoUrl={shared.office.logoUrl}
+                look={shared.office.look}
                 demo={shared.demo}
                 action={null}
                 documentLabel="Quote"

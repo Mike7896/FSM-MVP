@@ -1,5 +1,5 @@
 /**
- * Document branding — the three looks a business can send, wireframe 94 · 34c.
+ * Document branding — the looks a business can send, wireframe 94 · 34c.
  *
  * **Presets, not a design tool.** No fonts, no colours, no layout editor. Three
  * looks that all read cleanly on a phone in a driveway, and that is the whole
@@ -42,11 +42,22 @@ export const DOCUMENT_PRESETS = [
   },
 ] as const;
 
-export type DocumentPreset = (typeof DOCUMENT_PRESETS)[number]["id"];
+/**
+ * The logo and the band are two separate choices, and a business can have
+ * both. Plain is neither. The four combinations are stored as one value so the
+ * column and everything that reads it stay a single preset.
+ */
+export const DOCUMENT_PRESET_IDS = [
+  "plain",
+  "with_logo",
+  "bold_header",
+  "with_logo_bold_header",
+] as const;
 
-export const DOCUMENT_PRESET_IDS = DOCUMENT_PRESETS.map(
-  (preset) => preset.id
-) as unknown as [DocumentPreset, ...DocumentPreset[]];
+export type DocumentPreset = (typeof DOCUMENT_PRESET_IDS)[number];
+
+/** What a document's header carries: the logo beside the name, the band behind it. */
+export type DocumentLook = { logo: boolean; bold: boolean };
 
 /**
  * A stored preset falls back rather than rendering nothing.
@@ -58,13 +69,31 @@ export const DOCUMENT_PRESET_IDS = DOCUMENT_PRESETS.map(
 export function normalizePreset(value: string | null | undefined): DocumentPreset {
   if (value === "classic") return "with_logo";
   if (value === "bold") return "bold_header";
-  return DOCUMENT_PRESETS.some((preset) => preset.id === value)
+  return DOCUMENT_PRESET_IDS.includes(value as DocumentPreset)
     ? (value as DocumentPreset)
     : "plain";
 }
 
+export function lookOf(value: string | null | undefined): DocumentLook {
+  const preset = normalizePreset(value);
+  return {
+    logo: preset === "with_logo" || preset === "with_logo_bold_header",
+    bold: preset === "bold_header" || preset === "with_logo_bold_header",
+  };
+}
+
+export function presetOf(look: DocumentLook): DocumentPreset {
+  if (look.logo && look.bold) return "with_logo_bold_header";
+  if (look.logo) return "with_logo";
+  if (look.bold) return "bold_header";
+  return "plain";
+}
+
 /** What to call the current preset where it is shown but not chosen. */
 export function presetLabel(value: string | null | undefined): string {
-  const id = normalizePreset(value);
-  return DOCUMENT_PRESETS.find((preset) => preset.id === id)!.name;
+  const { logo, bold } = lookOf(value);
+  if (logo && bold) return "With logo, bold header";
+  if (logo) return "With logo";
+  if (bold) return "Bold header";
+  return "Plain";
 }

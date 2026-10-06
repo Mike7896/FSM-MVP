@@ -95,6 +95,8 @@ export type HeaderSnapshot = {
   businessEmail?: string;
   businessAddress?: string;
   logoUrl?: string;
+  /** The solid band behind the letterhead — the Office's look at send. */
+  boldHeader?: boolean;
   licenseNumber?: string;
   licenseKind?: string;
   customerName?: string;

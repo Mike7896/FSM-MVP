@@ -3,7 +3,8 @@ import "server-only";
 import { and, asc, eq } from "drizzle-orm";
 
 import { db } from "@/lib/db";
-import { licenses, organizations, type HeaderSnapshot } from "@/lib/db/schema";
+import { lookOf } from "@/lib/branding";
+import { licenses, officeDefaults, organizations, type HeaderSnapshot } from "@/lib/db/schema";
 import { headerCaptured } from "@/lib/documents/header";
 import { readAccess } from "@/lib/membership/access";
 
@@ -28,11 +29,17 @@ export async function letterheadFor(
       logoUrl: header.logoUrl ?? null,
       license: header.licenseNumber ?? null,
       phone: header.businessPhone ?? null,
+      bold: header.boldHeader ?? false,
     };
   }
 
-  const [access, [office], [license]] = await Promise.all([
+  const [access, [defaults], [office], [license]] = await Promise.all([
     readAccess(organizationId),
+    db
+      .select({ preset: officeDefaults.documentPreset })
+      .from(officeDefaults)
+      .where(eq(officeDefaults.organizationId, organizationId))
+      .limit(1),
     db
       .select({
         name: organizations.name,
@@ -57,9 +64,14 @@ export async function letterheadFor(
 
   return {
     name: office?.name?.trim() || null,
-    // The logo is a Pro branding feature (Billing §2.2).
-    logoUrl: access.features.branding ? (office?.logoUrl ?? null) : null,
+    // The logo is a Pro branding feature (Billing §2.2), and goes on when the
+    // Office's look includes it — what the document it links to will show.
+    logoUrl:
+      access.features.branding && lookOf(defaults?.preset).logo
+        ? (office?.logoUrl ?? null)
+        : null,
     license: license?.number ?? null,
     phone: office?.phone ?? null,
+    bold: access.features.branding && lookOf(defaults?.preset).bold,
   };
 }

@@ -78,6 +78,8 @@ export type EmailLetterhead = {
   logoUrl: string | null;
   license: string | null;
   phone: string | null;
+  /** The bold header's band — drawn on the attached PDF, not in the email. */
+  bold: boolean;
 };
 
 /**

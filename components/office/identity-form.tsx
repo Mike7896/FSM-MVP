@@ -13,6 +13,7 @@ import { LogoField } from "@/components/office/logo-field";
 import { OfficeDocumentPreview } from "@/components/office/document-preview";
 import { SaveStatus, type SaveState } from "@/components/office/save-status";
 import { QuoteProjection } from "@/components/quote/projection";
+import type { DocumentLook } from "@/lib/branding";
 import { emptyDraft } from "@/lib/quote";
 import type { Office } from "@/lib/queries/office";
 import {
@@ -50,6 +51,7 @@ export function IdentityForm({
   license,
   presetName,
   logoOnDocuments,
+  look,
 }: {
   office: Office;
   /** The number a document would carry today, from the License Manager. */
@@ -58,6 +60,8 @@ export function IdentityForm({
   presetName: string;
   /** Whether the plan puts the logo on documents (Pro). */
   logoOnDocuments: boolean;
+  /** The look documents go out with — the preview draws it. */
+  look: DocumentLook;
 }) {
   const router = useRouter();
   const [state, setState] = useState<SaveState>("idle");
@@ -259,7 +263,20 @@ export function IdentityForm({
             <div className="grid gap-2">
               <Label>Logo</Label>
               <LogoField logoUrl={logoUrl} onChange={changeLogo} />
-              {logoOnDocuments ? null : (
+              {logoOnDocuments ? (
+                logoUrl && !look.logo ? (
+                  <p className="text-muted-foreground text-xs">
+                    It goes on documents once{" "}
+                    <Link
+                      href="/office/branding"
+                      className="text-primary-ink underline underline-offset-4"
+                    >
+                      Document branding
+                    </Link>{" "}
+                    has With logo on.
+                  </p>
+                ) : null
+              ) : (
                 <p className="text-muted-foreground text-xs">
                   Your logo goes on documents with{" "}
                   <Link
@@ -326,7 +343,8 @@ export function IdentityForm({
               businessName={values.name?.trim() || null}
               license={license}
               phone={values.phone?.trim() || null}
-              logoUrl={logoOnDocuments ? logoUrl : null}
+              logoUrl={logoUrl}
+              look={look}
               action={null}
             />
           </OfficeDocumentPreview>
