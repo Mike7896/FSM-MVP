@@ -88,6 +88,15 @@ export default async function AccountPage() {
             />
           </div>
 
+          {!federated.some((method) => method.provider === "google") ? (
+            <p className="text-muted-foreground mt-4 text-sm leading-relaxed">
+              To use Google next time, sign out and choose Google on the sign-in page.
+              Select the Google account with the same email address as this account: {" "}
+              <strong className="text-foreground">{session.email}</strong>.
+              Your jobs and plan stay on this account. A different Google email won&apos;t link to it.
+            </p>
+          ) : null}
+
           <p className="text-muted-foreground mt-4 border-t pt-4 text-xs">
             {/* The reply-to on a document is a different address on purpose:
                 one is how we reach the contractor, the other is how their
