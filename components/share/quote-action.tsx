@@ -86,6 +86,7 @@ export function QuoteAction({
       <ResponsePanel>
         <QuoteSignature
           token={token}
+          hash={shared.hash}
           customerName={shared.draft.customerName || null}
           businessName={shared.office.businessName}
           actionLabel={signLabel(shared.draft)}
@@ -99,7 +100,7 @@ export function QuoteAction({
       title="Ready to go ahead?"
       description="Approving brings up the contract to sign. No account needed."
     >
-      <ApproveButton token={token} label={approveLabel(shared.draft)} />
+      <ApproveButton hash={shared.hash} token={token} label={approveLabel(shared.draft)} />
     </ResponsePanel>
   );
 }

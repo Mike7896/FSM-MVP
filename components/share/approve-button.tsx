@@ -14,9 +14,11 @@ import { apiJson } from "@/lib/api/client";
  */
 export function ApproveButton({
   token,
+  hash,
   label,
 }: {
   token: string;
+  hash: string;
   label: string;
 }) {
   const [pending, setPending] = useState(false);
@@ -29,7 +31,8 @@ export function ApproveButton({
     try {
       const { next } = await apiJson<{ next: string }>(
         `/api/share/${token}/accept`,
-        "POST"
+        "POST",
+        { hash }
       );
       window.location.assign(next);
     } catch (cause) {

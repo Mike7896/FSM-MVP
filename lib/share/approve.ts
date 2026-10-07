@@ -7,6 +7,7 @@ import { documents, quoteDetails } from "@/lib/db/schema";
 import { acceptQuote, ensureShareLink } from "@/lib/documents";
 import { DomainError } from "@/lib/errors";
 
+import { requireReviewedQuote } from "./review-quote";
 import { heldLink } from "./link";
 
 /**
@@ -21,7 +22,7 @@ import { heldLink } from "./link";
  * approval, so a second tap waits for the first and then finds the contract it
  * made rather than generating another.
  */
-export async function approveFromLink(token: string): Promise<{ next: string }> {
+export async function approveFromLink(token: string, hash: string): Promise<{ next: string }> {
   const link = await heldLink(token, "quote", "accept");
   const business = link.businessName ?? "the business";
 
@@ -33,6 +34,8 @@ export async function approveFromLink(token: string): Promise<{ next: string }> 
       .where(eq(documents.id, link.documentId))
       .limit(1)
       .for("update", { of: documents });
+
+    await requireReviewedQuote(link.documentId, link.organizationId, hash, tx);
 
     if (quote?.status === "accepted") {
       const [contract] = await tx

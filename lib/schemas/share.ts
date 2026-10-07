@@ -9,7 +9,10 @@ import { signatureMarkSchema } from "./signing";
  * token, and when and from where are read off the request. A client that could
  * send its own IP or signing time could forge the audit trail.
  */
+export const approveQuoteSchema = z.object({ hash: z.string().regex(/^[a-f0-9]{64}$/, "Reload the quote before accepting.") });
+
 export const signFromLinkSchema = z.object({
+  hash: approveQuoteSchema.shape.hash.optional(),
   printedName: z.string().trim().min(1).max(120),
   consented: z.boolean(),
   mark: signatureMarkSchema,

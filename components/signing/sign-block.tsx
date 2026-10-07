@@ -33,11 +33,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
  * It does not compute the time, the IP or the hash. Every one of those is
  * captured on the server from the request itself, because a browser can claim
  * any of them, and an audit trail assembled from a client's claims is not one.
- * All this sends is a name, a mark, and the fact that the box was ticked.
+ * It sends a name, a mark, consent, and (for quotes) the server-issued review
+ * token so the server can reject a quote changed since the page was opened.
  */
 export function SignBlock({
   /** Where to POST. `/api/v1/documents/<id>/sign`, or the share-token route. */
   endpoint,
+  reviewHash,
   party,
   /** Prefilled from the header snapshot — she should not retype her own name. */
   defaultName,
@@ -50,6 +52,7 @@ export function SignBlock({
   bare = false,
 }: {
   endpoint: string;
+  reviewHash?: string;
   party: "contractor" | "customer";
   defaultName?: string | null;
   businessName?: string | null;
@@ -86,6 +89,7 @@ export function SignBlock({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           party,
+          hash: reviewHash,
           printedName: name.trim(),
           consented,
           mark: mode === "draw" ? { kind: "drawn", paths } : { kind: "typed" },

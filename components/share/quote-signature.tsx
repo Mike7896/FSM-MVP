@@ -12,11 +12,13 @@ import { SignBlock } from "@/components/signing/sign-block";
  */
 export function QuoteSignature({
   token,
+  hash,
   customerName,
   businessName,
   actionLabel,
 }: {
   token: string;
+  hash: string;
   customerName: string | null;
   businessName: string | null;
   actionLabel: string;
@@ -25,6 +27,7 @@ export function QuoteSignature({
     <SignBlock
       endpoint={`/api/share/${token}/sign`}
       party="customer"
+      reviewHash={hash}
       heading="Sign to accept"
       description="Draw your signature or type your name — both count. It goes on the line above."
       defaultName={customerName}

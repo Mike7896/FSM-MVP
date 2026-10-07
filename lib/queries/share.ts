@@ -1,3 +1,4 @@
+import { quoteReviewHash } from "@/lib/signing/quote-review";
 import { readChangeOrder } from "@/lib/change-orders/service";
 import "server-only";
 
@@ -92,6 +93,7 @@ type SharedBase = {
 
 export type SharedQuote = SharedBase & {
   kind: "quote";
+  hash: string;
   draft: QuoteDraft;
   status: DocumentStatus;
   /**
@@ -240,7 +242,7 @@ export async function resolveShareToken(
 
   switch (link.type) {
     case "quote":
-      return sharedQuote(base, link.header);
+      return sharedQuote(base);
     case "contract":
       return sharedContract(base, link.header);
     case "invoice":
@@ -292,7 +294,7 @@ export async function resolveDocument(
 
   switch (row.type) {
     case "quote":
-      return sharedQuote(base, row.header);
+      return sharedQuote(base);
     case "contract":
       return sharedContract(base, row.header);
     case "invoice":
@@ -350,35 +352,46 @@ async function sharedChangeOrder(
 type Base = Omit<SharedBase, "office">;
 
 async function sharedQuote(
-  base: Base,
-  header: HeaderSnapshot
+  base: Base
 ): Promise<SharedQuote | null> {
-  const record = await readQuoteRecord(base.documentId, base.organizationId);
-  if (!record) return null;
+  const snapshot = await db.transaction(async (tx) => {
+    await tx.select({ id: documents.id }).from(documents)
+      .where(and(eq(documents.id, base.documentId), eq(documents.organizationId, base.organizationId)))
+      .for("share");
+    const quote = await loadDocument(base.documentId, base.organizationId, tx);
+    if (!quote || quote.type !== "quote") return null;
+    const record = await readQuoteRecord(base.documentId, base.organizationId, tx);
+    if (!record) return null;
 
-  const [[details], [contract]] = await Promise.all([
-    db
-      .select({ validUntil: quoteDetails.validUntil })
-      .from(quoteDetails)
-      .where(eq(quoteDetails.documentId, base.documentId))
-      .limit(1),
-    db
-      .select({
-        id: documents.id,
-        status: documents.status,
-        acceptedAt: contractDetails.acceptedAt,
-      })
-      .from(documents)
-      .leftJoin(contractDetails, eq(contractDetails.documentId, documents.id))
-      .where(
-        and(
-          eq(documents.sourceDocumentId, base.documentId),
-          eq(documents.type, "contract")
+    const [[details], [contract]] = await Promise.all([
+      tx
+        .select({ validUntil: quoteDetails.validUntil })
+        .from(quoteDetails)
+        .where(eq(quoteDetails.documentId, base.documentId))
+        .limit(1),
+      tx
+        .select({
+          id: documents.id,
+          status: documents.status,
+          acceptedAt: contractDetails.acceptedAt,
+        })
+        .from(documents)
+        .leftJoin(contractDetails, eq(contractDetails.documentId, documents.id))
+        .where(
+          and(
+            eq(documents.sourceDocumentId, base.documentId),
+            eq(documents.type, "contract")
+          )
         )
-      )
-      .orderBy(desc(documents.createdAt))
-      .limit(1),
-  ]);
+        .orderBy(desc(documents.createdAt))
+        .limit(1),
+    ]);
+
+    return { quote, record, details, contract };
+  });
+  if (!snapshot) return null;
+  const { quote, record, details, contract } = snapshot;
+  const header = quote.header;
 
   const [contractLink, stored] = await Promise.all([
     contract ? liveShareLink(contract.id) : Promise.resolve(null),
@@ -396,6 +409,7 @@ async function sharedQuote(
   return {
     ...base,
     kind: "quote",
+    hash: quoteReviewHash(quote),
     draft,
     status: record.status,
     schedule,
