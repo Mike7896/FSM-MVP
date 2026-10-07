@@ -6,7 +6,7 @@ import { db } from "@/lib/db";
 import { serverEnv } from "@/lib/env";
 
 import { COUNTED, REAL_ORG, realUser } from "./counting";
-import { getFounderMetrics } from "./founder-metrics";
+import { getFounderRevenueMetrics, getFounderUsageMetrics, type FounderMetrics } from "./founder-metrics";
 
 /**
  * Every number on the admin dashboard, in one read.
@@ -31,33 +31,12 @@ import { getFounderMetrics } from "./founder-metrics";
 
 export { realUser };
 
-export type AdminMetrics = Awaited<ReturnType<typeof getAdminMetrics>>;
-
-export async function getAdminMetrics(timeZone: string) {
+function metricReaders(timeZone: string) {
   const tz = timeZone;
   const today = sql`(date_trunc('day', now() at time zone ${tz}) at time zone ${tz})`;
 
-  const [
-    people,
-    revenueRows,
-    trialsEnding,
-    usage,
-    money,
-    funnel,
-    series,
-    hourly,
-    byKind,
-    newest,
-    active,
-    testUsers,
-    support,
-    deliveries,
-    failures,
-    stripe,
-    tables,
-    dbInfo,
-  ] = await inOrder([
-    () => one(sql`
+  const queries = {
+    people: () => one(sql`
       select
         (select count(*) from profiles p where ${realUser(sql`p.id`)})::int as users,
         (select count(*) from profiles p where ${realUser(sql`p.id`)} and created_at >= ${today})::int as signups_today,
@@ -79,13 +58,7 @@ export async function getAdminMetrics(timeZone: string) {
         (select count(*) from support_requests where status = 'open')::int as support_open,
         (select min(occurred_at) from admin_events) as log_since
     `),
-
-    // MRR is what reconcile read from Stripe — every line, less discounts.
-    // A membership not reconciled since that was recorded falls back to the
-    // list prices of all its lines (packs too), then to the core line alone.
-    // mrr_cents is read through to_jsonb so a database without drizzle/0041
-    // gets the fallback rather than an error.
-    () => many(sql`
+    revenueRows: () => many(sql`
       select s.status::text as status, coalesce(pr.name, 'Unknown plan') as plan, count(*)::int as count,
         coalesce(sum(coalesce(
           (to_jsonb(ba) ->> 'mrr_cents')::bigint,
@@ -102,15 +75,13 @@ export async function getAdminMetrics(timeZone: string) {
       group by 1, 2
       order by 3 desc
     `),
-
-    () => many(sql`
+    trialsEnding: () => many(sql`
       select o.name, s.trial_end
       from subscriptions s join organizations o on o.id = s.organization_id
       where ${REAL_ORG} and s.status = 'trialing' and s.trial_end between now() and now() + interval '7 days'
       order by s.trial_end
     `),
-
-    () => one(sql`
+    usage: () => one(sql`
       with q as (
         select d.id, d.created_at, d.status, d.updated_at
         from documents d join jobs j on j.id = d.job_id join organizations o on o.id = d.organization_id
@@ -144,8 +115,7 @@ export async function getAdminMetrics(timeZone: string) {
         (select count(*) from documents d join organizations o on o.id = d.organization_id where d.type = 'invoice' and ${REAL_ORG} and d.created_at >= now() - interval '30 days')::int as invoices_30d,
         (select count(*) from documents d join organizations o on o.id = d.organization_id where d.type = 'change_order' and ${REAL_ORG} and d.created_at >= now() - interval '30 days')::int as change_orders_30d
     `),
-
-    () => one(sql`
+    money: () => one(sql`
       with pay as (
         select l.amount_cents, l.occurred_at, l.source
         from ledger_entries l join organizations o on o.id = l.organization_id
@@ -161,8 +131,7 @@ export async function getAdminMetrics(timeZone: string) {
         coalesce((select sum(amount_cents) from pay where source = 'stripe' and occurred_at >= now() - interval '30 days'), 0)::bigint as card_30d,
         (select count(*) from connected_accounts ca join organizations o on o.id = ca.organization_id where ca.status = 'active' and ${REAL_ORG})::int as card_enabled
     `),
-
-    () => one(sql`
+    funnel: () => one(sql`
       with orgs as (
         select o.id from organizations o where ${REAL_ORG} and o.created_at >= now() - interval '90 days'
       )
@@ -182,8 +151,7 @@ export async function getAdminMetrics(timeZone: string) {
         (select count(distinct organization_id) from subscriptions
           where status = 'active' and organization_id in (select id from orgs))::int as paying
     `),
-
-    () => many(sql`
+    series: () => many(sql`
       with days as (
         select generate_series(
           (date_trunc('day', now() at time zone ${tz}) - interval '29 days')::date,
@@ -207,8 +175,7 @@ export async function getAdminMetrics(timeZone: string) {
       from days d
       order by d.day
     `),
-
-    () => many(sql`
+    hourly: () => many(sql`
       with hours as (
         select generate_series(date_trunc('hour', now()) - interval '23 hours', date_trunc('hour', now()), interval '1 hour') as hour
       )
@@ -217,14 +184,12 @@ export async function getAdminMetrics(timeZone: string) {
         (select count(*) from admin_events e where ${COUNTED} and e.level in ('money', 'milestone') and e.occurred_at >= h.hour and e.occurred_at < h.hour + interval '1 hour')::int as big
       from hours h order by h.hour
     `),
-
-    () => many(sql`
+    byKind: () => many(sql`
       select kind, level, count(*)::int as count
       from admin_events where ${COUNTED} and occurred_at > now() - interval '24 hours'
       group by 1, 2 order by 3 desc
     `),
-
-    () => many(sql`
+    newest: () => many(sql`
       select o.id, o.name, o.trade, o.created_at,
         (select p.email from memberships m join profiles p on p.id = m.user_id
           where m.organization_id = o.id order by (m.role = 'owner') desc, m.created_at limit 1) as owner,
@@ -250,8 +215,7 @@ export async function getAdminMetrics(timeZone: string) {
       order by o.created_at desc
       limit 25
     `),
-
-    () => many(sql`
+    active: () => many(sql`
       select coalesce(org_name, 'No business') as name, organization_id, count(*)::int as events,
         count(*) filter (where level in ('money', 'milestone'))::int as big,
         max(occurred_at) as last
@@ -259,12 +223,8 @@ export async function getAdminMetrics(timeZone: string) {
       where ${COUNTED} and occurred_at > now() - interval '7 days'
       group by 1, 2 order by 3 desc limit 10
     `),
-
-    // Who the live presence feed should leave out — it arrives over Realtime
-    // unfiltered, so the browser drops these.
-    () => many(sql`select p.id from profiles p where not ${realUser(sql`p.id`)} limit 5000`),
-
-    () => many(sql`
+    testUsers: () => many(sql`select p.id from profiles p where not ${realUser(sql`p.id`)} limit 5000`),
+    support: () => many(sql`
       select r.id, r.number, r.kind::text as kind, r.subject, r.body, r.status::text as status, r.page,
         r.reply_to, r.created_at, r.emailed_at, r.sentry_event_id,
         o.name as business, p.full_name as name
@@ -274,30 +234,25 @@ export async function getAdminMetrics(timeZone: string) {
       order by (r.status = 'open') desc, r.created_at desc
       limit 30
     `),
-
-    () => many(sql`
+    deliveries: () => many(sql`
       select channel, status, count(*)::int as count
       from notification_deliveries
       where created_at > now() - interval '24 hours'
       group by 1, 2 order by 1, 2
     `),
-
-    () => many(sql`
+    failures: () => many(sql`
       select d.channel, d.recipient, d.last_error, d.attempts, d.updated_at, n.kind
       from notification_deliveries d left join notifications n on n.id = d.notification_id
       where d.status = 'failed'
       order by d.updated_at desc limit 10
     `),
-
-    () => many(sql`select id, type, processed_at from stripe_events order by processed_at desc nulls last limit 15`),
-
-    () => many(sql`
+    stripe: () => many(sql`select id, type, processed_at from stripe_events order by processed_at desc nulls last limit 15`),
+    tables: () => many(sql`
       select relname as name, n_live_tup::bigint as rows
       from pg_stat_user_tables where schemaname = 'public'
       order by n_live_tup desc limit 24
     `),
-
-    () => one(sql`
+    dbInfo: () => one(sql`
       select pg_size_pretty(pg_database_size(current_database())) as size,
         (select count(*) from drizzle.__drizzle_migrations)::int as migrations,
         (select string_agg(tablename, ', ') from pg_publication_tables where pubname = 'supabase_realtime') as realtime,
@@ -305,56 +260,68 @@ export async function getAdminMetrics(timeZone: string) {
         (select count(*) from platform_admins)::int as admins,
         now() as db_time
     `),
-  ]);
-
-  const revenue = revenueRows.map((row) => ({
-    status: String(row.status),
-    plan: String(row.plan),
-    count: Number(row.count),
-    mrrCents: Number(row.mrr_cents),
-    estimated: Number(row.estimated),
-  }));
-  const paying = revenue.filter((row) => row.status === "active");
-  const mrrCents = paying.reduce((sum, row) => sum + row.mrrCents, 0);
-  const payingCount = paying.reduce((sum, row) => sum + row.count, 0);
-  const founder = await getFounderMetrics(tz, { mrrCents, paying: payingCount });
-
-  return {
-    generatedAt: new Date().toISOString(),
-    timeZone: tz,
-    people,
-    founder,
-    revenue: {
-      mrrCents,
-      paying: payingCount,
-      /** Paying memberships whose MRR is list price, not yet read from Stripe. */
+  };
+  const readRevenue = async () => {
+    const revenueRows = await queries.revenueRows();
+    const revenue = revenueRows.map((row) => ({
+      status: String(row.status), plan: String(row.plan), count: Number(row.count),
+      mrrCents: Number(row.mrr_cents), estimated: Number(row.estimated),
+    }));
+    const paying = revenue.filter((row) => row.status === "active");
+    return {
+      mrrCents: paying.reduce((sum, row) => sum + row.mrrCents, 0),
+      paying: paying.reduce((sum, row) => sum + row.count, 0),
       estimated: paying.reduce((sum, row) => sum + row.estimated, 0),
       trialing: count(revenue, "trialing"),
       pastDue: count(revenue, "past_due") + count(revenue, "unpaid"),
-      canceled: count(revenue, "canceled"),
-      byPlan: revenue,
-      trialsEnding,
+      canceled: count(revenue, "canceled"), byPlan: revenue,
+      trialsEnding: await queries.trialsEnding(),
+    };
+  };
+  return {
+    activity: async () => ({
+      people: await queries.people(), series: await queries.series(),
+      hourly: await queries.hourly(), byKind: await queries.byKind(), active: await queries.active(),
+    }),
+    business: async () => ({
+      usage: await queries.usage(), money: await queries.money(), funnel: await queries.funnel(),
+      newest: await queries.newest(), testUserIds: (await queries.testUsers()).map((row) => String(row.id)),
+    }),
+    revenue: async () => {
+      const revenue = await readRevenue();
+      return { revenue, founderRevenue: await getFounderRevenueMetrics(tz, revenue) };
     },
-    usage,
-    money,
-    funnel,
-    series,
-    hourly,
-    byKind,
-    newest,
-    active,
-    testUserIds: testUsers.map((row) => String(row.id)),
-    support,
-    deliveries,
-    failures,
-    stripe,
-    system: {
-      db: dbInfo,
-      tables,
-      node: process.version,
-      environment: process.env.NODE_ENV ?? "unknown",
-      config: configuration(),
-    },
+    engagement: async () => ({ founderUsage: await getFounderUsageMetrics(tz) }),
+    support: async () => ({
+      support: await queries.support(), deliveries: await queries.deliveries(),
+      failures: await queries.failures(), stripe: await queries.stripe(),
+    }),
+    system: async () => ({ system: {
+      db: await queries.dbInfo(), tables: await queries.tables(), node: process.version,
+      environment: process.env.NODE_ENV ?? "unknown", config: configuration(),
+    } }),
+  };
+}
+
+type Readers = ReturnType<typeof metricReaders>;
+type Parts = { [K in keyof Readers]: Awaited<ReturnType<Readers[K]>> };
+export type AdminMetricParts = Parts["activity"] & Parts["business"] & Parts["revenue"] & Parts["engagement"] & Parts["support"] & Parts["system"];
+export type AdminMetrics = Omit<AdminMetricParts, "founderRevenue" | "founderUsage"> & { founder: FounderMetrics; generatedAt: string; timeZone: string };
+
+export async function getAdminMetricGroup(timeZone: string, group: keyof Readers) {
+  return { ...await metricReaders(timeZone)[group](), generatedAt: new Date().toISOString(), timeZone };
+}
+
+/** Full snapshot for scripts and existing API callers. */
+export async function getAdminMetrics(timeZone: string): Promise<AdminMetrics> {
+  const readers = metricReaders(timeZone);
+  const { revenue, founderRevenue } = await readers.revenue();
+  const { founderUsage } = await readers.engagement();
+  return {
+    ...await readers.activity(), ...await readers.business(), revenue,
+    founder: { ...founderRevenue, usage: founderUsage },
+    ...await readers.support(), ...await readers.system(),
+    generatedAt: new Date().toISOString(), timeZone,
   };
 }
 
@@ -388,19 +355,6 @@ function monthly(alias: SQL, quantity: SQL) {
 
 function count(rows: { status: string; count: number }[], status: string) {
   return rows.filter((row) => row.status === status).reduce((sum, row) => sum + row.count, 0);
-}
-
-/**
- * One query at a time. Fired together, the eighteen queries pile up on the single
- * dev connection through Supabase's transaction pooler and stall until the
- * statement timeout; one after another they take under a second.
- */
-async function inOrder<T extends (() => Promise<unknown>)[]>(
-  steps: [...T]
-): Promise<{ [K in keyof T]: Awaited<ReturnType<T[K]>> }> {
-  const results: unknown[] = [];
-  for (const step of steps) results.push(await step());
-  return results as { [K in keyof T]: Awaited<ReturnType<T[K]>> };
 }
 
 /** A row as it crosses to the browser: numbers, text, flags, and dates as text. */
