@@ -33,15 +33,14 @@ const DAY_MS = 86_400_000;
 /** The database, or a transaction — the check script runs these inside one it rolls back. */
 export type Executor = Pick<typeof db, "execute">;
 
-export async function getFounderMetrics(
-  timeZone: string,
-  current: { mrrCents: number; paying: number },
-  executor: Executor = db
-) {
+export async function getFounderMetrics(timeZone: string, current: { mrrCents: number; paying: number }, executor: Executor = db) {
+  return { ...await getFounderRevenueMetrics(timeZone, current, executor), usage: await getFounderUsageMetrics(timeZone, executor) };
+}
+
+export async function getFounderRevenueMetrics(timeZone: string, current: { mrrCents: number; paying: number }, executor: Executor = db) {
   const tz = timeZone;
   const one = (query: ReturnType<typeof sql>) => first(executor, query);
   const many = (query: ReturnType<typeof sql>) => all(executor, query);
-  const today = sql`(date_trunc('day', now() at time zone ${tz}) at time zone ${tz})`;
   const days = sql`(
     select generate_series(
       (date_trunc('day', now() at time zone ${tz}) - interval '29 days')::date,
@@ -50,7 +49,6 @@ export async function getFounderMetrics(
     )::date as day
   )`;
 
-  // One query at a time — see `inOrder` in ./metrics.
   const movement = await one(sql`
     select
       coalesce(sum(c.to_cents - c.from_cents) filter (where c.kind = 'new'), 0)::bigint as new_cents,
@@ -67,8 +65,6 @@ export async function getFounderMetrics(
     where ${REAL_ORG} and c.kind <> 'baseline' and c.changed_at > now() - interval '30 days'
   `);
 
-  // Where the 30-day window starts — or where tracking does, if later — and
-  // what each membership brought in at that moment.
   const start = await one(sql`
     with t0 as (
       select greatest(now() - interval '30 days', coalesce((select min(changed_at) from mrr_changes), now())) as at
@@ -166,87 +162,6 @@ export async function getFounderMetrics(
     order by 1
   `);
 
-  const activity = await one(sql`
-    with act as (
-      select a.user_id, a.organization_id, a.hour from user_activity_hours a
-      where a.hour > now() - interval '31 days' and ${realUser(sql`a.user_id`)}
-    )
-    select
-      (select count(distinct user_id) from act where hour >= ${today})::int as dau,
-      (select count(distinct user_id) from act where hour > now() - interval '7 days')::int as wau,
-      (select count(distinct user_id) from act where hour > now() - interval '30 days')::int as mau,
-      (select count(distinct a.organization_id) from act a join organizations o on o.id = a.organization_id
-        where ${REAL_ORG} and a.hour > now() - interval '7 days')::int as shops_7d,
-      (select min(hour) from user_activity_hours) as tracking_since
-  `);
-
-  const dauSeries = await many(sql`
-    with days as ${days},
-    act as (
-      select a.user_id, (a.hour at time zone ${tz})::date as day from user_activity_hours a
-      where a.hour > now() - interval '31 days' and ${realUser(sql`a.user_id`)}
-    )
-    select to_char(d.day, 'YYYY-MM-DD') as day,
-      (select count(distinct act.user_id) from act where act.day = d.day)::int as users
-    from days d order by d.day
-  `);
-
-  const hours = await many(sql`
-    select extract(hour from a.hour at time zone ${tz})::int as hour, count(*)::int as user_hours
-    from user_activity_hours a
-    where a.hour > now() - interval '30 days' and ${realUser(sql`a.user_id`)}
-    group by 1 order by 1
-  `);
-
-  // Of the people who signed up in each of the last eight weeks, how many
-  // came back in each of the four weeks after.
-  const retention = await many(sql`
-    with people as (
-      select p.id, date_trunc('week', p.created_at at time zone ${tz})::date as cohort
-      from profiles p
-      where ${realUser(sql`p.id`)} and p.created_at > now() - interval '9 weeks'
-    ),
-    weeks as (
-      select a.user_id, date_trunc('week', a.hour at time zone ${tz})::date as week
-      from user_activity_hours a group by 1, 2
-    )
-    select to_char(pp.cohort, 'YYYY-MM-DD') as cohort, count(distinct pp.id)::int as people,
-      count(distinct w1.user_id)::int as w1, count(distinct w2.user_id)::int as w2,
-      count(distinct w3.user_id)::int as w3, count(distinct w4.user_id)::int as w4
-    from people pp
-    left join weeks w1 on w1.user_id = pp.id and w1.week = pp.cohort + 7
-    left join weeks w2 on w2.user_id = pp.id and w2.week = pp.cohort + 14
-    left join weeks w3 on w3.user_id = pp.id and w3.week = pp.cohort + 21
-    left join weeks w4 on w4.user_id = pp.id and w4.week = pp.cohort + 28
-    group by pp.cohort order by pp.cohort desc
-  `);
-  const thisWeek = await one(sql`select to_char(date_trunc('week', now() at time zone ${tz})::date, 'YYYY-MM-DD') as week`);
-
-  // Activation: a shop sends its first real quote. Judged on shops at least a
-  // week old, so every one has had its full seven days.
-  const activation = await one(sql`
-    with first_send as (
-      select s.organization_id, min(s.sent_at) as at
-      from document_sends s join documents d on d.id = s.document_id join jobs j on j.id = d.job_id
-      where d.type = 'quote' and not j.is_demo
-      group by 1
-    ),
-    shops as (
-      select o.id, o.created_at, f.at as first_quote
-      from organizations o left join first_send f on f.organization_id = o.id
-      where ${REAL_ORG} and o.created_at > now() - interval '90 days'
-    )
-    select
-      (select count(*) from shops where created_at < now() - interval '7 days')::int as judged,
-      (select count(*) from shops where created_at < now() - interval '7 days'
-        and first_quote <= created_at + interval '7 days')::int as activated,
-      (select percentile_cont(0.5) within group (order by extract(epoch from (first_quote - created_at)) / 3600)
-        from shops where first_quote is not null) as median_hours,
-      (select count(*) from shops where first_quote is not null)::int as with_quote
-  `);
-
-  // What it costs to run, from the provider records on Costs & Usage — only
-  // ones whose billing period covers today, in dollars.
   const costs = await one(sql`
     select coalesce(sum((u.configuration ->> 'reported')::numeric), 0)::float as reported_dollars,
       count(*) filter (where u.configuration ->> 'reported' is not null)::int as providers
@@ -255,9 +170,6 @@ export async function getFounderMetrics(
       and (u.configuration ->> 'start')::date <= current_date
       and current_date < (u.configuration ->> 'end')::date
   `);
-
-  /* ── Derived ──────────────────────────────────────────────────────── */
-
   const n = (value: unknown) => {
     const number = Number(value ?? 0);
     return Number.isFinite(number) ? number : 0;
@@ -273,17 +185,6 @@ export async function getFounderMetrics(
   // A lifetime needs a churn rate measured over a real month, and some churn.
   const monthlyChurn = customerChurn !== null && windowDays >= 28 ? customerChurn * (30 / windowDays) : null;
   const ltvCents = arpaCents !== null && monthlyChurn ? arpaCents / monthlyChurn : null;
-
-  const trackedFrom = activity.tracking_since ? String(activity.tracking_since).slice(0, 10) : null;
-  const dau = dauSeries.map((row) => ({ day: String(row.day), users: n(row.users) }));
-  const tracked = trackedFrom ? dau.filter((row) => row.day >= trackedFrom) : [];
-  const avgDau = tracked.length ? tracked.reduce((sum, row) => sum + row.users, 0) / tracked.length : 0;
-  const mau = n(activity.mau);
-
-  const byHour = Array.from({ length: 24 }, (_, hour) => n(hours.find((row) => n(row.hour) === hour)?.user_hours));
-  const week = String(thisWeek.week);
-  const addDays = (date: string, count: number) =>
-    new Date(Date.parse(`${date}T00:00:00Z`) + count * DAY_MS).toISOString().slice(0, 10);
 
   const costCents = Math.round(n(costs.reported_dollars) * 100);
 
@@ -345,7 +246,120 @@ export async function getFounderMetrics(
         trialsRunning: n(row.running),
       })),
     },
-    usage: {
+    costs: {
+      reportedCents: costCents,
+      providers: n(costs.providers),
+      mrrAfterCostsCents: current.mrrCents - costCents,
+      perPayingCents: current.paying > 0 ? costCents / current.paying : null,
+    },
+  };
+}
+
+export async function getFounderUsageMetrics(timeZone: string, executor: Executor = db) {
+  const tz = timeZone;
+  const one = (query: ReturnType<typeof sql>) => first(executor, query);
+  const many = (query: ReturnType<typeof sql>) => all(executor, query);
+  const today = sql`(date_trunc('day', now() at time zone ${tz}) at time zone ${tz})`;
+  const days = sql`(
+    select generate_series(
+      (date_trunc('day', now() at time zone ${tz}) - interval '29 days')::date,
+      (date_trunc('day', now() at time zone ${tz}))::date,
+      interval '1 day'
+    )::date as day
+  )`;
+
+  const activity = await one(sql`
+    with act as (
+      select a.user_id, a.organization_id, a.hour from user_activity_hours a
+      where a.hour > now() - interval '31 days' and ${realUser(sql`a.user_id`)}
+    )
+    select
+      (select count(distinct user_id) from act where hour >= ${today})::int as dau,
+      (select count(distinct user_id) from act where hour > now() - interval '7 days')::int as wau,
+      (select count(distinct user_id) from act where hour > now() - interval '30 days')::int as mau,
+      (select count(distinct a.organization_id) from act a join organizations o on o.id = a.organization_id
+        where ${REAL_ORG} and a.hour > now() - interval '7 days')::int as shops_7d,
+      (select min(hour) from user_activity_hours) as tracking_since
+  `);
+
+  const dauSeries = await many(sql`
+    with days as ${days},
+    act as (
+      select a.user_id, (a.hour at time zone ${tz})::date as day from user_activity_hours a
+      where a.hour > now() - interval '31 days' and ${realUser(sql`a.user_id`)}
+    )
+    select to_char(d.day, 'YYYY-MM-DD') as day,
+      (select count(distinct act.user_id) from act where act.day = d.day)::int as users
+    from days d order by d.day
+  `);
+
+  const hours = await many(sql`
+    select extract(hour from a.hour at time zone ${tz})::int as hour, count(*)::int as user_hours
+    from user_activity_hours a
+    where a.hour > now() - interval '30 days' and ${realUser(sql`a.user_id`)}
+    group by 1 order by 1
+  `);
+
+  const retention = await many(sql`
+    with people as (
+      select p.id, date_trunc('week', p.created_at at time zone ${tz})::date as cohort
+      from profiles p
+      where ${realUser(sql`p.id`)} and p.created_at > now() - interval '9 weeks'
+    ),
+    weeks as (
+      select a.user_id, date_trunc('week', a.hour at time zone ${tz})::date as week
+      from user_activity_hours a group by 1, 2
+    )
+    select to_char(pp.cohort, 'YYYY-MM-DD') as cohort, count(distinct pp.id)::int as people,
+      count(distinct w1.user_id)::int as w1, count(distinct w2.user_id)::int as w2,
+      count(distinct w3.user_id)::int as w3, count(distinct w4.user_id)::int as w4
+    from people pp
+    left join weeks w1 on w1.user_id = pp.id and w1.week = pp.cohort + 7
+    left join weeks w2 on w2.user_id = pp.id and w2.week = pp.cohort + 14
+    left join weeks w3 on w3.user_id = pp.id and w3.week = pp.cohort + 21
+    left join weeks w4 on w4.user_id = pp.id and w4.week = pp.cohort + 28
+    group by pp.cohort order by pp.cohort desc
+  `);
+
+  const thisWeek = await one(sql`select to_char(date_trunc('week', now() at time zone ${tz})::date, 'YYYY-MM-DD') as week`);
+
+  const activation = await one(sql`
+    with first_send as (
+      select s.organization_id, min(s.sent_at) as at
+      from document_sends s join documents d on d.id = s.document_id join jobs j on j.id = d.job_id
+      where d.type = 'quote' and not j.is_demo
+      group by 1
+    ),
+    shops as (
+      select o.id, o.created_at, f.at as first_quote
+      from organizations o left join first_send f on f.organization_id = o.id
+      where ${REAL_ORG} and o.created_at > now() - interval '90 days'
+    )
+    select
+      (select count(*) from shops where created_at < now() - interval '7 days')::int as judged,
+      (select count(*) from shops where created_at < now() - interval '7 days'
+        and first_quote <= created_at + interval '7 days')::int as activated,
+      (select percentile_cont(0.5) within group (order by extract(epoch from (first_quote - created_at)) / 3600)
+        from shops where first_quote is not null) as median_hours,
+      (select count(*) from shops where first_quote is not null)::int as with_quote
+  `);
+  const n = (value: unknown) => {
+    const number = Number(value ?? 0);
+    return Number.isFinite(number) ? number : 0;
+  };
+  const trackedFrom = activity.tracking_since ? String(activity.tracking_since).slice(0, 10) : null;
+  const dau = dauSeries.map((row) => ({ day: String(row.day), users: n(row.users) }));
+  const tracked = trackedFrom ? dau.filter((row) => row.day >= trackedFrom) : [];
+  const avgDau = tracked.length ? tracked.reduce((sum, row) => sum + row.users, 0) / tracked.length : 0;
+  const mau = n(activity.mau);
+
+  const byHour = Array.from({ length: 24 }, (_, hour) => n(hours.find((row) => n(row.hour) === hour)?.user_hours));
+  const week = String(thisWeek.week);
+  const addDays = (date: string, count: number) =>
+    new Date(Date.parse(`${date}T00:00:00Z`) + count * DAY_MS).toISOString().slice(0, 10);
+
+
+  return {
       dau: n(activity.dau),
       wau: n(activity.wau),
       mau,
@@ -369,14 +383,7 @@ export async function getFounderMetrics(
         medianHoursToFirstQuote: activation.median_hours === null ? null : n(activation.median_hours),
         withQuote: n(activation.with_quote),
       },
-    },
-    costs: {
-      reportedCents: costCents,
-      providers: n(costs.providers),
-      mrrAfterCostsCents: current.mrrCents - costCents,
-      perPayingCents: current.paying > 0 ? costCents / current.paying : null,
-    },
-  };
+    };
 }
 
 type Row = Record<string, string | number | boolean | null>;

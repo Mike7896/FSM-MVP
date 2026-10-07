@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
   Bell,
@@ -27,7 +26,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import type { AdminMetrics } from "@/lib/admin/metrics";
+import { METRIC_GROUPS, mergeLiveEvents } from "@/lib/admin/live-refresh";
+import { useAdminMetrics } from "./use-admin-metrics";
 import type { AdminEventLevel } from "@/lib/db/schema/admin";
 import { cn } from "@/lib/utils";
 
@@ -83,11 +83,13 @@ import { useLive, type LiveEvent, type PresenceRow } from "./use-live";
  * - **Every other number** — the founder's revenue and usage numbers first —
  *   is re-read the moment the database says a table it counts from changed (a
  *   trigger signal, `useLive`), and whenever the connection comes back.
- *   Missed feed lines are caught up at the same moments.
+ *   Feed and presence snapshots reconcile on reconnect and when returning to
+ *   the tab, independently of metric notifications.
  *
  * The one timer left is the clock: "today", "last 7 days" and the hourly pulse
  * move because time passes, not because anything is written, so nothing could
- * push them. The numbers are re-read on each five-minute mark for that.
+ * push them. Windowed numbers are re-read every five minutes; infrastructure
+ * every fifteen. Hidden tabs skip these clock reads.
  *
  * Visual polish was deliberately traded for more numbers — it's for the people
  * who build the product, not the people who use it.
@@ -139,18 +141,9 @@ function Dashboard({
   initialPresence: (PresenceRow & { business: string | null })[];
   adminEmail: string;
 }) {
-  const client = useQueryClient();
-  const timeZone = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone, []);
-  const metrics = useQuery({
-    queryKey: ["admin-metrics", timeZone],
-    queryFn: async (): Promise<AdminMetrics> => {
-      const response = await fetch(`/api/v1/admin/metrics?${new URLSearchParams({ tz: timeZone })}`, { cache: "no-store" });
-      const body = (await response.json().catch(() => null)) as { data?: AdminMetrics; error?: { message?: string } } | null;
-      if (!response.ok || !body?.data) throw new Error(body?.error?.message ?? "The numbers didn't load.");
-      return body.data;
-    },
-    placeholderData: (previous) => previous,
-  });
+  const metrics = useAdminMetrics();
+  const timeZone = metrics.timeZone;
+  const refreshSoon = metrics.onChanged;
 
   const [events, setEvents] = useState<LiveEvent[]>(initialEvents);
   const [shownLevels, setShownLevels] = useState<Set<AdminEventLevel>>(() => new Set(LEVELS.map((entry) => entry.level)));
@@ -167,47 +160,8 @@ function Dashboard({
   const [soundOn, setSoundOn] = useState(false);
   const permission = useDesktopPermission();
   const now = useNow(15_000);
-  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Every line already in the feed, so one that arrives twice — pushed, and
-  // fetched by a catch-up — is shown and announced once.
+  // Deduplicate pushes against recovered snapshots without advancing a cursor.
   const seen = useRef(new Set(initialEvents.map((event) => event.id)));
-  const lastId = useRef(initialEvents.reduce((max, event) => Math.max(max, event.id), 0));
-  const catchUpRef = useRef<() => void>(() => undefined);
-
-  /*
-   * Re-read the numbers, and catch the feed up, soon. A burst of writes — a
-   * checkout touches four tables — becomes one read. A signal that lands while
-   * a read is running waits for it and reads again after, so a write committed
-   * mid-read is never left out.
-   */
-  const refreshSoon = useCallback(() => {
-    if (refreshTimer.current) return;
-    const run = () => {
-      if (client.isFetching({ queryKey: ["admin-metrics"] })) {
-        refreshTimer.current = setTimeout(run, 400);
-        return;
-      }
-      refreshTimer.current = null;
-      void client.refetchQueries({ queryKey: ["admin-metrics"] });
-      catchUpRef.current();
-    };
-    refreshTimer.current = setTimeout(run, 600);
-  }, [client]);
-
-  // The clock: windows that move with time alone, on each five-minute mark.
-  useEffect(() => {
-    let timer: ReturnType<typeof setTimeout>;
-    const schedule = () => {
-      const next = new Date();
-      next.setMinutes(Math.floor(next.getMinutes() / 5) * 5 + 5, 0, 0);
-      timer = setTimeout(() => {
-        refreshSoon();
-        schedule();
-      }, next.getTime() - Date.now());
-    };
-    schedule();
-    return () => clearTimeout(timer);
-  }, [refreshSoon]);
 
   /* ── Something happened ───────────────────────────────────────────── */
 
@@ -216,7 +170,6 @@ function Dashboard({
       if (!options.local) {
         if (seen.current.has(event.id)) return;
         seen.current.add(event.id);
-        lastId.current = Math.max(lastId.current, event.id);
       }
       // Newest first by when it happened — a caught-up line takes its place
       // in time, not the top of the list.
@@ -234,7 +187,7 @@ function Dashboard({
 
       // In the feed, but no sound, banner or spotlight: not real business.
       if ((event.test || event.internal) && !options.local) {
-        if (!event.test) refreshSoon();
+        if (!event.test) refreshSoon("admin_events");
         return;
       }
       if (options.quiet) {
@@ -254,64 +207,59 @@ function Dashboard({
       if (document.visibilityState !== "visible") setUnseen((count) => count + 1);
 
       // The counts by kind, the pulse and "most active" are read from the log.
-      if (!options.local) refreshSoon();
+      if (!options.local) refreshSoon("admin_events");
     },
     [prefs, refreshSoon]
   );
 
-  /*
-   * Catch the feed up: everything after the last line it has. A push can be
-   * missed — the connection blinks, the laptop sleeps, a line lands while the
-   * page is still loading — and this is what makes "missed" mean "late".
-   * A few missed lines alert as usual; a pile becomes one summary.
-   */
-  const catching = useRef<"idle" | "busy" | "again">("idle");
-  useEffect(() => {
-    catchUpRef.current = () => {
-      if (catching.current !== "idle") {
-        catching.current = "again";
-        return;
-      }
-      catching.current = "busy";
-      void (async () => {
-        try {
-          const response = await fetch(`/api/v1/admin/events?after=${lastId.current}`, { cache: "no-store" });
-          const body = (await response.json().catch(() => null)) as { data?: { events: LiveEvent[]; more: boolean } } | null;
-          if (!response.ok || !body?.data) return;
-          const missed = body.data.events.filter((event) => !seen.current.has(event.id));
-          const quiet = missed.length > 3;
-          for (const event of missed) onEvent(event, { quiet });
-          const counted = missed.filter((event) => !event.test && !event.internal).length;
-          if (quiet && counted) {
-            toast(`Caught up on ${counted} event${counted === 1 ? "" : "s"} the live feed missed`, {
-              description: body.data.more ? "Older ones are in the Event log." : undefined,
-              duration: 10_000,
-            });
-          }
-        } finally {
-          const rerun = catching.current === "again";
-          catching.current = "idle";
-          if (rerun) catchUpRef.current();
-        }
-      })();
-    };
-  }, [onEvent]);
-
-  const { status, presence } = useLive({
-    onEvent,
-    onChanged: refreshSoon,
-    onSynced: refreshSoon,
-    initialPresence,
+  const onRecovered = useCallback((snapshot: LiveEvent[]) => {
+    const missed = snapshot.filter((event) => !seen.current.has(event.id));
+    snapshot.forEach((event) => seen.current.add(event.id));
+    setEvents((current) => mergeLiveEvents(current, snapshot));
+    // Recovery may observe a commit after the concurrent metrics read. Its
+    // eventual push is deduplicated, so explicitly dirty the affected counts.
+    if (missed.length) refreshSoon("admin_events");
+    const counted = missed.filter((event) => !event.test && !event.internal).length;
+    if (counted) toast(`Recovered ${counted} event${counted === 1 ? "" : "s"} in the latest 500 feed entries`, {
+      description: "Older activity is available in the Event log.",
+    });
+  }, [refreshSoon]);
+  const refreshMetrics = metrics.refresh;
+  const onSynced = useCallback(() => refreshMetrics(), [refreshMetrics]);
+  const { status, presence, syncing, recoveryError, recover } = useLive({
+    onEvent, onChanged: refreshSoon, onSynced, onRecovered, initialPresence,
   });
+  const refreshAll = useCallback(() => { refreshMetrics(); recover(); }, [refreshMetrics, recover]);
+
+  // Windowed counts age without writes. Recheck infrastructure every fifteen
+  // minutes and on reconnect/manual refresh.
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    const schedule = () => {
+      const next = new Date();
+      next.setMinutes(Math.floor(next.getMinutes() / 5) * 5 + 5, 0, 0);
+      timer = setTimeout(() => {
+        if (document.visibilityState === "visible") {
+          refreshMetrics(next.getMinutes() % 15 === 0 ? METRIC_GROUPS : METRIC_GROUPS.filter((group) => group !== "system"));
+          recover();
+        }
+        schedule();
+      }, next.getTime() - Date.now());
+    };
+    const visible = () => { if (document.visibilityState === "visible") refreshAll(); };
+    document.addEventListener("visibilitychange", visible);
+    schedule();
+    return () => { clearTimeout(timer); document.removeEventListener("visibilitychange", visible); };
+  }, [refreshMetrics, recover, refreshAll]);
 
   // Presence rows carry an organization id; names come from the first read
   // and from the newest-businesses list.
   const businessNames = useMemo(() => {
     const names: Record<string, string> = {};
-    for (const row of initialPresence) if (row.organization_id && row.business) names[row.organization_id] = row.business;
+    for (const row of Object.values(presence)) if (row.organization_id && row.business) names[row.organization_id] = row.business;
     for (const row of metrics.data?.newest ?? []) names[String(row.id)] = String(row.name);
     return names;
-  }, [initialPresence, metrics.data]);
+  }, [presence, metrics.data]);
   // Check scripts and testers aren't users; Realtime delivers them anyway.
   const testUsers = useMemo(() => new Set(metrics.data?.testUserIds ?? []), [metrics.data]);
   const people = Object.values(presence).filter((row) => !testUsers.has(row.user_id));
@@ -357,7 +305,7 @@ function Dashboard({
       {/* Header. */}
       <header className="bg-card flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2">
         <span className="font-semibold tracking-tight">ServiceClerk · Live</span>
-        <StatusPill status={status} />
+        <StatusPill status={status === "live" ? (metrics.isError || recoveryError ? "degraded" : syncing || !metrics.data ? "syncing" : "live") : status} />
         <span className="text-muted-foreground text-xs tabular-nums">
           {new Date(now).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })} · {timeZone}
         </span>
@@ -434,8 +382,9 @@ function Dashboard({
           <Button
             size="sm"
             variant="ghost"
-            onClick={() => void metrics.refetch()}
-            title={metrics.dataUpdatedAt ? `Numbers read ${ago(new Date(metrics.dataUpdatedAt).toISOString(), now)}` : undefined}
+            onClick={refreshAll}
+            aria-label="Refresh live dashboard"
+            title={metrics.dataUpdatedAt ? `Oldest metric group refreshed ${ago(new Date(metrics.dataUpdatedAt).toISOString(), now)}` : undefined}
           >
             {metrics.isFetching ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
             <span className="text-muted-foreground text-xs">
@@ -444,6 +393,16 @@ function Dashboard({
           </Button>
         </div>
       </header>
+
+      {(metrics.isError || recoveryError || status === "offline" || status === "reconnecting") && (
+        <div role="alert" className="border-amber-500/40 bg-amber-500/10 rounded-lg border p-3 text-sm">
+          <p className="font-medium">Live data may be out of date.</p>
+          {metrics.isError && <p>Unable to refresh: {metrics.failed.join(", ")}. Last successful values remain visible.</p>}
+          {recoveryError && <p>{recoveryError}</p>}
+          {(status === "offline" || status === "reconnecting") && <p>The live connection is {status}. Updates may be missing until it reconnects.</p>}
+          <Button variant="outline" size="sm" className="mt-2" onClick={refreshAll}>Retry data refresh</Button>
+        </div>
+      )}
 
       {/* The last big thing. */}
       {spotlight ? <Spotlight event={spotlight} now={now} /> : null}
@@ -455,7 +414,7 @@ function Dashboard({
           <KpiGrid metrics={metrics.data} online={onlineNow} />
         </>
       ) : metrics.isError ? (
-        <p className="text-destructive rounded-lg border p-3 text-sm">{metrics.error.message}</p>
+        <p className="text-destructive rounded-lg border p-3 text-sm">{metrics.error?.message}</p>
       ) : (
         <>
           <FounderKpisSkeleton />
@@ -537,7 +496,7 @@ function Dashboard({
         <>
           <BusinessesPanel metrics={metrics.data} lastSeen={lastSeenByBusiness} now={now} />
           <div className="grid gap-2 lg:grid-cols-2">
-            <SupportPanel rows={metrics.data.support} onChanged={() => void metrics.refetch()} />
+            <SupportPanel rows={metrics.data.support} onChanged={() => refreshSoon("support_requests")} />
             <div className="grid gap-2">
               <HealthPanels metrics={metrics.data} now={now} />
             </div>
@@ -559,6 +518,10 @@ function StatusPill({ status }: { status: string }) {
   const look =
     status === "live"
       ? { dot: "bg-emerald-500 animate-pulse", text: "Live" }
+      : status === "degraded"
+        ? { dot: "bg-amber-500", text: "Data stale" }
+      : status === "syncing"
+        ? { dot: "bg-amber-500 animate-pulse", text: "Syncing" }
       : status === "connecting"
         ? { dot: "bg-amber-500", text: "Connecting" }
         : status === "reconnecting"
