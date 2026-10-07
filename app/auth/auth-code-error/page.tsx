@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import { AuthShell } from "@/components/auth/auth-shell";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -55,10 +56,10 @@ export default async function AuthCodeErrorPage({
     (typeof reason === "string" ? REASONS[reason] : undefined) ?? FALLBACK;
 
   return (
-    <main className="flex flex-1 items-center justify-center p-6">
+    <AuthShell>
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle>{copy.title}</CardTitle>
+          <CardTitle><h1>{copy.title}</h1></CardTitle>
           <CardDescription>{copy.body}</CardDescription>
         </CardHeader>
         <CardContent>
@@ -67,6 +68,6 @@ export default async function AuthCodeErrorPage({
           </Button>
         </CardContent>
       </Card>
-    </main>
+    </AuthShell>
   );
 }

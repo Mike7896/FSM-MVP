@@ -89,7 +89,7 @@ export function SignupForm({ next = "/welcome" }: { next?: string }) {
   return (
     <Card className="w-full max-w-sm [--card-spacing:--spacing(6)]">
       <CardHeader>
-        <CardTitle>Create an account</CardTitle>
+        <CardTitle><h1>Create your account.</h1></CardTitle>
         <CardDescription>
           Create professional quotes and keep your job details together. No credit card required.
         </CardDescription>

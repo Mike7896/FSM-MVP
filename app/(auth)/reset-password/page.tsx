@@ -34,7 +34,7 @@ export default async function ResetPasswordPage() {
     return (
       <Card className="w-full max-w-sm [--card-spacing:--spacing(6)]">
         <CardHeader>
-          <CardTitle>This reset link has run out</CardTitle>
+          <CardTitle><h1>This reset link has run out</h1></CardTitle>
           <CardDescription>
             A reset link works once, for {EMAIL_LINK_PROOF_MINUTES} minutes
             after you open it. Send yourself a new one.

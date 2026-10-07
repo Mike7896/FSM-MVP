@@ -89,7 +89,7 @@ export function ResetPasswordForm({
   return (
     <Card className="w-full max-w-sm [--card-spacing:--spacing(6)]">
       <CardHeader>
-        <CardTitle>{title}</CardTitle>
+        <CardTitle><h1>{title}</h1></CardTitle>
         <CardDescription>
           For <span className="text-foreground font-medium">{email}</span>
         </CardDescription>

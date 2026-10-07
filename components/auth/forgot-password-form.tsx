@@ -82,7 +82,7 @@ export function ForgotPasswordForm({
     return (
       <Card className="w-full max-w-sm [--card-spacing:--spacing(6)]">
         <CardHeader>
-          <CardTitle>Check your email</CardTitle>
+          <CardTitle><h1>Check your email</h1></CardTitle>
           <CardDescription>
             If <span className="text-foreground font-medium">{sentTo}</span>{" "}
             has an account, a link to set a new password is on its way. It can
@@ -114,7 +114,7 @@ export function ForgotPasswordForm({
   return (
     <Card className="w-full max-w-sm [--card-spacing:--spacing(6)]">
       <CardHeader>
-        <CardTitle>Reset your password</CardTitle>
+        <CardTitle><h1>Reset your password</h1></CardTitle>
         <CardDescription>
           We&apos;ll email you a link to set a new one.
         </CardDescription>
