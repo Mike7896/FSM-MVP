@@ -82,7 +82,7 @@ export function LoginForm({ next }: { next?: string }) {
   return (
     <Card className="w-full max-w-sm [--card-spacing:--spacing(6)]">
       <CardHeader>
-        <CardTitle>Sign in</CardTitle>
+        <CardTitle><h1>Welcome back.</h1></CardTitle>
         <CardDescription>Pick up where you left off.</CardDescription>
       </CardHeader>
 

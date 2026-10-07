@@ -42,7 +42,7 @@ export default async function InvitePage({ params }: PageProps<"/invite/[token]"
     return (
       <Card className="w-full max-w-sm [--card-spacing:--spacing(6)]">
         <CardHeader>
-          <CardTitle>{copy.title}</CardTitle>
+          <CardTitle><h1>{copy.title}</h1></CardTitle>
           <CardDescription>{copy.body}</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-2">
@@ -62,7 +62,7 @@ export default async function InvitePage({ params }: PageProps<"/invite/[token]"
   return (
     <Card className="w-full max-w-sm [--card-spacing:--spacing(6)]">
       <CardHeader>
-        <CardTitle>{invite.firstName ? `Welcome, ${invite.firstName}` : "Welcome to ServiceClerk"}</CardTitle>
+        <CardTitle><h1>{invite.firstName ? `Welcome, ${invite.firstName}` : "Welcome to ServiceClerk"}</h1></CardTitle>
         <CardDescription>
           {invite.inviter} set up an account for <span className="text-foreground font-medium">{invite.email}</span>.
         </CardDescription>

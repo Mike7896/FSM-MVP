@@ -123,6 +123,13 @@ export async function updateSession(request: NextRequest) {
   }
 
   if (claims && (pathname === "/login" || pathname === "/signup")) {
+    // A valid JWT can outlive its account (deleted user, restored database,
+    // or a deployment pointing at a fresh instance). The DAL uses getUser(),
+    // so using claims alone here creates /login <-> /dashboard redirects.
+    // Only bounce away from an auth form when the authoritative check agrees.
+    const { data: { user }, error } = await supabase.auth.getUser();
+    if (error || !user) return response;
+
     const params = Object.fromEntries(request.nextUrl.searchParams);
     const next = pathname === "/signup" && purchaseQuery(params)
       ? signupDestination(params) : safeNextPath(params.next);
