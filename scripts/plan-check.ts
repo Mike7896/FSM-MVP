@@ -105,5 +105,35 @@ is("…and what the deposit covered", sections[0].note, "Your deposit covers the
 is("by percent, the scope stays one list", phaseSections(byPercent), []);
 is("the schedule starts with the deposit", paymentSchedule(withDeposit).map((p) => p.name), ["Deposit", "First floor", "Second floor"]);
 
+/* Regression: independent rounding previously made the last bill negative. */
+const pennyPlan = draft({ depositPercent: 99, moneyUpFront: "deposit", progressBilling: "draws", phaseSplit: "percent",
+  phases: [33.33, 33.33, 33.33, 0.01].map((percent, i) => ({ key: String(i), name: `Phase ${i}`, percent })) }, [room("Small balance", 10_100)]);
+is("fractional phase weights never produce a negative final bill", amounts(pennyPlan), [9_999, 34, 33, 34, 0]);
+is("fractional weights preserve the exact agreed total", sum(pennyPlan), 10_100);
+for (const split of ["percent", "scope"] as const) {
+  let valid = true;
+  for (let cents = 0; cents < 180; cents++) {
+    for (const depositPercent of [0, 1, 33, 99, 100]) {
+      const phases = Array.from({ length: 6 }, (_, i) => ({ key: String(i), name: `Phase ${i}`, percent: 1 }));
+      const sample = draft({ depositPercent, moneyUpFront: "deposit", progressBilling: "draws", phaseSplit: split, phases },
+        phases.map((phase, i) => room(phase.name, i === 5 ? 0 : cents, phase.key)));
+      const plan = paymentPlan(sample);
+      valid &&= plan.every(p => Number.isInteger(p.amountCents) && p.amountCents >= 0) && sum(sample) === cents * 5;
+    }
+  }
+  is(`${split}: small balances, empty final phases, and deposits preserve nonnegative exact cents`, valid, true);
+}
+
+const tinyTaxed = emptyDraft({
+  taxRate: 0.06,
+  terms: { ...DEFAULT_TERMS, progressBilling: "draws", phaseSplit: "scope",
+    phases: [0, 1, 2, 3].map(i => ({ key: String(i), name: `Phase ${i}`, percent: 25 })) },
+  scope: [0, 1, 2].map(i => makeNode("group", { phaseKey: String(i), children: [
+    makeNode("item", { section: "material", taxable: true, sellPriceCents: 9 }),
+  ] })),
+});
+is("tax rounding stays on taxable work instead of making an empty final phase negative", amounts(tinyTaxed), [10, 9, 10, 0]);
+is("taxed phases preserve the quote total", sum(tinyTaxed), 29);
+
 console.log(failures ? `\n${failures} failed` : "\nAll checks passed.");
 process.exit(failures ? 1 : 0);

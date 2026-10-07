@@ -131,7 +131,7 @@ try {
     );
     await refuses(
       "signing the quote is refused — she would be first to commit",
-      () => signQuoteFromLink(token, { printedName: "Dana Whitfield", consented: true, mark: drawn }, audit),
+      () => signQuoteFromLink(token, { hash: shared?.kind === "quote" ? shared.hash : undefined, printedName: "Dana Whitfield", consented: true, mark: drawn }, audit),
       /hasn't signed/
     );
     check("...and the quote is untouched", (await statusOf(quoteId)) === "sent");
@@ -160,7 +160,7 @@ try {
 
     await refuses(
       "a signature without consent is refused",
-      () => signQuoteFromLink(token, { printedName: "Dana Whitfield", consented: false, mark: drawn }, audit),
+      () => signQuoteFromLink(token, { hash: shared?.kind === "quote" ? shared.hash : undefined, printedName: "Dana Whitfield", consented: false, mark: drawn }, audit),
       /electronically/
     );
     check(
@@ -170,7 +170,7 @@ try {
 
     const result = await signQuoteFromLink(
       token,
-      { printedName: "Dana Whitfield", consented: true, mark: drawn },
+      { hash: shared?.kind === "quote" ? shared.hash : undefined, printedName: "Dana Whitfield", consented: true, mark: drawn },
       audit
     );
     check("signing completes the agreement", result.status === "signed", result.status);
@@ -222,7 +222,7 @@ try {
 
     const again = await signQuoteFromLink(
       token,
-      { printedName: "Dana Whitfield", consented: true, mark: drawn },
+      { hash: shared?.kind === "quote" ? shared.hash : undefined, printedName: "Dana Whitfield", consented: true, mark: drawn },
       audit
     );
     check(
@@ -254,7 +254,7 @@ try {
     check("the link offers the button", shared?.kind === "quote" && shared.signing === false);
     await refuses(
       "signing it is refused",
-      () => signQuoteFromLink(token, { printedName: "Dana Whitfield", consented: true, mark: drawn }, audit),
+      () => signQuoteFromLink(token, { hash: shared?.kind === "quote" ? shared.hash : undefined, printedName: "Dana Whitfield", consented: true, mark: drawn }, audit),
       /button/
     );
     check("...and it is untouched", (await statusOf(quoteId)) === "sent");

@@ -1,5 +1,6 @@
-import { handlerWithParams } from "@/lib/api/handler";
+import { handlerWithParams, readJson } from "@/lib/api/handler";
 import { ok } from "@/lib/api/response";
+import { approveQuoteSchema } from "@/lib/schemas/share";
 import { approveFromLink } from "@/lib/share";
 
 /**
@@ -10,5 +11,8 @@ import { approveFromLink } from "@/lib/share";
  * is where the customer goes next.
  */
 export const POST = handlerWithParams<{ token: string }>(
-  async (_request, { token }) => ok(await approveFromLink(token))
+  async (request, { token }) => {
+    const { hash } = await readJson(request, approveQuoteSchema);
+    return ok(await approveFromLink(token, hash));
+  }
 );

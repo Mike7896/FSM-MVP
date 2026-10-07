@@ -19,6 +19,7 @@ import type { SignFromLinkInput } from "@/lib/schemas";
 import { SigningError, signDocument } from "@/lib/signing";
 import { signsOnQuote } from "@/lib/signing/lines";
 
+import { requireReviewedQuote } from "./review-quote";
 import { heldLink } from "./link";
 import { reportError } from "@/lib/observability";
 
@@ -70,6 +71,8 @@ export async function signQuoteFromLink(
       .where(eq(documents.id, link.documentId))
       .limit(1)
       .for("update", { of: documents });
+
+    await requireReviewedQuote(link.documentId, link.organizationId, input.hash, tx);
 
     if (quote?.status === "accepted") {
       const [contract] = await tx

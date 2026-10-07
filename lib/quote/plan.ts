@@ -157,16 +157,9 @@ export function paymentPlan(
 
   // By percent: each phase's share of what's left after the deposit. Shares
   // are weights, so a pattern that doesn't add to 100 still bills the whole.
-  const weight = phases.reduce((sum, phase) => sum + Math.max(phase.percent, 0), 0);
-  let allocated = 0;
+  const amounts = allocateCents(rest, phases.map(phase => phase.percent));
   phases.forEach((phase, index) => {
-    const last = index === phases.length - 1;
-    const amountCents = last
-      ? rest - allocated
-      : weight > 0
-        ? Math.round((rest * Math.max(phase.percent, 0)) / weight)
-        : 0;
-    allocated += amountCents;
+    const amountCents = amounts[index];
     plan.push({
       phaseKey: phase.key,
       name: phaseName(phase, index),
@@ -189,7 +182,7 @@ function phaseWork(
   taxRate: number | null,
   totalCents: number
 ): number[] {
-  const work = groups.map((rows) => {
+  const parts = groups.map((rows) => {
     let subtotal = 0;
     let taxable = 0;
     for (const node of rows) subtotal += baseTotal(node);
@@ -197,14 +190,28 @@ function phaseWork(
       if (optional || !isPriced(node)) return;
       if (node.taxable && node.section !== "labor") taxable += leafTotal(node);
     });
-    return subtotal + (taxRate ? Math.round(taxable * taxRate) : 0);
+    return { subtotal, taxable };
   });
+  const tax = totalCents - parts.reduce((sum, part) => sum + part.subtotal, 0);
+  const taxes = allocateCents(Math.max(0, tax), parts.map(part => taxRate ? part.taxable : 0));
+  return parts.map((part, index) => part.subtotal + taxes[index]);
+}
 
-  if (work.length) {
-    const others = work.slice(0, -1).reduce((sum, cents) => sum + cents, 0);
-    work[work.length - 1] = totalCents - others;
-  }
-  return work;
+/** Round cumulative boundaries, not each independent share. Boundaries are
+ * monotone, so no phase can borrow pennies from a negative final payment. */
+export function allocateCents(total: number, weights: number[]): number[] {
+  const positive = weights.map(weight => Math.max(0, weight));
+  const sum = positive.reduce((value, weight) => value + weight, 0);
+  let cumulative = 0;
+  let allocated = 0;
+  return positive.map((weight, index) => {
+    cumulative += weight;
+    const boundary = index === weights.length - 1 ? total
+      : sum > 0 ? Math.min(total, Math.max(allocated, Math.round(total * cumulative / sum))) : 0;
+    const amount = boundary - allocated;
+    allocated = boundary;
+    return amount;
+  });
 }
 
 /** Each phase's bill: its work, less its part of the deposit. */
@@ -218,13 +225,7 @@ function creditDeposit(
   const rest = totalCents - depositCents;
 
   if (credit === "spread") {
-    let allocated = 0;
-    return work.map((cents, index) => {
-      if (index === work.length - 1) return rest - allocated;
-      const share = totalCents > 0 ? Math.round((cents * rest) / totalCents) : 0;
-      allocated += share;
-      return share;
-    });
+    return allocateCents(rest, work);
   }
 
   // `first` walks forward, `last` walks back; either way the deposit is spent

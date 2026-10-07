@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, ne, sql } from "drizzle-orm";
 
 import { refreshJobStatus } from "@/lib/billing";
 import { db } from "@/lib/db";
@@ -9,6 +9,7 @@ import {
   documents,
   drawSchedule,
   invoiceDetails,
+  jobs,
 } from "@/lib/db/schema";
 
 import { ensureShareLink } from "../share-links";
@@ -76,6 +77,8 @@ export async function issueDepositInvoice({
       sql`select pg_advisory_xact_lock(hashtext(${`deposit:${contract.id}`}))`
     );
 
+    await tx.select({ id: jobs.id }).from(jobs).where(eq(jobs.id, contract.jobId)).for("update");
+
     const [existing] = await tx
       .select({ id: documents.id })
       .from(documents)
@@ -84,7 +87,9 @@ export async function issueDepositInvoice({
         and(
           eq(documents.sourceDocumentId, contract.id),
           eq(documents.type, "invoice"),
-          eq(invoiceDetails.invoiceType, "deposit")
+          eq(invoiceDetails.invoiceType, "deposit"),
+          ne(documents.status, "void"),
+          isNull(invoiceDetails.voidedAt)
         )
       )
       .orderBy(desc(documents.createdAt))

@@ -1,11 +1,11 @@
 import "server-only";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull, ne } from "drizzle-orm";
 
 import { jobSettlement, refreshJobStatus, unbilledStage } from "@/lib/billing";
 import type { Settlement } from "@/lib/billing";
 import { db } from "@/lib/db";
-import { documents, invoiceDetails } from "@/lib/db/schema";
+import { documents, invoiceDetails, jobs } from "@/lib/db/schema";
 import { formatMoney } from "@/lib/quote/money";
 
 import { DocumentError } from "../errors";
@@ -38,72 +38,73 @@ export async function issueFinalInvoice({
   url: string;
   settlement: Settlement;
 }> {
-  const settlement = await jobSettlement(jobId, organizationId);
+  const issued = await db.transaction(async (tx) => {
+    await tx.select({ id: jobs.id }).from(jobs)
+      .where(and(eq(jobs.id, jobId), eq(jobs.organizationId, organizationId))).for("update");
+    const settlement = await jobSettlement(jobId, organizationId, tx);
 
-  if (!settlement) {
-    throw new DocumentError(
-      "Nothing is agreed on this job yet, so there's no balance to settle.",
-      "invalid"
-    );
-  }
+    if (!settlement) {
+      throw new DocumentError(
+        "Nothing is agreed on this job yet, so there's no balance to settle.",
+        "invalid"
+      );
+    }
 
-  const [existing] = await db
-    .select({ number: documents.number })
-    .from(documents)
-    .innerJoin(invoiceDetails, eq(invoiceDetails.documentId, documents.id))
-    .where(
-      and(
-        eq(documents.jobId, jobId),
-        eq(documents.organizationId, organizationId),
-        eq(documents.type, "invoice"),
-        eq(invoiceDetails.invoiceType, "final_balance")
+    const [existing] = await tx
+      .select({ number: documents.number })
+      .from(documents)
+      .innerJoin(invoiceDetails, eq(invoiceDetails.documentId, documents.id))
+      .where(
+        and(
+          eq(documents.jobId, jobId),
+          eq(documents.organizationId, organizationId),
+          eq(documents.type, "invoice"),
+          eq(invoiceDetails.invoiceType, "final_balance"),
+          ne(documents.status, "void"),
+          isNull(invoiceDetails.voidedAt)
+        )
       )
-    )
-    .limit(1);
+      .limit(1);
 
-  if (existing) {
-    throw new DocumentError(
-      `${existing.number} is already the final bill on this job. Anything after it is a change order.`
-    );
-  }
+    if (existing) {
+      throw new DocumentError(
+        `${existing.number} is already the final bill on this job. Anything after it is a change order.`
+      );
+    }
 
-  if (settlement.unbilledCents <= 0) {
-    throw new DocumentError(
-      `Everything agreed has been billed — ${formatMoney(settlement.billedCents)} of ${formatMoney(settlement.agreedCents)}. There's nothing left to invoice.`
-    );
-  }
+    if (settlement.unbilledCents <= 0) {
+      throw new DocumentError(
+        `Everything agreed has been billed — ${formatMoney(settlement.billedCents)} of ${formatMoney(settlement.agreedCents)}. There's nothing left to invoice.`
+      );
+    }
 
-  // The stage that planned the end of the job, when the plan has one. The bill
-  // *becomes* it, so the hub shows one row rather than a plan and a bill saying
-  // the same thing.
-  const stage = await unbilledStage(jobId, "on_completion");
+    // The stage that planned the end of the job, when the plan has one. The bill
+    // *becomes* it, so the hub shows one row rather than a plan and a bill saying
+    // the same thing.
+    const stage = await unbilledStage(jobId, "on_completion", tx);
 
-  const invoice = await createInvoice({
-    organizationId,
-    input: {
-      jobId,
-      type: "final_balance",
-      amountDueCents: settlement.unbilledCents,
-      covers: stage?.name?.trim() || "Final balance",
-      sourceContractId: settlement.contractId,
-      drawScheduleId: stage?.id,
-      dueOn,
-      issue: true,
-    },
+    const invoice = await createInvoice({
+      organizationId,
+      on: tx,
+      input: {
+        jobId,
+        type: "final_balance",
+        amountDueCents: settlement.unbilledCents,
+        covers: stage?.name?.trim() || "Final balance",
+        sourceContractId: settlement.contractId,
+        drawScheduleId: stage?.id,
+        dueOn,
+        issue: true,
+      },
+    });
+
+    const { url } = await ensureShareLink({ id: invoice.id, jobId }, [
+      "view",
+      "pay",
+    ], tx);
+
+    return { invoiceId: invoice.id, number: invoice.number, url, settlement };
   });
-
-  const { url } = await ensureShareLink({ id: invoice.id, jobId }, [
-    "view",
-    "pay",
-  ]);
-
-  // The last bill is out: the work is done and what remains is collection.
   await refreshJobStatus(jobId, organizationId);
-
-  return {
-    invoiceId: invoice.id,
-    number: invoice.number,
-    url,
-    settlement,
-  };
+  return issued;
 }
