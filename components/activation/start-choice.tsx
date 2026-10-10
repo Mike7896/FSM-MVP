@@ -29,10 +29,7 @@ import { cn } from "@/lib/utils";
  * never weighted the same — because offered flat, most people take the
  * lowest-commitment option and none of them activate.
  *
- * **The input is still the design.** The smallest possible act of real work
- * sits inside the recommended start. Any text is valid — no format, no minimum,
- * no message — and once he has typed, the other two drop their explanations:
- * he has chosen, and they stay reachable without competing.
+ * Separate fields capture the customer and work without punctuation guessing.
  *
  * **The trade question comes first, once.** One tap, no Next button, skippable,
  * and absent for anyone who came in through a trade door — they answered it
@@ -187,17 +184,20 @@ function Starts({
   demoQuote: StartState["demoQuote"];
 }) {
   const router = useRouter();
-  const [seed, setSeed] = useState("");
+  const [customerName, setCustomerName] = useState("");
+  const [workTitle, setWorkTitle] = useState("");
   const [starting, setStarting] = useState(false);
   const [skipping, setSkipping] = useState(false);
 
-  const typed = seed.trim() !== "";
+  const typed = customerName.trim() !== "" || workTitle.trim() !== "";
+  const ready = Boolean(customerName.trim() && workTitle.trim());
 
   function start(event: FormEvent) {
     event.preventDefault();
-    if (!typed || starting) return;
+    if (!ready || starting) return;
     setStarting(true);
-    router.push(`/welcome/quote?seed=${encodeURIComponent(seed.trim())}`);
+    const params = new URLSearchParams({ customerName: customerName.trim(), title: workTitle.trim() });
+    router.push(`/welcome/quote?${params}`);
   }
 
   /**
@@ -277,34 +277,27 @@ function Starts({
           )}
         </div>
 
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="seed" className={EYEBROW}>
-            Customer and job description
-          </Label>
-          {/* At the desk the input and its button are one row, so the act
-              reads as a single gesture (3d). */}
-          <div className="flex flex-col gap-3 md:flex-row">
-            <Input
-              id="seed"
-              autoFocus={!returning}
-              autoComplete="off"
-              placeholder="e.g. Jordan Lee — replace the kitchen faucet"
-              maxLength={500}
-              value={seed}
-              onChange={(event) => setSeed(event.target.value)}
-              className="h-12 text-base md:flex-1"
-            />
-            <Button
-              type="submit"
-              size="lg"
-              className="h-12"
-              disabled={!typed || starting}
-            >
-              {starting ? <Loader2 className="animate-spin" /> : null}
-              Create quote
-              {starting ? null : <ArrowRight />}
-            </Button>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-2">
+            <Label htmlFor="quote-customer">Customer name</Label>
+            <Input id="quote-customer" autoFocus={!returning} autoComplete="off"
+              placeholder="Jordan Lee" maxLength={160} required value={customerName}
+              onChange={(event) => setCustomerName(event.target.value)} className="h-12 text-base" />
           </div>
+          <div className="grid gap-2">
+            <Label htmlFor="quote-title">Work title</Label>
+            <Input id="quote-title" autoComplete="off" placeholder="Kitchen faucet replacement"
+              maxLength={200} required value={workTitle}
+              onChange={(event) => setWorkTitle(event.target.value)} className="h-12 text-base" />
+          </div>
+        </div>
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <p className="text-muted-foreground text-sm">Add the scope of work and prices next.</p>
+          <Button type="submit" size="lg" className="h-12" disabled={!ready || starting}>
+            {starting ? <Loader2 className="animate-spin" /> : null}
+            Create quote
+            {starting ? null : <ArrowRight />}
+          </Button>
         </div>
       </form>
 

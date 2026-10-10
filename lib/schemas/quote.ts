@@ -244,6 +244,8 @@ export const scopeTreeSchema = z
  * has a name and often nothing else.
  */
 export const createQuoteSchema = z.object({
+  /** Stable across retries of one creation; becomes the document's id. */
+  creationId: z.uuid().optional(),
   /** Wins over `customerName` when both are sent. */
   customerId: z.uuid().optional(),
   customerName: z.string().trim().max(160).optional(),

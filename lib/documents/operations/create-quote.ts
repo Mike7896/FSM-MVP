@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq, ilike } from "drizzle-orm";
+import { and, eq, ilike, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import {
@@ -45,6 +45,20 @@ export async function createQuote({
   const demo = input.demo === true;
 
   return db.transaction(async (tx) => {
+    // Serialize retries before creating any dependent customer/job rows.
+    if (input.creationId) {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`quote-create:${input.creationId}`}))`);
+      const [existing] = await tx.select({ organizationId: documents.organizationId, createdBy: documents.createdBy, type: documents.type })
+        .from(documents).where(eq(documents.id, input.creationId)).limit(1);
+      if (existing) {
+        if (existing.organizationId !== organizationId || existing.createdBy !== userId || existing.type !== "quote") {
+          throw new DocumentError("That creation request is unavailable. Start a new quote.", "conflict");
+        }
+        const record = await readQuoteRecord(input.creationId, organizationId, tx);
+        if (!record) throw new DocumentError("The quote couldn't be read back.", "failed");
+        return record;
+      }
+    }
     /* ── The customer ─────────────────────────────────────────────────── */
 
     let customerId = demo ? null : (input.customerId ?? null);
@@ -156,6 +170,7 @@ export async function createQuote({
     const [document] = await tx
       .insert(documents)
       .values({
+        ...(input.creationId ? { id: input.creationId } : {}),
         organizationId,
         jobId,
         customerId,

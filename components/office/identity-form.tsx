@@ -106,6 +106,7 @@ export function IdentityForm({
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: serialized,
+      keepalive: true,
     }).catch(() => null);
 
     if (!response?.ok) {
@@ -171,19 +172,34 @@ export function IdentityForm({
     [form, schedule]
   );
 
-  // Leaving the page with a change still waiting sends it anyway.
+  // Mobile backgrounding and page exit need a flush too; React cleanup alone
+  // is not called when the browser closes/reloads the document.
+  useEffect(() => {
+    function flushHidden() {
+      if (document.visibilityState === "hidden") void flushRef.current();
+    }
+    function flushExit() { void flushRef.current(); }
+    function warn(event: BeforeUnloadEvent) {
+      if (!running.current && JSON.stringify(form.getValues()) === lastSaved.current) return;
+      event.preventDefault();
+      event.returnValue = "";
+    }
+    document.addEventListener("visibilitychange", flushHidden);
+    window.addEventListener("pagehide", flushExit);
+    window.addEventListener("beforeunload", warn);
+    return () => {
+      document.removeEventListener("visibilitychange", flushHidden);
+      window.removeEventListener("pagehide", flushExit);
+      window.removeEventListener("beforeunload", warn);
+    };
+  }, [form]);
+
+  // In-app navigation uses the same serialized, validated save path. An
+  // independent cleanup request could arrive before an older in-flight save.
   useEffect(
     () => () => {
-      if (timer.current === null) return;
-      window.clearTimeout(timer.current);
-      const snapshot = JSON.stringify(form.getValues());
-      if (snapshot === lastSaved.current) return;
-      void fetch("/api/v1/office", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: snapshot,
-        keepalive: true,
-      });
+      if (timer.current !== null) window.clearTimeout(timer.current);
+      if (JSON.stringify(form.getValues()) !== lastSaved.current) void flushRef.current();
     },
     [form]
   );

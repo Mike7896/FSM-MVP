@@ -16,8 +16,7 @@ export const metadata: Metadata = { title: "Your first quote" };
  * The activation editor — **the same quote editor, with the onboarding tour
  * running over it** from the tour system in the layout.
  *
- * Two ways in, from the start choice: `?seed=` is the real start, carrying the
- * sentence he typed; `?demo=1` is the demo start, a blank practice quote that
+ * Two ways in, from the start choice: separate customerName/title fields carry the real start; `?demo=1` is the demo start, a blank practice quote that
  * can only be sent to himself.
  *
  * **This lives in the activation group, not the app shell, and that is
@@ -30,16 +29,16 @@ export default async function ActivationQuotePage({
   searchParams,
 }: PageProps<"/welcome/quote">) {
   const session = await requireSession();
-  const { seed, demo } = await searchParams;
+  const { seed, demo, customerName, title } = await searchParams;
 
   const isDemo = demo === "1";
   const seedText =
     typeof seed === "string" && seed.trim().length > 0 ? seed : undefined;
 
-  // The real start without its sentence — send him back to write one rather
-  // than opening an empty editor, which is the thing the start screen exists
-  // to prevent. The demo start is blank on purpose.
-  if (!isDemo && !seedText) redirect("/welcome");
+  // A demo is deliberately blank. Real starts need details or a legacy title.
+  const hasDetails = typeof customerName === "string" && customerName.trim() &&
+    typeof title === "string" && title.trim();
+  if (!isDemo && !seedText && !hasDetails) redirect("/welcome");
 
   const [profile, org] = await Promise.all([
     getCurrentUser(),
@@ -64,8 +63,10 @@ export default async function ActivationQuotePage({
     <ActivationQuoteSurface
       // Remounted when the start changes, so the draft follows the URL rather
       // than whichever start was opened first in this tab.
-      key={isDemo ? "demo" : seedText}
+      key={isDemo ? "demo" : JSON.stringify([customerName, title, seedText])}
       seedText={isDemo ? undefined : seedText}
+      customerName={!isDemo && typeof customerName === "string" ? customerName : undefined}
+      title={!isDemo && typeof title === "string" ? title : undefined}
       demo={isDemo}
       office={office}
       hasOrganization={org !== null}

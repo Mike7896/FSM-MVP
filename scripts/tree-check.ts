@@ -17,8 +17,8 @@
  */
 
 import {
-  baseTotal, describeScope, dissolveNode, draftFromSeed, emptyDraft, flatten,
-  insertNode, makeNode, margin, moveNode, moveTargets, nodeTotal, optionalTotal, parseSeed,
+  baseTotal, describeScope, dissolveNode, draftFromStart, emptyDraft, flatten,
+  insertNode, makeNode, margin, moveNode, moveTargets, nodeTotal, optionalTotal,
   retypeNode, shapeOf, toSavePayload, totals, buildTree, applyOfficeDefaults,
   idsByKey, withIds, customerLines, customerDetail, withCustomerDetail, overridesQuote, DEFAULT_TERMS,
   type ScopeNode,
@@ -137,9 +137,9 @@ is("refuses to move past the end",
   moveNode([holder], a.key, -1)[0].children.map((n) => n.description), ["a", "b"]);
 
 /* 10 — a typed sentence names the quote and invents nothing */
-const seeded = draftFromSeed(parseSeed("Dana Reyes — the dead outlet"));
+const seeded = draftFromStart({ customerName: "Dana Reyes", title: "The dead outlet" });
 is("seed fills the customer", seeded.customerName, "Dana Reyes");
-is("seed fills the title, without the article", seeded.title, "Dead outlet");
+is("start preserves the title", seeded.title, "The dead outlet");
 is("seed adds no rows", shapeOf(seeded.scope).nodes, 0);
 is("seed writes no scope paragraph", seeded.scopeOfWork, "");
 is("an empty scope says so", describeScope(seeded.scope), "Empty");
@@ -272,6 +272,17 @@ is("existing wording is left alone", dup.scope.map((n) => n.description), ["Its 
   is("a mismatched echo adopts nothing", idsByKey(sent, returned.slice(1)).size, 0);
   is("blank rows are skipped on both sides", idsByKey([a, makeNode("item"), b], [{ ...a }, { ...b }]).get(b.key), "id-b");
 }
+
+for (const name of ["Smith, Jr.", "Jean\u2013Luc", "ACME: West Division"]) {
+  const draft = draftFromStart({ customerName: name, title: "A repair, then paint - phase 2" });
+  is("punctuation in customer survives", draft.customerName, name);
+  is("work punctuation and articles survive", draft.title, "A repair, then paint - phase 2");
+}
+is("legacy seed never invents a customer", draftFromStart({ seedText: "Replace faucet, repair drain" }).customerName, "");
+is("legacy seed remains intact", draftFromStart({ seedText: "Replace faucet, repair drain" }).title, "Replace faucet, repair drain");
+is("explicit title wins", draftFromStart({ title: "Chosen", seedText: "Old" }).title, "Chosen");
+is("customer length matches API", draftFromStart({ customerName: "x".repeat(200) }).customerName.length, 160);
+is("title length matches API", draftFromStart({ title: "x".repeat(250) }).title.length, 200);
 
 console.log(failures === 0 ? "\nAll checks passed." : `\n${failures} FAILED`);
 process.exit(failures === 0 ? 0 : 1);
