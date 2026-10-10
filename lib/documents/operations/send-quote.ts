@@ -35,11 +35,8 @@ import { withDocumentActivation } from "@/lib/membership/activation";
 /**
  * `sendQuote` — the quote goes out.
  *
- * **The Header is the gate, and nothing else is.** A quote can go with an empty
- * scope or no deposit — those are his calls — but not without the business name
- * and a license number, because they are what a customer checks first. The
- * editor asks for both at the letterhead; this refuses without them, so no
- * client can skip it.
+ * A business name is required. Licenses are optional and are captured on the
+ * document only when one has been selected or is available in the Office.
  *
  * **Email is the way out.** `email` delivers his message, the quote's card and
  * its link through Resend, from the business's name with replies going to the
@@ -146,13 +143,8 @@ async function sendQuoteNow({
   ]);
 
   const businessName = office?.name?.trim() || null;
-  const missing = [
-    businessName ? null : "business name",
-    license ? null : "license number",
-  ].filter((gap): gap is string => gap !== null);
-
-  if (missing.length) {
-    const message = `Add your ${missing.join(" and ")} first — it's what your customer checks before anything else.`;
+  if (!businessName) {
+    const message = "Add your business name before sending the quote.";
     throw new DocumentError(message, "invalid", [{ field: "header", message }]);
   }
 
@@ -257,7 +249,7 @@ async function sendQuoteNow({
     // An accepted quote is frozen. Sending it again is still a send worth
     // recording, but what it says was settled the day it was agreed.
     if (row.frozenAt === null) {
-      const licenseId = row.licenseId ?? license!.id;
+      const licenseId = row.licenseId ?? license?.id ?? null;
 
       await tx
         .update(documents)
@@ -279,7 +271,7 @@ async function sendQuoteNow({
         })
         .where(eq(documents.id, row.id));
 
-      if (!row.licenseId) {
+      if (!row.licenseId && licenseId) {
         // The license it goes out stamped with. Later changes to the vault
         // don't reach a document already in someone's hands.
         await tx

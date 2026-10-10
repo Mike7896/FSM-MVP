@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import {
@@ -13,10 +13,8 @@ import type { CaptureItem } from "@/lib/queries/captures";
 import {
   applyOfficeDefaults,
   draftFromRecord,
-  draftFromSeed,
+  draftFromStart,
   draftFromTemplate,
-  emptyDraft,
-  parseSeed,
   type QuoteDraft,
   type QuoteRecord,
   type OfficeStartingValues,
@@ -59,11 +57,13 @@ function sentHref(quoteId: string) {
  * A new quote — `/quotes/new`.
  *
  * The draft is built on the client from the seed rather than on the server,
- * because `draftFromSeed` is pure and the round trip would buy nothing. The
+ * because `draftFromStart` is pure and the round trip would buy nothing. The
  * first save is what creates the Job, the Customer and the Quote row.
  */
 export function NewQuoteSurface({
   seedText,
+  customerName,
+  title,
   template,
   jobId,
   customer,
@@ -74,6 +74,8 @@ export function NewQuoteSurface({
   send,
 }: {
   seedText?: string;
+  customerName?: string;
+  title?: string;
   /** A previous quote this one starts from — the Quick start path. */
   template?: QuoteRecord;
   jobId?: string;
@@ -87,19 +89,12 @@ export function NewQuoteSurface({
   demo?: boolean;
   send: SendContext;
 }) {
-  const seed = useMemo(
-    () => (seedText ? parseSeed(seedText) : undefined),
-    [seedText]
-  );
-
   // `useState` initialiser, not `useMemo`: the draft is state the editor owns
   // from here on, and re-deriving it would throw away everything typed since.
   const [initial] = useState<QuoteDraft>(() => {
     const base = template
       ? draftFromTemplate(template)
-      : seed
-        ? draftFromSeed(seed)
-        : emptyDraft();
+      : draftFromStart({ customerName, title, seedText });
 
     // The shop's starting values — the tax rate, the deposit, the standard
     // exclusions. Copied in here, at creation, and never read back: changing a

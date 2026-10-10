@@ -23,7 +23,7 @@ import { reportError } from "@/lib/observability";
  */
 
 const bodySchema = z.object({
-  party: z.enum(["contractor", "customer"]),
+  party: z.literal("contractor"),
   printedName: z.string().trim().min(1).max(120),
   consented: z.boolean(),
   mark: z.discriminatedUnion("kind", [
@@ -54,7 +54,7 @@ export const POST = handlerWithParams<{ id: string }>(
       const { signature, document } = await signDocument({
         documentId: id,
         organizationId,
-        party: body.party,
+        party: "contractor",
         printedName: body.printedName,
         mark: body.mark,
         consented: body.consented,

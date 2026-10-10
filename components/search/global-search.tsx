@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useInfiniteQuery, useIsFetching } from "@tanstack/react-query";
 import { Loader2, Maximize2, Search } from "lucide-react";
+import { Command as CommandPrimitive } from "cmdk";
 
 import { DemoChip } from "@/components/demo-chip";
 import { Button } from "@/components/ui/button";
@@ -114,7 +115,7 @@ export function GlobalSearch() {
           actions leave over — which is why it is taken out of the flow. */}
       <div
         ref={field}
-        className="absolute top-1/2 left-1/2 hidden w-full max-w-[34rem] -translate-x-1/2 -translate-y-1/2 px-4 md:block"
+        className="absolute top-1/2 left-1/2 hidden w-[calc(100%-24rem)] max-w-[34rem] -translate-x-1/2 -translate-y-1/2 px-4 md:block"
       >
         <Command
           shouldFilter={false}
@@ -125,8 +126,11 @@ export function GlobalSearch() {
             if (event.key === "Escape") setDropdown(false);
           }}
         >
-          <div className="relative">
-            <CommandInput
+          <div className="border-input bg-muted/40 focus-within:border-ring focus-within:ring-ring/25 flex h-10 items-center gap-2 rounded-lg border px-3 shadow-xs transition-colors focus-within:bg-background focus-within:ring-2">
+            <Search aria-hidden="true" className="text-muted-foreground size-4 shrink-0" />
+            <CommandPrimitive.Input
+              aria-label="Search jobs, quotes, customers and invoices"
+              className="placeholder:text-muted-foreground min-w-0 flex-1 bg-transparent text-sm outline-none"
               value={term}
               onValueChange={(value) => {
                 setTerm(value);
@@ -142,9 +146,9 @@ export function GlobalSearch() {
                 setPalette(true);
               }}
               title="Open the full search (⌘K)"
-              className="text-muted-foreground hover:text-foreground absolute top-1/2 right-3 z-10 -translate-y-1/2 rounded p-0.5"
+              className="text-muted-foreground hover:text-foreground hover:bg-muted focus-visible:ring-ring -mr-1 flex size-8 shrink-0 items-center justify-center rounded-md outline-none focus-visible:ring-2"
             >
-              <Maximize2 className="size-3.5" />
+              <Maximize2 aria-hidden="true" className="size-4" />
               <span className="sr-only">Open the full search</span>
             </button>
           </div>

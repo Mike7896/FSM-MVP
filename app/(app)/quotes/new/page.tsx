@@ -42,7 +42,7 @@ export default async function NewQuotePage({
     requireActiveOrganization(),
     requireSession(),
   ]);
-  const [{ seed, job, from, customer }, identity, signature, defaults, profile] =
+  const [{ seed, job, from, customer, customerName, title }, identity, signature, defaults, profile] =
     await Promise.all([
       searchParams,
       getOfficeIdentity(org.id),
@@ -96,6 +96,8 @@ export default async function NewQuotePage({
     <div className="-m-4 flex min-h-0 flex-1 flex-col md:-m-6">
       <NewQuoteSurface
         seedText={typeof seed === "string" ? seed : undefined}
+        customerName={typeof customerName === "string" ? customerName : undefined}
+        title={typeof title === "string" ? title : undefined}
         template={template ?? undefined}
         jobId={jobId}
         customer={

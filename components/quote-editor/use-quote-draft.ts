@@ -104,6 +104,8 @@ export function useQuoteDraft({
   // Touched only inside the async save, never during render.
   const inFlight = useRef(false);
   const queued = useRef<QuoteDraft | null>(null);
+  // A lost create response must replay the same request, then PATCH newer edits.
+  const creation = useRef<{ id: string; draft: QuoteDraft } | null>(null);
   /**
    * The last draft the server confirmed, identity and all, or null when the
    * most recent write failed. What `saveNow` hands back — a caller about to
@@ -134,6 +136,13 @@ export function useQuoteDraft({
         let current: QuoteDraft | null = first;
 
         while (current) {
+          if (!current.id && !saveRequest) {
+            creation.current ??= { id: crypto.randomUUID(), draft: current };
+            if (current !== creation.current.draft) {
+              queued.current ??= current;
+              current = creation.current.draft;
+            }
+          }
           setStatus("saving");
           setError(null);
 
@@ -142,6 +151,9 @@ export function useQuoteDraft({
             server = await write(current);
           } catch (cause) {
             const failure = cause instanceof SaveFailure ? cause : null;
+            // An explicit refusal did not create the quote. Let a corrected
+            // draft start a new attempt instead of replaying invalid fields.
+            if (failure && !failure.retryable) creation.current = null;
             confirmed.current = null;
             setStatus("error");
             setError(failure?.message ?? OFFLINE_MESSAGE);
@@ -162,6 +174,7 @@ export function useQuoteDraft({
           setDraft((live) => adopt(live, server, ids));
           setSaved(adopted);
           confirmed.current = adopted;
+          creation.current = null;
           setStatus("saved");
           setFailures(0);
           setRetryable(false);
@@ -189,6 +202,7 @@ export function useQuoteDraft({
                 ? toSavePayload(target)
                 : {
                     ...toSavePayload(target),
+                    creationId: creation.current!.id,
                     jobId,
                     // An explicit id beats the name match the endpoint would
                     // otherwise fall back on.
@@ -328,7 +342,7 @@ export function useQuoteDraft({
   const saveNow = useCallback(async (): Promise<QuoteDraft | null> => {
     // A quote never written has no row yet, changed or not — one opened from a
     // sentence and sent untouched is still a quote to create.
-    if (dirty || !confirmed.current) await saveRef.current(draft);
+    if (dirty || !confirmed.current) void saveRef.current(draft);
 
     // A write that was already out when this was called — the debounce's, or
     // one queued behind it — has to land before the answer means anything.
@@ -337,6 +351,9 @@ export function useQuoteDraft({
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
 
+    // A timeout is not a successful flush. Also refuse if editing continued
+    // while we waited and the newest draft has not reached the server yet.
+    if (inFlight.current || !confirmed.current || hasChanges(latest.current.draft, confirmed.current)) return null;
     return confirmed.current;
   }, [draft, dirty]);
 

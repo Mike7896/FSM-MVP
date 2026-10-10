@@ -109,6 +109,10 @@ export async function signDocument(
 ): Promise<{ signature: DocumentSignature; document: AnyDocument }> {
   const on: Executor = input.on ?? db;
 
+  if (input.authMethod === "account" && input.party !== "contractor") {
+    throw new SigningError("The customer must sign through their own share link.", false);
+  }
+
   if (!input.consented) {
     throw new SigningError(
       "Agree to sign electronically before signing. You can ask for a paper " +

@@ -13,9 +13,7 @@ import { SendFlow, type SenderOffice } from "@/components/quote-send/send-flow";
 import { useTours } from "@/components/tours/context";
 import { Button } from "@/components/ui/button";
 import {
-  draftFromSeed,
-  emptyDraft,
-  parseSeed,
+  draftFromStart,
   type QuoteDraft,
 } from "@/lib/quote";
 
@@ -41,13 +39,17 @@ import {
  */
 export function ActivationQuoteSurface({
   seedText,
+  customerName,
+  title,
   demo,
   office: initialOffice,
   hasOrganization,
   send,
 }: {
-  /** The sentence from the real start. The demo start has none. */
+  /** Legacy links preserve their text as a work title. */
   seedText?: string;
+  customerName?: string;
+  title?: string;
   demo: boolean;
   office: SenderOffice;
   hasOrganization: boolean;
@@ -56,10 +58,10 @@ export function ActivationQuoteSurface({
   const router = useRouter();
   const { start: startTour } = useTours();
 
-  // The sentence names the customer and the job, and nothing else. A demo is a
+  // Explicit fields name the customer and job. A demo is a
   // blank practice quote — nothing is filled in for him either way.
   const [initial] = useState<QuoteDraft>(() =>
-    seedText ? draftFromSeed(parseSeed(seedText)) : emptyDraft()
+    draftFromStart({ customerName, title, seedText })
   );
 
   const editor = useRef<QuoteEditorController>(null);

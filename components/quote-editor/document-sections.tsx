@@ -5,7 +5,6 @@ import { ChevronRight } from "lucide-react";
 
 import { EditableText } from "@/components/fields";
 import {
-  EYEBROW,
   FIELD_LABEL,
   SectionCard,
   SectionNumber,
@@ -62,17 +61,7 @@ export type OfficeIdentity = {
 
 /* ── Header ───────────────────────────────────────────────────────────── */
 
-/**
- * Parties, address, number, and the document type word.
- *
- * Two sides, the way the paper sets them: **For** — the customer and the
- * work, the two things typed here — and **From** — the business, read from
- * the Office and never edited on a quote.
- *
- * A value the shop has not given us is **drawn as a gap — never invented, and
- * never silently dropped**: a dashed "License number" where it will go is the
- * version he actually notices.
- */
+/** Editable job details lead; issuer information stays secondary. */
 export function HeaderSection({
   draft,
   office,
@@ -95,134 +84,62 @@ export function HeaderSection({
    */
   changeOrder?: ChangeOrderContext;
 }) {
-  const word = changeOrder ? "Change order" : "Quote";
 
   if (collapsed) {
     const summary = [
-      office.businessName,
-      draft.number ?? word,
-      office.license ? `License #${office.license}` : null,
+      draft.title.trim() || "Untitled work",
+      draft.customerName.trim() || "Add customer",
     ]
       .filter(Boolean)
       .join(" · ");
 
-    return <CollapsedRow id="header" detail={summary} onClick={onExpand} />;
+    return <CollapsedRow id="header" label={changeOrder ? "Change order details" : "Quote details"} detail={summary} onClick={onExpand} />;
   }
 
 
   return (
-    <SectionCard
-      id="header"
-      hint={!draft.customerName.trim() && !draft.title.trim()}
-    >
-      <div className="grid gap-x-8 gap-y-6 @3xl:grid-cols-[minmax(0,1fr)_17rem]">
-        {/* For — the two things typed here, side by side once there's room. */}
-        <div className="grid content-start gap-4">
-          <p className={EYEBROW}>For</p>
-          <div className="grid gap-4 @lg:grid-cols-2">
-            {changeOrder ? (
-              <div className="grid content-start gap-1.5">
-                <span className={FIELD_LABEL}>Customer</span>
-                <p className="flex min-h-10 items-center text-[15px] font-medium">
-                  {draft.customerName || "The customer"}
-                </p>
-              </div>
-            ) : (
-              <label className="grid content-start gap-1.5">
-                <span className={FIELD_LABEL}>Customer</span>
-                <EditableText
-                  className="text-[15px] md:text-[15px]"
-                  value={draft.customerName}
-                  placeholder="Who is this for?"
-                  aria-label="Customer"
-                  onChange={(event) =>
-                    onChange({ customerName: event.target.value })
-                  }
-                />
-              </label>
-            )}
-            <label className="grid content-start gap-1.5">
-              <span className={FIELD_LABEL}>
-                {changeOrder ? "The change" : "Work title"}
-              </span>
-              <EditableText
-                className="text-[15px] md:text-[15px]"
-                value={draft.title}
-                placeholder={changeOrder ? "Name the change" : "What's the work?"}
-                aria-label={changeOrder ? "The change" : "The work"}
-                onChange={(event) => onChange({ title: event.target.value })}
-              />
+    <SectionCard id="header" label={changeOrder ? "Change order details" : "Quote details"} hint={false}
+      aside={<span className="text-muted-foreground text-xs tabular-nums">{draft.number ?? "Number assigned on save"}</span>}>
+      <div className="grid gap-5">
+        <label className="grid gap-2">
+          <span className={FIELD_LABEL}>{changeOrder ? "The change" : "Work title"}</span>
+          <EditableText tone="title" className="min-h-12" value={draft.title}
+            maxLength={200} placeholder={changeOrder ? "Name the change" : "What is the work?"}
+            aria-label={changeOrder ? "The change" : "The work"}
+            onChange={(event) => onChange({ title: event.target.value })} />
+        </label>
+        <div className="grid gap-4 @lg:grid-cols-2">
+          {changeOrder ? (
+            <div className="grid content-start gap-2">
+              <span className={FIELD_LABEL}>Customer</span>
+              <p className="min-h-10 py-2 text-sm font-medium [overflow-wrap:anywhere]">{draft.customerName || "The customer"}</p>
+            </div>
+          ) : (
+            <label className="grid content-start gap-2">
+              <span className={FIELD_LABEL}>Customer</span>
+              <EditableText value={draft.customerName} maxLength={160}
+                placeholder="Who is this for?" aria-label="Customer"
+                onChange={(event) => onChange({ customerName: event.target.value })} />
             </label>
-          </div>
+          )}
           {address ? (
-            <div className="grid gap-1">
+            <div className="grid content-start gap-2">
               <span className={FIELD_LABEL}>Job address</span>
-              <p className="text-muted-foreground text-sm">{address}</p>
+              <p className="text-muted-foreground py-2 text-sm [overflow-wrap:anywhere]">{address}</p>
             </div>
           ) : null}
         </div>
-
-        {/* From — the Office's, read-only here. */}
-        <div className="bg-muted/40 grid content-start gap-3 rounded-lg border p-4">
-          <p className={EYEBROW}>From</p>
-          <dl className="grid gap-2.5 text-sm">
-            <FromLine label="Business">
-              {office.businessName ? (
-                <span className="font-medium">{office.businessName}</span>
-              ) : (
-                <Gap>Your business name</Gap>
-              )}
-            </FromLine>
-            <FromLine label="License">
-              {office.license ? (
-                `#${office.license}`
-              ) : (
-                <span className="text-muted-foreground">None — optional</span>
-              )}
-            </FromLine>
-            {office.phone ? (
-              <FromLine label="Phone">{office.phone}</FromLine>
-            ) : null}
-            <FromLine label={`${word} no.`}>
-              {draft.number ?? (
-                <span className="text-muted-foreground">On first save</span>
-              )}
-              {changeOrder?.contractNumber ? (
-                <span className="text-muted-foreground">
-                  {" "}
-                  · amends {changeOrder.contractNumber}
-                </span>
-              ) : null}
-            </FromLine>
-          </dl>
-          {office.businessName ? null : (
-            // Stated, not nagged about, and never blocking.
-            <p className="text-muted-foreground border-t pt-3 text-[13px] leading-snug">
-              Add your business name in the Office — it heads every quote you
-              send.
-            </p>
-          )}
+        <div className="text-muted-foreground grid gap-2 border-t pt-4 text-xs [overflow-wrap:anywhere]">
+          <p className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+            <span><span className="mr-1">From</span> <span className="text-foreground font-medium">{office.businessName || "Your business name"}</span></span>
+            {office.phone ? <span>{office.phone}</span> : null}
+            {office.license ? <span>License #{office.license}</span> : null}
+          </p>
+          {office.businessName ? null : <p>Add your business name in the Office. It heads every quote you send.</p>}
+          {changeOrder?.contractNumber ? <p>Amends contract {changeOrder.contractNumber}</p> : null}
         </div>
       </div>
     </SectionCard>
-  );
-}
-
-function FromLine({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-baseline gap-2">
-      <dt className="text-muted-foreground text-[13px]">{label}</dt>
-      <dd className="min-w-0 [overflow-wrap:anywhere]">{children}</dd>
-    </div>
-  );
-}
-
-/** A slot the shop has not filled yet, drawn as a slot. */
-function Gap({ children }: { children: ReactNode }) {
-  return (
-    <span className="text-muted-foreground border-muted-foreground/50 border-b border-dashed">
-      {children}
-    </span>
   );
 }
 
@@ -624,24 +541,26 @@ function MiniLine({ who, children }: { who: string; children: ReactNode }) {
 function CollapsedRow({
   id,
   detail,
+  label,
   onClick,
 }: {
   id: DocumentSectionId;
   detail: string;
+  label?: string;
   onClick?: () => void;
 }) {
   const section = documentSection(id);
 
   const content = (
-    <div className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left">
+    <div className="flex w-full flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 py-3 text-left">
       <span className="flex shrink-0 items-center gap-2.5">
         <SectionNumber id={id} />
         <span className="text-base font-semibold tracking-tight">
-          {section.label}
+          {label ?? section.label}
         </span>
       </span>
       <span className="flex min-w-0 items-center gap-2">
-        <span className="text-muted-foreground truncate text-sm">{detail}</span>
+        <span className="text-muted-foreground text-sm [overflow-wrap:anywhere]">{detail}</span>
         {onClick ? (
           <ChevronRight className="text-muted-foreground size-4 shrink-0" />
         ) : (
