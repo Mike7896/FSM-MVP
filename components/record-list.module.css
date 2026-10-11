@@ -1,0 +1,45 @@
+.list {
+  container-type: inline-size;
+  border: 1px solid color-mix(in srgb, var(--border) 65%, var(--card));
+  border-radius: 14px;
+  background: var(--card);
+  overflow: hidden;
+}
+.heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 24px; background: color-mix(in srgb, var(--muted) 55%, var(--card)); }
+.heading h2 { display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 600; }
+.heading > span { color: var(--muted-foreground); font-size: 11px; }
+.count { display: inline-grid; place-items: center; min-width: 24px; padding: 2px 7px; border-radius: 6px; background: var(--card); color: var(--muted-foreground); font-size: 11px; font-variant-numeric: tabular-nums; }
+.items { margin: 0; padding: 0; list-style: none; }
+.row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 40%) 40px; align-items: center; gap: 24px; padding: 22px 24px; border-top: 1px solid color-mix(in srgb, var(--border) 55%, var(--card)); }
+.row:hover { background: color-mix(in srgb, var(--muted) 50%, var(--card)); }
+.row:focus-visible { outline: 2px solid var(--ring); outline-offset: -3px; border-radius: 8px; }
+.row:active { background: var(--muted); }
+.identity { display: flex; align-items: flex-start; gap: 16px; min-width: 0; }
+.icon { display: grid; place-items: center; width: 44px; height: 44px; flex-shrink: 0; border-radius: 12px; background: color-mix(in srgb, var(--primary) 12%, var(--card)); color: var(--primary-ink); }
+.copy { min-width: 0; }
+.titleLine { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; }
+.title { font-size: 14px; font-weight: 600; line-height: 1.5; overflow-wrap: anywhere; }
+.reference { color: var(--muted-foreground); font-size: 11px; font-variant-numeric: tabular-nums; }
+.description { margin-top: 4px; color: var(--muted-foreground); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: start; gap: 16px; text-align: right; }
+.metric { min-width: 0; }
+.label { display: block; color: var(--muted-foreground); font-size: 11px; line-height: 1.5; }
+.value { margin-top: 6px; font-size: 14px; font-weight: 600; line-height: 1.5; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.value[data-positive] { color: var(--positive); }
+.open { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 10px; color: var(--primary-ink); background: color-mix(in srgb, var(--primary) 12%, var(--card)); }
+.row:hover .open, .row:focus-visible .open { background: var(--primary); color: var(--primary-foreground); }
+@container (max-width: 850px) {
+  .row { grid-template-columns: minmax(0, 1fr) 40px; gap: 16px; }
+  .metrics { grid-column: 1; text-align: left; padding-left: 60px; }
+  .open { grid-column: 2; grid-row: 1; }
+}
+@container (max-width: 480px) {
+  .heading { padding: 14px 16px; }
+  .heading > span { display: none; }
+  .row { padding: 20px 16px; gap: 16px 12px; }
+  .identity { gap: 12px; }
+  .icon { width: 36px; height: 36px; border-radius: 10px; }
+  .metrics { grid-column: 1 / -1; padding-left: 0; gap: 12px; border-top: 1px solid color-mix(in srgb, var(--border) 45%, var(--card)); padding-top: 14px; }
+  .value { font-size: 13px; }
+}

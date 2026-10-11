@@ -3,10 +3,11 @@ import { listTags, tagsForRecords } from "@/lib/queries/tags";
 import { parseTagFilter } from "@/lib/tags";
 import Link from "next/link";
 import type { Metadata } from "next";
-import { ArrowUpRight, BriefcaseBusiness, Plus, Search, ShieldCheck } from "lucide-react";
+import { Plus, Search, ShieldCheck } from "lucide-react";
 
 import { DemoChip } from "@/components/demo-chip";
 import { StagePill } from "@/components/jobs/stage-pill";
+import { RecordList, RecordRow, RecordMetric } from "@/components/record-list";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -138,67 +139,29 @@ export default async function JobsPage({
           </EmptyContent>
         </Empty>
       ) : (
-        <div className={styles.jobList}>
-          <div className={styles.listHeading}><h2>{(search || filters.tags || filters.tagMode === "untagged") ? "Search results" : "All jobs"}</h2><span>{jobs.length} {jobs.length === 1 ? "job" : "jobs"} shown</span></div>
+        <RecordList title={search || filters.tags || filters.tagMode === "untagged" ? "Search results" : "All jobs"} count={jobs.length}>
           {jobs.map((job) => (
-            <Link
+            <RecordRow
               key={job.id}
               href={`/jobs/${job.id}`}
-              className={styles.jobRow}
-            >
-              <div className={styles.rowIdentity}>
-                <span className={styles.rowIcon} aria-hidden="true"><BriefcaseBusiness size={20} strokeWidth={1.5} /></span>
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-baseline gap-2">
-                    <span className="text-muted-foreground text-xs tabular-nums">
-                      #{job.number}
-                    </span>
-                    <span className="font-medium">{job.customerName}</span>
-                    {/* A demo job has no money position to report, so DEMO is
-                        its status. */}
-                    {job.demo ? (
-                      <DemoChip />
-                    ) : (
-                      <StagePill label={job.stage.label} tone={job.stage.tone} />
-                    )}
-                    {job.permitStatus ? (
-                      <Badge variant="outline" className="capitalize">
-                        Permit {job.permitStatus.replace(/_/g, " ")}
-                      </Badge>
-                    ) : null}
-                  </div>
-                  <p className="text-muted-foreground mt-2 text-sm leading-relaxed">
-                    {[job.name, job.address].filter(Boolean).join(" · ") ||
-                      "No description yet"}
-                  </p>
-                  <TagBadges tags={recordTags[job.id] ?? []} />
-                </div>
-              </div>
-              {job.demo ? (
-                <p className="text-muted-foreground shrink-0 text-sm">
-                  Not counted in your money
-                </p>
-              ) : (
-                <div className={styles.rowMoney}>
-                  <Figure label="Total" cents={job.money.totalCents} />
-                  <Figure label="Collected" cents={job.money.collectedCents} />
-                  <Figure label="Remaining" cents={job.money.remainingCents} />
-                </div>
-              )}
-              <ArrowUpRight className={styles.rowArrow} size={17} aria-hidden="true" />
-            </Link>
+              kind="job"
+              title={job.customerName}
+              reference={`#${job.number}`}
+              description={[job.name, job.address].filter(Boolean).join(" · ") || "No description yet"}
+              badges={<>
+                {job.demo ? <DemoChip /> : <StagePill label={job.stage.label} tone={job.stage.tone} />}
+                {job.permitStatus ? <Badge variant="outline" className="capitalize">Permit {job.permitStatus.replace(/_/g, " ")}</Badge> : null}
+              </>}
+              tags={<TagBadges tags={recordTags[job.id] ?? []} />}
+              metrics={job.demo ? <span className="text-muted-foreground col-span-3 text-xs">Not counted in your money</span> : <>
+                <RecordMetric label="Total">{formatMoney(job.money.totalCents)}</RecordMetric>
+                <RecordMetric label="Collected" positive={job.money.collectedCents > 0}>{formatMoney(job.money.collectedCents)}</RecordMetric>
+                <RecordMetric label="Remaining">{formatMoney(job.money.remainingCents)}</RecordMetric>
+              </>}
+            />
           ))}
-        </div>
+        </RecordList>
       )}
-    </div>
-  );
-}
-
-function Figure({ label, cents }: { label: string; cents: number }) {
-  return (
-    <div>
-      <p className="text-muted-foreground text-xs">{label}</p>
-      <p className="mt-1 font-medium tabular-nums break-words">{formatMoney(cents)}</p>
     </div>
   );
 }
