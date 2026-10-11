@@ -5,6 +5,7 @@ import { handlerWithParams, readJson } from "@/lib/api/handler";
 import { ApiError, noContent, ok } from "@/lib/api/response";
 import { db } from "@/lib/db";
 import { customers } from "@/lib/db/schema";
+import { updateCustomer } from "@/lib/customers/service";
 import { getCustomer } from "@/lib/queries/customers";
 import { updateCustomerSchema } from "@/lib/schemas";
 
@@ -48,28 +49,9 @@ export const PATCH = handlerWithParams<{ id: string }>(
     const { organizationId } = await requireOrg(request, caller);
     const body = await readJson(request, updateCustomerSchema);
 
-    const [updated] = await db
-      .update(customers)
-      .set({
-        ...body,
-        // An empty email is how a form clears one; storing "" would make the
-        // column lie about having a value.
-        email: body.email === "" ? null : body.email,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(customers.id, id),
-          eq(customers.organizationId, organizationId)
-        )
-      )
-      .returning();
-
-    if (!updated) {
-      throw new ApiError("not_found", "No customer with that id in this shop.");
-    }
-
-    return ok(updated);
+    return ok(
+      await updateCustomer({ organizationId, customerId: id, input: body })
+    );
   }
 );
 

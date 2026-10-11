@@ -37,6 +37,8 @@ import {
   type ScheduledPayment,
 } from "@/lib/quote";
 import { contractDraft } from "@/lib/queries/contracts";
+import { documentCustomer, issuedFact } from "@/lib/documents/document-customer";
+import { calendarDate, type DocumentCustomer, type DocumentFact } from "@/lib/documents/parties";
 import {
   getOfficeSignature,
   officeAsItStands,
@@ -81,6 +83,13 @@ type SharedBase = {
   office: OfficeIdentity;
   scopes: string[];
   jobAddress: string | null;
+  /**
+   * Who it's for, as the paper prints them — frozen with the letterhead when
+   * the document went out, read from their record before that.
+   */
+  customer: DocumentCustomer;
+  /** The dates beside the number: issued, and valid until or due. */
+  facts: DocumentFact[];
   /** A demo, labelled on the page so it can never pass for real work. */
   demo: boolean;
   /**
@@ -325,15 +334,19 @@ async function sharedChangeOrder(
       : null;
   };
 
+  const customer = await documentCustomer(doc.header, doc.customerId);
+
   return {
     ...base,
     office: officeFromHeader(doc.header),
+    customer,
+    facts: [issuedFact(doc.sentAt ?? doc.header.capturedAt)],
     kind: "change_order",
     number: doc.number,
     status: doc.status,
     summary: doc.summary,
     title: doc.title?.trim() || null,
-    customerName: doc.header.customerName ?? null,
+    customerName: customer.name,
     hash,
     deltaCents: doc.details!.deltaCents,
     baseAmountCents: doc.details!.baseAmountCents ?? 0,
@@ -349,7 +362,7 @@ async function sharedChangeOrder(
   };
 }
 
-type Base = Omit<SharedBase, "office">;
+type Base = Omit<SharedBase, "office" | "customer" | "facts">;
 
 async function sharedQuote(
   base: Base
@@ -401,6 +414,7 @@ async function sharedQuote(
   ]);
   const draft = draftFromRecord(record);
   const open = record.status === "sent" || record.status === "viewed";
+  const customer = await documentCustomer(header, quote.customerId);
 
   // Priced off the same total the page shows, so the schedule and the figure
   // above it can never disagree.
@@ -411,6 +425,15 @@ async function sharedQuote(
     kind: "quote",
     hash: quoteReviewHash(quote),
     draft,
+    // The name is the quote's own, as the editor writes it; the rest is the
+    // customer the send froze.
+    customer: { ...customer, name: draft.customerName.trim() || customer.name },
+    facts: [
+      issuedFact(quote.sentAt ?? header.capturedAt),
+      ...(details?.validUntil
+        ? [{ label: "Valid until", value: calendarDate(details.validUntil) }]
+        : []),
+    ],
     status: record.status,
     schedule,
     // **The letterhead on the page is the one it was sent with** (Documents §2).
@@ -474,7 +497,10 @@ async function sharedContract(
 
   const quote = source?.type === "quote" ? source : null;
 
-  const depositLink = deposit ? await liveShareLink(deposit.id) : null;
+  const [depositLink, frozen] = await Promise.all([
+    deposit ? liveShareLink(deposit.id) : Promise.resolve(null),
+    documentCustomer(header, contract.customerId),
+  ]);
 
   return {
     ...base,
@@ -490,6 +516,8 @@ async function sharedContract(
           base.organizationId,
           contract.details?.licenseId ?? null
         ),
+    customer: { ...frozen, name: customer?.name ?? frozen.name },
+    facts: [issuedFact(contract.details?.acceptedAt ?? contract.createdAt)],
     sourceQuoteNumber: quote?.number ?? null,
     acceptedAt: contract.details?.acceptedAt ?? null,
     customerName: customer?.name ?? null,
@@ -522,6 +550,9 @@ async function sharedInvoice(
       number: documents.number,
       status: documents.status,
       jobId: documents.jobId,
+      customerId: documents.customerId,
+      issuedAt: documents.issuedAt,
+      sentAt: documents.sentAt,
       sourceDocumentId: documents.sourceDocumentId,
       invoiceType: invoiceDetails.invoiceType,
       covers: invoiceDetails.covers,
@@ -604,6 +635,7 @@ async function sharedInvoice(
 
   const paidCents = Number(invoice.paidCents);
   const voided = invoice.voidedAt !== null || invoice.status === "void";
+  const customer = await documentCustomer(letterhead, invoice.customerId);
 
   return {
     ...base,
@@ -626,6 +658,11 @@ async function sharedInvoice(
       : await officeAsItStands(base.organizationId, null),
     customerName:
       header.customerName ?? source?.header?.customerName ?? null,
+    customer,
+    facts: [
+      issuedFact(invoice.issuedAt ?? invoice.sentAt ?? header.capturedAt),
+      ...(invoice.dueOn ? [{ label: "Due", value: calendarDate(invoice.dueOn) }] : []),
+    ],
     contract:
       source && sourceLink
         ? { url: shareUrl(sourceLink.token), number: source.number }

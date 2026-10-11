@@ -20,9 +20,18 @@ export type PreviewImportInput = z.infer<typeof previewImportSchema>;
 
 const importedCustomer = z.object({
   name: z.string().trim().min(1, "Who is this?").max(160),
+  firstName: z.string().trim().max(80).nullish(),
+  lastName: z.string().trim().max(80).nullish(),
+  companyName: z.string().trim().max(160).nullish(),
   email: z.string().trim().max(160).nullish(),
+  altEmail: z.string().trim().max(160).nullish(),
   phone: z.string().trim().max(40).nullish(),
+  altPhone: z.string().trim().max(40).nullish(),
+  preferredContact: z.enum(["call", "text", "email"]).nullish(),
   address: z.string().trim().max(300).nullish(),
+  billingAddress: z.string().trim().max(300).nullish(),
+  accessNotes: z.string().trim().max(1000).nullish(),
+  leadSource: z.string().trim().max(80).nullish(),
   notes: z.string().trim().max(2000).nullish(),
 });
 

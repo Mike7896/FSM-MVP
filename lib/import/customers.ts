@@ -2,8 +2,11 @@ import "server-only";
 
 import { and, eq, inArray, sql } from "drizzle-orm";
 
+import { displayName, splitName } from "@/lib/customers/name";
 import { db } from "@/lib/db";
-import { customers } from "@/lib/db/schema";
+import { customerNotes, customers } from "@/lib/db/schema";
+
+import type { ImportCustomersInput } from "@/lib/schemas/import";
 
 import { MAX_IMPORT_ROWS, matchColumns, parseCsv, type FieldSpec } from "./csv";
 
@@ -25,13 +28,31 @@ import { MAX_IMPORT_ROWS, matchColumns, parseCsv, type FieldSpec } from "./csv";
  * without anybody mapping columns by hand.
  */
 
-export type CustomerField = "name" | "email" | "phone" | "address" | "notes";
+export type CustomerField =
+  | "name"
+  | "firstName"
+  | "lastName"
+  | "companyName"
+  | "email"
+  | "altEmail"
+  | "phone"
+  | "altPhone"
+  | "preferredContact"
+  | "address"
+  | "billingAddress"
+  | "accessNotes"
+  | "leadSource"
+  | "notes";
 
+/**
+ * A name can arrive whole, in parts, or as a company — whichever the file has.
+ * None of the three is required on its own; a file with none of them is
+ * refused in the preview.
+ */
 const FIELDS: FieldSpec<CustomerField>[] = [
   {
     field: "name",
     label: "Customer",
-    required: true,
     aliases: [
       "customer",
       "customer name",
@@ -41,22 +62,94 @@ const FIELDS: FieldSpec<CustomerField>[] = [
       "full name",
       "contact",
       "contact name",
+      "display name",
     ],
+  },
+  {
+    field: "firstName",
+    label: "First name",
+    aliases: ["first name", "first", "firstname", "given name"],
+  },
+  {
+    field: "lastName",
+    label: "Last name",
+    aliases: ["last name", "last", "lastname", "surname", "family name"],
+  },
+  {
+    field: "companyName",
+    label: "Company",
+    aliases: ["company", "company name", "business", "business name", "organization"],
   },
   {
     field: "email",
     label: "Email",
-    aliases: ["email", "email address", "e mail", "mail"],
+    aliases: ["email", "email address", "e mail", "mail", "primary email"],
+  },
+  {
+    field: "altEmail",
+    label: "Other email",
+    aliases: ["other email", "alternate email", "secondary email", "email 2", "second email"],
   },
   {
     field: "phone",
     label: "Phone",
-    aliases: ["phone", "phone number", "telephone", "mobile", "cell", "cell phone"],
+    aliases: [
+      "phone",
+      "phone number",
+      "telephone",
+      "mobile",
+      "mobile phone",
+      "cell",
+      "cell phone",
+      "primary phone",
+      "main phone",
+    ],
+  },
+  {
+    field: "altPhone",
+    label: "Other phone",
+    aliases: [
+      "other phone",
+      "alternate phone",
+      "secondary phone",
+      "phone 2",
+      "second phone",
+      "home phone",
+      "work phone",
+    ],
+  },
+  {
+    field: "preferredContact",
+    label: "Preferred contact",
+    aliases: ["preferred contact", "contact preference", "preferred contact method"],
   },
   {
     field: "address",
-    label: "Address",
-    aliases: ["address", "street address", "billing address", "mailing address"],
+    label: "Service address",
+    aliases: [
+      "service address",
+      "address",
+      "street address",
+      "property address",
+      "job address",
+      // Most other tools' one address column — for a homeowner, their home.
+      "mailing address",
+    ],
+  },
+  {
+    field: "billingAddress",
+    label: "Billing address",
+    aliases: ["billing address", "bill to"],
+  },
+  {
+    field: "accessNotes",
+    label: "Property access",
+    aliases: ["property access", "access notes", "access", "gate code", "property notes"],
+  },
+  {
+    field: "leadSource",
+    label: "Lead source",
+    aliases: ["lead source", "source", "referral source", "referred by", "how did you hear"],
   },
   {
     field: "notes",
@@ -70,10 +163,20 @@ export type RowVerdict = "new" | "duplicate" | "invalid";
 export type PreviewRow = {
   /** Line in the file, counting the heading row as 1 — what Excel shows. */
   line: number;
+  /** The one line the directory will show — whole, or made from the parts. */
   name: string;
+  firstName: string | null;
+  lastName: string | null;
+  companyName: string | null;
   email: string | null;
+  altEmail: string | null;
   phone: string | null;
+  altPhone: string | null;
+  preferredContact: ContactMethod | null;
   address: string | null;
+  billingAddress: string | null;
+  accessNotes: string | null;
+  leadSource: string | null;
   notes: string | null;
   verdict: RowVerdict;
   /** Why it can't come in, or who it already matches. */
@@ -92,6 +195,18 @@ export type ImportPreview = {
 };
 
 const EMAIL = /^\S+@\S+\.\S+$/;
+
+type ContactMethod = "call" | "text" | "email";
+
+/** "Text", "SMS", "Phone" — what a spreadsheet says, to what the form stores. */
+function contactMethod(value: string | null): ContactMethod | null {
+  const word = value?.trim().toLowerCase();
+  if (!word) return null;
+  if (["call", "phone", "phone call", "calls"].includes(word)) return "call";
+  if (["text", "sms", "texts", "text message"].includes(word)) return "text";
+  if (["email", "e-mail", "mail"].includes(word)) return "email";
+  return null;
+}
 
 function clean(value: string | undefined, max: number): string | null {
   const text = (value ?? "").trim();
@@ -116,12 +231,18 @@ export async function previewCustomerImport(
   const [headings, ...body] = table;
   const match = matchColumns(headings, FIELDS);
 
-  if (match.missing.length > 0) {
+  const hasName =
+    match.found.name ||
+    match.found.firstName ||
+    match.found.lastName ||
+    match.found.companyName;
+
+  if (!hasName) {
     return {
       ...empty,
       ignored: match.ignored,
       problem:
-        "This file needs a column for the customer's name. " +
+        "This file needs a column for the customer's name — a whole name, a first and last name, or a company. " +
         (match.ignored.length
           ? `The headings found were: ${match.ignored.join(", ")}.`
           : "No headings were found at all — the first row should name the columns."),
@@ -140,14 +261,33 @@ export async function previewCustomerImport(
     return column ? clean(row[column.index], max) : null;
   };
 
-  const parsed = body.map((row, index) => ({
-    line: index + 2,
-    name: value(row, "name", 160) ?? "",
-    email: value(row, "email", 160),
-    phone: value(row, "phone", 40),
-    address: value(row, "address", 300),
-    notes: value(row, "notes", 2000),
-  }));
+  const parsed = body.map((row, index) => {
+    const whole = value(row, "name", 160);
+    let firstName = value(row, "firstName", 80);
+    let lastName = value(row, "lastName", 80);
+    const companyName = value(row, "companyName", 160);
+    // Parts win when the file has them; a whole name alone is split.
+    if (!firstName && !lastName && whole && whole !== companyName) {
+      ({ firstName, lastName } = splitName(whole));
+    }
+    return {
+      line: index + 2,
+      name: displayName({ firstName, lastName, companyName }) ?? whole ?? "",
+      firstName,
+      lastName,
+      companyName,
+      email: value(row, "email", 160),
+      altEmail: value(row, "altEmail", 160),
+      phone: value(row, "phone", 40),
+      altPhone: value(row, "altPhone", 40),
+      preferredContact: contactMethod(value(row, "preferredContact", 40)),
+      address: value(row, "address", 300),
+      billingAddress: value(row, "billingAddress", 300),
+      accessNotes: value(row, "accessNotes", 1000),
+      leadSource: value(row, "leadSource", 80),
+      notes: value(row, "notes", 2000),
+    };
+  });
 
   /* ── Who is already here ────────────────────────────────────────────── */
 
@@ -185,6 +325,9 @@ export async function previewCustomerImport(
     } else if (row.email && !EMAIL.test(row.email)) {
       verdict = "invalid";
       reason = `"${row.email}" isn't an email address.`;
+    } else if (row.altEmail && !EMAIL.test(row.altEmail)) {
+      verdict = "invalid";
+      reason = `"${row.altEmail}" isn't an email address.`;
     } else if (already.has(key)) {
       const match = already.get(key)!;
       verdict = "duplicate";
@@ -226,29 +369,45 @@ export async function previewCustomerImport(
  */
 export async function commitCustomerImport(
   organizationId: string,
-  rows: {
-    name: string;
-    email?: string | null;
-    phone?: string | null;
-    address?: string | null;
-    notes?: string | null;
-  }[]
+  rows: ImportCustomersInput["rows"]
 ): Promise<{ created: number }> {
   if (rows.length === 0) return { created: 0 };
 
-  const written = await db
-    .insert(customers)
-    .values(
-      rows.map((row) => ({
-        organizationId,
-        name: row.name,
-        email: row.email ?? null,
-        phone: row.phone ?? null,
-        address: row.address ?? null,
-        notes: row.notes ?? null,
-      }))
-    )
-    .returning({ id: customers.id });
+  return db.transaction(async (tx) => {
+    const written = await tx
+      .insert(customers)
+      .values(
+        rows.map((row) => {
+          const firstName = row.firstName ?? null;
+          const lastName = row.lastName ?? null;
+          const companyName = row.companyName ?? null;
+          return {
+            organizationId,
+            name: displayName({ firstName, lastName, companyName }) ?? row.name,
+            firstName,
+            lastName,
+            companyName,
+            email: row.email ?? null,
+            altEmail: row.altEmail ?? null,
+            phone: row.phone ?? null,
+            altPhone: row.altPhone ?? null,
+            preferredContact: row.preferredContact ?? null,
+            address: row.address ?? null,
+            billingAddress: row.billingAddress ?? null,
+            accessNotes: row.accessNotes ?? null,
+            leadSource: row.leadSource ?? null,
+          };
+        })
+      )
+      .returning({ id: customers.id });
 
-  return { created: written.length };
+    // A Notes column becomes the first entry in each customer's log.
+    const notes = written.flatMap((customer, index) => {
+      const body = rows[index].notes?.trim();
+      return body ? [{ organizationId, customerId: customer.id, body }] : [];
+    });
+    if (notes.length) await tx.insert(customerNotes).values(notes);
+
+    return { created: written.length };
+  });
 }

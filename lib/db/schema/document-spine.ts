@@ -94,15 +94,21 @@ export type HeaderSnapshot = {
   businessPhone?: string;
   businessEmail?: string;
   businessAddress?: string;
+  businessWebsite?: string;
   logoUrl?: string;
   /** The solid band behind the letterhead — the Office's look at send. */
   boldHeader?: boolean;
   licenseNumber?: string;
   licenseKind?: string;
   customerName?: string;
+  /** A person at a company; absent when the company is the name. */
+  customerCompany?: string;
   customerEmail?: string;
   customerPhone?: string;
+  /** Their own (service) address. */
   customerAddress?: string;
+  /** Where bills go, when that isn't `customerAddress`. */
+  customerBillingAddress?: string;
   jobAddress?: string;
   jobNumber?: number;
   /**

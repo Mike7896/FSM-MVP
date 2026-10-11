@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 
 import { EditableText } from "@/components/fields";
@@ -28,7 +29,9 @@ import {
   type QuoteDraft,
   type QuoteTotals,
 } from "@/lib/quote";
+import { useCustomerOnPaper } from "@/components/documents/use-customer-on-paper";
 import type { DocumentLook } from "@/lib/branding";
+import { customerLines, type DocumentCustomer } from "@/lib/documents/parties";
 import { cn } from "@/lib/utils";
 
 /**
@@ -84,6 +87,8 @@ export function HeaderSection({
    */
   changeOrder?: ChangeOrderContext;
 }) {
+  // What the document will print about them, beyond the name typed here.
+  const onRecord = useCustomerOnPaper(draft.customerId);
 
   if (collapsed) {
     const summary = [
@@ -113,14 +118,18 @@ export function HeaderSection({
             <div className="grid content-start gap-2">
               <span className={FIELD_LABEL}>Customer</span>
               <p className="min-h-10 py-2 text-sm font-medium [overflow-wrap:anywhere]">{draft.customerName || "The customer"}</p>
+              <OnRecord customerId={draft.customerId} customer={onRecord} jobAddress={address ?? null} />
             </div>
           ) : (
-            <label className="grid content-start gap-2">
-              <span className={FIELD_LABEL}>Customer</span>
-              <EditableText value={draft.customerName} maxLength={160}
-                placeholder="Who is this for?" aria-label="Customer"
-                onChange={(event) => onChange({ customerName: event.target.value })} />
-            </label>
+            <div className="grid content-start gap-2">
+              <label className="grid content-start gap-2">
+                <span className={FIELD_LABEL}>Customer</span>
+                <EditableText value={draft.customerName} maxLength={160}
+                  placeholder="Who is this for?" aria-label="Customer"
+                  onChange={(event) => onChange({ customerName: event.target.value })} />
+              </label>
+              <OnRecord customerId={draft.customerId} customer={onRecord} jobAddress={address ?? null} />
+            </div>
           )}
           {address ? (
             <div className="grid content-start gap-2">
@@ -140,6 +149,35 @@ export function HeaderSection({
         </div>
       </div>
     </SectionCard>
+  );
+}
+
+/**
+ * The rest of what prints under "Prepared for" — company, billing address,
+ * phone, email — read from the customer's record and edited there, so it is
+ * fixed once for every document rather than retyped on each.
+ */
+function OnRecord({
+  customerId,
+  customer,
+  jobAddress,
+}: {
+  customerId: string | null;
+  customer: DocumentCustomer | null;
+  jobAddress: string | null;
+}) {
+  if (!customerId || !customer) return null;
+  const { rest } = customerLines(customer, jobAddress);
+  return (
+    <p className="text-muted-foreground text-xs leading-relaxed [overflow-wrap:anywhere]">
+      {rest.length ? rest.join(" · ") : "No phone, email or billing address on file."}{" "}
+      <Link
+        href={`/customers/${customerId}`}
+        className="hover:text-foreground whitespace-nowrap underline underline-offset-4"
+      >
+        {rest.length ? "Edit details" : "Add them"}
+      </Link>
+    </p>
   );
 }
 

@@ -118,8 +118,11 @@ async function searchCustomers(
         eq(customers.organizationId, organizationId),
         or(
           ilike(customers.name, match),
+          ilike(customers.companyName, match),
           ilike(customers.email, match),
+          ilike(customers.altEmail, match),
           ilike(customers.phone, match),
+          ilike(customers.altPhone, match),
           ilike(customers.address, match)
         )
       )

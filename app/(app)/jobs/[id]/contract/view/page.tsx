@@ -139,8 +139,14 @@ export default async function ContractDocumentPage({
               businessName={paper.office.businessName}
               license={paper.office.license}
               phone={paper.office.phone}
+              email={paper.office.email}
+              address={paper.office.address}
+              website={paper.office.website}
               logoUrl={paper.office.logoUrl}
               look={paper.office.look}
+              customer={paper.customer}
+              jobAddress={paper.jobAddress}
+              facts={paper.facts}
               action={null}
               documentLabel="Contract"
               signatureBlock

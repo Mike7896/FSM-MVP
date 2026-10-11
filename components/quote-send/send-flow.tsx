@@ -13,6 +13,7 @@ import {
 import { QuotePreviewSheet } from "@/components/quote-send/preview-sheet";
 import { QuoteSendSheet } from "@/components/quote-send/send-sheet";
 import type { DocumentLook } from "@/lib/branding";
+import { useCustomerOnPaper } from "@/components/documents/use-customer-on-paper";
 import { totals, type QuoteDraft } from "@/lib/quote";
 import type { OfficeSignature } from "@/lib/signing/lines";
 
@@ -34,6 +35,9 @@ export type SenderOffice = {
   businessName: string | null;
   license: string | null;
   phone: string | null;
+  email?: string | null;
+  address?: string | null;
+  website?: string | null;
   logoUrl?: string | null;
   /** The Office's look, as its plan lets it go out. */
   look?: DocumentLook;
@@ -54,6 +58,7 @@ export function SendFlow({
   selfEmail,
   selfPhone,
   customerEmail,
+  jobAddress,
   sentHref,
 }: {
   editor: RefObject<QuoteEditorController | null>;
@@ -70,6 +75,8 @@ export function SendFlow({
   selfEmail: string;
   selfPhone: string | null;
   customerEmail: string | null;
+  /** Where the work is, for the preview's job site. */
+  jobAddress?: string | null;
   /** Where a sent quote's confirmation lives. */
   sentHref: (quoteId: string) => string;
 }) {
@@ -81,6 +88,10 @@ export function SendFlow({
   // The business name is the one thing a quote can't go out without. A
   // license is shown when there is one; plenty of work doesn't need one.
   const gaps = !office.businessName;
+
+  // Her page names the customer the way their record does — company, phone,
+  // email, where bills go — read when the preview opens.
+  const customer = useCustomerOnPaper(preview?.customerId ?? null);
 
   /** Flush the draft, then open the send on the row that was written. */
   async function openSend(draft: QuoteDraft) {
@@ -128,6 +139,8 @@ export function SendFlow({
         }}
         draft={preview ?? emptyPreview}
         office={office}
+        customer={customer}
+        jobAddress={preview ? (jobAddress ?? null) : null}
         demo={demo}
         preparing={preparing}
         onFillHeader={() => setIntro("gap")}

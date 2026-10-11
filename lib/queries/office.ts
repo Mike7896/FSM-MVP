@@ -46,6 +46,10 @@ export type OfficeIdentity = {
   businessName: string | null;
   license: string | null;
   phone: string | null;
+  /** The rest of the letterhead — how a customer writes, finds and looks the shop up. */
+  email?: string | null;
+  address?: string | null;
+  website?: string | null;
   /** A public image URL. Null until one is uploaded. */
   logoUrl?: string | null;
   /**
@@ -89,6 +93,9 @@ export const getOfficeIdentity = cache(
       .select({
         name: organizations.name,
         phone: organizations.phone,
+        email: organizations.email,
+        address: organizations.address,
+        website: organizations.website,
         logoUrl: organizations.logoUrl,
       })
       .from(organizations)
@@ -117,6 +124,9 @@ export const getOfficeIdentity = cache(
       businessName: org?.name?.trim() || null,
       license: license?.number ?? null,
       phone: org?.phone ?? null,
+      email: org?.email ?? null,
+      address: org?.address ?? null,
+      website: org?.website ?? null,
       logoUrl: org?.logoUrl ?? null,
       look,
     };
@@ -129,6 +139,9 @@ export function officeFromHeader(header: HeaderSnapshot): OfficeIdentity {
     businessName: header.businessName ?? null,
     license: header.licenseNumber ?? null,
     phone: header.businessPhone ?? null,
+    email: header.businessEmail ?? null,
+    address: header.businessAddress ?? null,
+    website: header.businessWebsite ?? null,
     logoUrl: header.logoUrl ?? null,
     look: { logo: Boolean(header.logoUrl), bold: header.boldHeader ?? false },
     // Documents from before plans existed carried the footer, and still do.
@@ -152,6 +165,9 @@ export async function officeAsItStands(
     .select({
       name: organizations.name,
       phone: organizations.phone,
+      email: organizations.email,
+      address: organizations.address,
+      website: organizations.website,
       logoUrl: organizations.logoUrl,
     })
     .from(organizations)
@@ -170,6 +186,9 @@ export async function officeAsItStands(
     businessName: org?.name?.trim() || null,
     license: license?.number ?? null,
     phone: org?.phone ?? null,
+    email: org?.email ?? null,
+    address: org?.address ?? null,
+    website: org?.website ?? null,
     // A draft shows what sending it would: the logo and band only as the
     // look and the plan allow, the footer on Free.
     logoUrl: look.logo ? (org?.logoUrl ?? null) : null,

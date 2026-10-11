@@ -358,6 +358,20 @@
       "when": 1791177451414,
       "tag": "0050_founder_metrics",
       "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1791684842870,
+      "tag": "0051_customer_details",
+      "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1791684911579,
+      "tag": "0052_drop_customer_notes_column",
+      "breakpoints": true
     }
   ]
 }

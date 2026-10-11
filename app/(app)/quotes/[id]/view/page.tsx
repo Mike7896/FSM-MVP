@@ -18,6 +18,7 @@ import { requireActiveOrganization } from "@/lib/dal";
 import { draftFromRecord } from "@/lib/quote";
 import { getOfficeIdentity, getOfficeSignature } from "@/lib/queries/office";
 import { getQuote } from "@/lib/queries/quotes";
+import { resolveDocument } from "@/lib/queries/share";
 import { quoteSignatures } from "@/lib/queries/signatures";
 
 export const metadata: Metadata = { title: "Quote" };
@@ -44,13 +45,17 @@ export default async function QuoteDocumentPage({
   const org = await requireActiveOrganization();
   const { id } = await params;
 
-  const [record, office, stored, { features }] = await Promise.all([
+  const [record, office, stored, { features }, shared] = await Promise.all([
     getQuote(id, org.id),
     getOfficeIdentity(org.id),
     getOfficeSignature(org.id),
     getAccess(org.id),
+    // The customer block, the job site and the dates, read exactly as her
+    // link reads them — frozen at the send, live before it.
+    resolveDocument(id, org.id),
   ]);
   if (!record) notFound();
+  const parties = shared?.kind === "quote" ? shared : null;
   const requiresActivation = features.monthlyActivations !== null && !(await isJobActivated(record.jobId));
 
   // The lines as they stand: recorded once accepted, the stored signature on
@@ -108,8 +113,14 @@ export default async function QuoteDocumentPage({
             businessName={office.businessName}
             license={office.license}
             phone={office.phone}
+            email={office.email}
+            address={office.address}
+            website={office.website}
             logoUrl={office.logoUrl}
             look={office.look}
+            customer={parties?.customer}
+            jobAddress={parties?.jobAddress}
+            facts={parties?.facts}
             action={null}
             documentLabel="Quote"
             signatures={signatures}

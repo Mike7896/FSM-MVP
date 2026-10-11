@@ -29,6 +29,9 @@ export async function letterheadFor(
       logoUrl: header.logoUrl ?? null,
       license: header.licenseNumber ?? null,
       phone: header.businessPhone ?? null,
+      email: header.businessEmail ?? null,
+      address: header.businessAddress ?? null,
+      website: header.businessWebsite ?? null,
       bold: header.boldHeader ?? false,
     };
   }
@@ -44,6 +47,9 @@ export async function letterheadFor(
       .select({
         name: organizations.name,
         phone: organizations.phone,
+        email: organizations.email,
+        address: organizations.address,
+        website: organizations.website,
         logoUrl: organizations.logoUrl,
       })
       .from(organizations)
@@ -72,6 +78,9 @@ export async function letterheadFor(
         : null,
     license: license?.number ?? null,
     phone: office?.phone ?? null,
+    email: office?.email ?? null,
+    address: office?.address ?? null,
+    website: office?.website ?? null,
     bold: access.features.branding && lookOf(defaults?.preset).bold,
   };
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Loader2, Send } from "lucide-react";
 import { toast } from "sonner";
@@ -17,6 +18,7 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
+import { customerLines, type DocumentCustomer } from "@/lib/documents/parties";
 import { formatMoney, moneyInputValue, parseMoney } from "@/lib/quote";
 import type { PhaseGate } from "@/lib/schemas";
 
@@ -40,11 +42,18 @@ import type { PhaseGate } from "@/lib/schemas";
 export function InvoiceEditor({
   jobId,
   customerName,
+  customerId,
+  billTo,
+  jobAddress,
   stage,
   contract,
 }: {
   jobId: string;
   customerName: string;
+  customerId: string;
+  /** Their printable details, as "Bill to" will carry them. */
+  billTo: DocumentCustomer;
+  jobAddress: string | null;
   /** The draw-schedule row this bill settles, when there is one. */
   stage: {
     id: string;
@@ -135,6 +144,7 @@ export function InvoiceEditor({
                 letting it drift from the job is how a payment lands on the
                 wrong ledger. */}
             <Input value={customerName} readOnly className="bg-muted/40" />
+            <BillTo customerId={customerId} billTo={billTo} jobAddress={jobAddress} />
           </div>
           <div className="grid gap-2">
             <Label htmlFor="type">What kind of invoice</Label>
@@ -250,6 +260,38 @@ function Row({ label, cents }: { label: string; cents: number }) {
     <div className="text-muted-foreground flex justify-between gap-2 py-0.5 text-sm">
       <span>{label}</span>
       <span className="tabular-nums">{formatMoney(cents)}</span>
+    </div>
+  );
+}
+
+/**
+ * What prints under the invoice's "Bill to", read-only — the details belong
+ * to the customer, so a missing email is fixed on their page, once, for every
+ * document after.
+ */
+function BillTo({
+  customerId,
+  billTo,
+  jobAddress,
+}: {
+  customerId: string;
+  billTo: DocumentCustomer;
+  jobAddress: string | null;
+}) {
+  const { rest } = customerLines(billTo, jobAddress);
+  return (
+    <div className="text-muted-foreground text-xs leading-relaxed">
+      {rest.length ? (
+        rest.map((line) => <p key={line}>{line}</p>)
+      ) : (
+        <p>No address, phone or email on file to print.</p>
+      )}
+      <Link
+        href={`/customers/${customerId}`}
+        className="hover:text-foreground underline underline-offset-4"
+      >
+        Edit their details
+      </Link>
     </div>
   );
 }

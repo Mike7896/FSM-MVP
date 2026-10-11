@@ -3,6 +3,7 @@ import { ShieldCheck } from "lucide-react";
 
 import { inkFor } from "@/components/documents/ink";
 import { Letterhead } from "@/components/documents/letterhead";
+import { DocumentParties, LetterheadContact } from "@/components/documents/parties";
 import { SignatureLines } from "@/components/signing/signature-lines";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -23,6 +24,11 @@ import {
   type ScopeNode,
 } from "@/lib/quote";
 import type { DocumentLook } from "@/lib/branding";
+import {
+  NO_CUSTOMER,
+  type DocumentCustomer,
+  type DocumentFact,
+} from "@/lib/documents/parties";
 import type { DocumentSignatures } from "@/lib/signing/lines";
 import { cn } from "@/lib/utils";
 
@@ -63,8 +69,15 @@ export function QuoteProjection({
   businessName,
   license,
   phone,
+  email,
+  address,
+  website,
   logoUrl,
   look,
+  customer,
+  jobAddress = null,
+  facts = [],
+  slots = false,
   demo = false,
   onGap,
   action,
@@ -77,12 +90,30 @@ export function QuoteProjection({
   businessName: string | null;
   license: string | null;
   phone?: string | null;
+  /** The rest of the letterhead: how to write to, find and look up the shop. */
+  email?: string | null;
+  address?: string | null;
+  website?: string | null;
   logoUrl?: string | null;
   /**
    * The Office's look: the logo beside the name, the band behind it. Left out,
    * a logo given is drawn and there's no band.
    */
   look?: DocumentLook;
+  /**
+   * Who it's for, beyond the name the draft carries — company, billing
+   * address, phone and email. Left out, the draft's name prints alone.
+   */
+  customer?: DocumentCustomer | null;
+  /** Where the work is. */
+  jobAddress?: string | null;
+  /** The dates beside the number — issued, valid until. */
+  facts?: DocumentFact[];
+  /**
+   * The Office's preview, with no customer yet: where their details go is
+   * drawn as labelled gaps rather than an invented person.
+   */
+  slots?: boolean;
   demo?: boolean;
   /**
    * The contractor's preview only. Turns the unfilled letterhead into gaps he
@@ -116,7 +147,11 @@ export function QuoteProjection({
   documentLabel?: string;
 }) {
   const sums = totals(draft);
-  const customerName = draft.customerName.trim() || "your customer";
+  // The name is the draft's own — what the editor shows and writes.
+  const party: DocumentCustomer = {
+    ...(customer ?? NO_CUSTOMER),
+    name: draft.customerName.trim() || customer?.name || null,
+  };
 
   // The rows the contractor chose to show her. Unpriced text is gathered below
   // under its own heading rather than sitting between priced rows, because an
@@ -170,16 +205,20 @@ export function QuoteProjection({
               LIC #{license}
             </p>
           ) : null}
-          {phone ? (
-            <p className="text-muted-foreground mt-1 text-xs">{phone}</p>
-          ) : null}
+          <LetterheadContact
+            phone={phone}
+            email={email}
+            address={address}
+            website={website}
+          />
         </Letterhead>
-        {/* Who it is for and which document it is, on one line — the way a
-            document says it, rather than as two interface labels. */}
-        <p className="text-muted-foreground mt-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5 text-xs">
-          <span>Prepared for {customerName}</span>
-          {draft.number ? <span className="tabular-nums">{draft.number}</span> : null}
-        </p>
+        <DocumentParties
+          customer={party}
+          jobAddress={jobAddress}
+          number={draft.number}
+          facts={facts}
+          slots={slots}
+        />
       </header>
 
       <Separator />
