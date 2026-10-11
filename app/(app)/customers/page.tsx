@@ -7,6 +7,7 @@ import { Search } from "lucide-react";
 
 import { AddCustomerButton } from "@/components/customers/customer-actions";
 import { DemoChip } from "@/components/demo-chip";
+import { RecordList, RecordRow, RecordMetric } from "@/components/record-list";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import {
@@ -92,49 +93,27 @@ export default async function CustomersPage({
           </EmptyContent>
         </Empty>
       ) : (
-        <div className="flex flex-col">
+        <RecordList title={search || filters.tags || filters.tagMode === "untagged" ? "Search results" : "All customers"} count={customers.length}>
           {customers.map((customer) => (
-            <Link
+            <RecordRow
               key={customer.id}
               href={`/customers/${customer.id}`}
-              className="hover:bg-muted/50 -mx-3 flex flex-col gap-3 border-t px-3 py-4 transition-colors sm:flex-row sm:items-center sm:justify-between sm:gap-8"
-            >
-              <div className="min-w-0">
-                <p className="flex items-center gap-2 font-medium">
-                  {customer.name}
-                  {customer.demo ? <DemoChip /> : null}
-                </p>
-                <TagBadges tags={recordTags[customer.id] ?? []} />
-                <p className="text-muted-foreground mt-1.5 text-sm">
-                  {[
-                    customer.companyName !== customer.name ? customer.companyName : null,
-                    customer.address ?? customer.phone ?? "No address on file",
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
-                </p>
-              </div>
-              <div className="flex shrink-0 gap-8 text-sm sm:text-right">
-                <div>
-                  <p className="text-muted-foreground text-xs">Jobs</p>
-                  <p className="mt-1 font-medium tabular-nums">
-                    {customer.jobCount}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground text-xs">Open balance</p>
-                  <div className="mt-1">
-                    <Balance cents={customer.openBalanceCents} />
-                  </div>
-                </div>
-                <div>
-                  <p className="text-muted-foreground text-xs">Last job</p>
-                  <p className="mt-1 font-medium">{lastJob(customer.lastJobAt)}</p>
-                </div>
-              </div>
-            </Link>
+              kind="customer"
+              title={customer.name}
+              description={[
+                customer.companyName !== customer.name ? customer.companyName : null,
+                customer.address ?? customer.phone ?? "No address on file",
+              ].filter(Boolean).join(" · ")}
+              badges={customer.demo ? <DemoChip /> : null}
+              tags={<TagBadges tags={recordTags[customer.id] ?? []} />}
+              metrics={<>
+                <RecordMetric label="Jobs">{customer.jobCount}</RecordMetric>
+                <RecordMetric label="Open balance" positive={customer.openBalanceCents < 0}><Balance cents={customer.openBalanceCents} /></RecordMetric>
+                <RecordMetric label="Last job">{lastJob(customer.lastJobAt)}</RecordMetric>
+              </>}
+            />
           ))}
-        </div>
+        </RecordList>
       )}
     </div>
   );
