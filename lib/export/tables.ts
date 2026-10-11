@@ -73,10 +73,25 @@ async function customerRows(organizationId: string): Promise<ExportSet> {
   const rows = await db
     .select({
       name: customers.name,
+      firstName: customers.firstName,
+      lastName: customers.lastName,
+      companyName: customers.companyName,
       email: customers.email,
+      altEmail: customers.altEmail,
       phone: customers.phone,
+      altPhone: customers.altPhone,
+      preferredContact: customers.preferredContact,
       address: customers.address,
-      notes: customers.notes,
+      billingAddress: customers.billingAddress,
+      accessNotes: customers.accessNotes,
+      leadSource: customers.leadSource,
+      // The notes log, oldest first, one per line — a spreadsheet cell is
+      // the only place a list of them can go in a CSV.
+      notes: sql<string | null>`(
+        select string_agg(cn.body, chr(10) order by cn.created_at)
+        from customer_notes cn
+        where cn.customer_id = ${sql.raw('"customers"."id"')}
+      )`,
       createdAt: customers.createdAt,
     })
     .from(customers)
@@ -91,17 +106,35 @@ async function customerRows(organizationId: string): Promise<ExportSet> {
   return {
     columns: [
     "Customer",
+    "First name",
+    "Last name",
+    "Company",
     "Email",
+    "Other email",
     "Phone",
-    "Address",
+    "Other phone",
+    "Preferred contact",
+    "Service address",
+    "Billing address",
+    "Property access",
+    "Lead source",
     "Notes",
     "Added",
   ],
     rows: rows.map((row) => ({
     Customer: row.name,
+    "First name": row.firstName,
+    "Last name": row.lastName,
+    Company: row.companyName,
     Email: row.email,
+    "Other email": row.altEmail,
     Phone: row.phone,
-    Address: row.address,
+    "Other phone": row.altPhone,
+    "Preferred contact": row.preferredContact,
+    "Service address": row.address,
+    "Billing address": row.billingAddress,
+    "Property access": row.accessNotes,
+    "Lead source": row.leadSource,
     Notes: row.notes,
     Added: stamp(row.createdAt),
   })),

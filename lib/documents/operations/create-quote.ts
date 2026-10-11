@@ -2,6 +2,7 @@ import "server-only";
 
 import { and, eq, ilike, sql } from "drizzle-orm";
 
+import { columnsForName, UNNAMED_CUSTOMER } from "@/lib/customers/name";
 import { db } from "@/lib/db";
 import {
   customers,
@@ -109,7 +110,7 @@ export async function createQuote({
         .insert(customers)
         .values({
           organizationId,
-          name: typedName || "New customer",
+          ...columnsForName(typedName || UNNAMED_CUSTOMER),
           address: input.address,
           isDemo: demo,
         })

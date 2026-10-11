@@ -2,6 +2,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { requireCaller, requireOrg } from "@/lib/api/auth";
 import { handler, readJson, readQuery } from "@/lib/api/handler";
 import { ApiError, created, ok } from "@/lib/api/response";
+import { columnsForName } from "@/lib/customers/name";
 import { db } from "@/lib/db";
 import { customers, jobs } from "@/lib/db/schema";
 import { listJobs } from "@/lib/queries/jobs";
@@ -81,7 +82,7 @@ export const POST = handler(async (request) => {
       } else {
         const [row] = await tx
           .insert(customers)
-          .values({ organizationId, name, address: body.address })
+          .values({ organizationId, ...columnsForName(name), address: body.address })
           .returning({ id: customers.id });
         customerId = row.id;
       }

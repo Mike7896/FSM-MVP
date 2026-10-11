@@ -3,8 +3,10 @@ import { ShieldCheck } from "lucide-react";
 
 import { inkFor } from "@/components/documents/ink";
 import { Letterhead } from "@/components/documents/letterhead";
+import { DocumentParties, LetterheadContact } from "@/components/documents/parties";
 import { SignatureMark } from "@/components/signing/signature-mark";
 import { Separator } from "@/components/ui/separator";
+import { customerHeading } from "@/lib/documents/parties";
 import {
   paperDate,
   type PaperBlock,
@@ -56,21 +58,20 @@ export function PaperView({
               LIC #{letterhead.license}
             </p>
           ) : null}
-          {letterhead.phone ? (
-            <p className="text-muted-foreground mt-1 text-xs">{letterhead.phone}</p>
-          ) : null}
+          <LetterheadContact
+            phone={letterhead.phone}
+            email={letterhead.email}
+            address={letterhead.address}
+            website={letterhead.website}
+          />
         </Letterhead>
-        <p className="text-muted-foreground mt-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5 text-xs">
-          <span>
-            {[
-              paper.preparedFor ? `Prepared for ${paper.preparedFor}` : null,
-              paper.jobAddress,
-            ]
-              .filter(Boolean)
-              .join(" · ")}
-          </span>
-          {paper.number ? <span className="tabular-nums">{paper.number}</span> : null}
-        </p>
+        <DocumentParties
+          heading={customerHeading(paper.kind)}
+          customer={paper.customer}
+          jobAddress={paper.jobAddress}
+          number={paper.number}
+          facts={paper.facts}
+        />
       </header>
 
       <Separator />

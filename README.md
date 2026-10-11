@@ -500,6 +500,9 @@ the prose in `message`.
 |---|---|
 | `/api/v1/organizations` | `GET` `POST` |
 | `/api/v1/customers` | `GET` `POST` |
+| `/api/v1/customers/[id]` | `GET` `PATCH` `DELETE` |
+| `/api/v1/customers/[id]/notes` | `GET` `POST` |
+| `/api/v1/customers/[id]/notes/[noteId]` | `DELETE` |
 | `/api/v1/jobs` | `GET` `POST` |
 | `/api/v1/jobs/[id]` | `GET` `PATCH` |
 

@@ -21,6 +21,7 @@ import {
   type PaperDocument,
   type PaperSignature,
 } from "@/lib/documents/paper";
+import { customerHeading, customerLines } from "@/lib/documents/parties";
 import { parseMark } from "@/lib/signing/mark";
 
 /**
@@ -78,6 +79,9 @@ export type EmailLetterhead = {
   logoUrl: string | null;
   license: string | null;
   phone: string | null;
+  email: string | null;
+  address: string | null;
+  website: string | null;
   /** The bold header's band — drawn on the attached PDF, not in the email. */
   bold: boolean;
 };
@@ -248,24 +252,19 @@ function Sheet({ paper }: { paper: PaperDocument }) {
           {letterhead.name}
         </Text>
       ) : null}
-      {letterhead.license || letterhead.phone ? (
-        <Text style={{ margin: "3px 0 0", fontSize: 12, lineHeight: "17px", color: SOFT }}>
-          {[letterhead.license ? `LIC #${letterhead.license}` : null, letterhead.phone]
-            .filter(Boolean)
-            .join(" · ")}
-        </Text>
-      ) : null}
+      {[
+        [letterhead.license ? `LIC #${letterhead.license}` : null, letterhead.phone, letterhead.email],
+        [letterhead.address, letterhead.website],
+      ].map((parts, index) => {
+        const text = parts.filter(Boolean).join(" · ");
+        return text ? (
+          <Text key={index} style={{ margin: "3px 0 0", fontSize: 12, lineHeight: "17px", color: SOFT }}>
+            {text}
+          </Text>
+        ) : null;
+      })}
 
-      <Row style={{ marginTop: 14 }}>
-        <Column style={{ fontSize: 12, lineHeight: "17px", color: SOFT, paddingBottom: 14, borderBottom: `1px solid ${RULE}` }}>
-          {[paper.preparedFor ? `Prepared for ${paper.preparedFor}` : null, paper.jobAddress]
-            .filter(Boolean)
-            .join(" · ")}
-        </Column>
-        <Column align="right" style={{ fontSize: 12, lineHeight: "17px", color: SOFT, paddingBottom: 14, borderBottom: `1px solid ${RULE}`, whiteSpace: "nowrap" }}>
-          {paper.number ?? ""}
-        </Column>
-      </Row>
+      <Parties paper={paper} />
 
       <Text style={{ ...LABEL, color: KIND_INK[paper.kind], margin: "20px 0 0" }}>
         {paper.label}
@@ -289,6 +288,62 @@ function Sheet({ paper }: { paper: PaperDocument }) {
         ) : null}
       </Row>
     </Section>
+  );
+}
+
+/**
+ * Who it's for, where the work is, and which document — the columns the
+ * page and the PDF draw, as table cells an inbox can lay out.
+ */
+function Parties({ paper }: { paper: PaperDocument }) {
+  const { name, rest } = customerLines(paper.customer, paper.jobAddress);
+  const cell = {
+    fontSize: 12,
+    lineHeight: "17px",
+    color: SOFT,
+    paddingBottom: 14,
+    borderBottom: `1px solid ${RULE}`,
+    verticalAlign: "top" as const,
+  };
+
+  return (
+    <Row style={{ marginTop: 14 }}>
+      <Column style={{ ...cell, paddingRight: 12 }}>
+        <Text style={{ ...LABEL, margin: "0 0 3px" }}>{customerHeading(paper.kind)}</Text>
+        {name ? (
+          <Text style={{ margin: 0, fontSize: 13, lineHeight: "18px", fontWeight: 700, color: INK }}>
+            {name}
+          </Text>
+        ) : null}
+        {rest.map((line) => (
+          <Text key={line} style={{ margin: 0, fontSize: 12, lineHeight: "17px", color: SOFT }}>
+            {line}
+          </Text>
+        ))}
+      </Column>
+      <Column style={{ ...cell, paddingRight: 12 }}>
+        {paper.jobAddress ? (
+          <>
+            <Text style={{ ...LABEL, margin: "0 0 3px" }}>Job site</Text>
+            <Text style={{ margin: 0, fontSize: 12, lineHeight: "17px", color: INK }}>
+              {paper.jobAddress}
+            </Text>
+          </>
+        ) : null}
+      </Column>
+      <Column align="right" style={{ ...cell, whiteSpace: "nowrap" }}>
+        {paper.number ? (
+          <Text style={{ margin: 0, fontSize: 13, lineHeight: "18px", fontWeight: 700, color: INK }}>
+            {paper.number}
+          </Text>
+        ) : null}
+        {paper.facts.map((fact) => (
+          <Text key={fact.label} style={{ margin: 0, fontSize: 12, lineHeight: "17px", color: SOFT }}>
+            {fact.label} <span style={{ color: INK }}>{fact.value}</span>
+          </Text>
+        ))}
+      </Column>
+    </Row>
   );
 }
 

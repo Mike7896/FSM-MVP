@@ -102,7 +102,7 @@ export default async function NewQuotePage({
         jobId={jobId}
         customer={
           forCustomer
-            ? { id: forCustomer.id, name: forCustomer.name }
+            ? { id: forCustomer.id, name: forCustomer.name, address: forCustomer.address }
             : undefined
         }
         office={office}

@@ -2,6 +2,7 @@ import "server-only";
 
 import { and, eq } from "drizzle-orm";
 
+import { columnsForName, UNNAMED_CUSTOMER } from "@/lib/customers/name";
 import { db } from "@/lib/db";
 import {
   customers,
@@ -94,7 +95,7 @@ export async function duplicateQuote({
           .insert(customers)
           .values({
             organizationId,
-            name: input.customerName?.trim() || "New customer",
+            ...columnsForName(input.customerName?.trim() || UNNAMED_CUSTOMER),
           })
           .returning({ id: customers.id });
         customerId = customer.id;

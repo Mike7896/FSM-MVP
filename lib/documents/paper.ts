@@ -25,6 +25,8 @@ import {
 import type { DocumentSignatures, LineSignature } from "@/lib/signing/lines";
 import type { OfficeIdentity } from "@/lib/queries/office";
 
+import type { DocumentCustomer, DocumentFact } from "./parties";
+
 /**
  * A document as a sheet of paper — the one shape the PDF, the email and the
  * customer's page are all drawn from.
@@ -90,12 +92,20 @@ export type PaperDocument = {
     name: string | null;
     license: string | null;
     phone: string | null;
+    email: string | null;
+    address: string | null;
+    website: string | null;
     logoUrl: string | null;
     /** The bold header's band — the look the document went out with. */
     bold: boolean;
   };
+  /** Who it's for — see `lib/documents/parties`. */
+  customer: DocumentCustomer;
+  /** The customer's name, on its own — the signature line and the filename read it. */
   preparedFor: string | null;
   jobAddress: string | null;
+  /** The dates beside the number. */
+  facts: DocumentFact[];
   title: string | null;
   demo: boolean;
   blocks: PaperBlock[];
@@ -127,7 +137,10 @@ export function paperFor(shared: SharedDocument): PaperDocument {
  * customer opens (`QuoteProjection`).
  */
 export function quotePaper(
-  shared: Pick<SharedQuote, "draft" | "office" | "signatures" | "demo" | "jobAddress">
+  shared: Pick<
+    SharedQuote,
+    "draft" | "office" | "signatures" | "demo" | "jobAddress" | "customer" | "facts"
+  >
 ): PaperDocument {
   return draftPaper({
     label: "Quote",
@@ -136,6 +149,8 @@ export function quotePaper(
     signatures: shared.draft.signatureLines ? shared.signatures : null,
     demo: shared.demo,
     jobAddress: shared.jobAddress,
+    customer: shared.customer,
+    facts: shared.facts,
     offerOptional: true,
   });
 }
@@ -160,6 +175,8 @@ export function contractPaper(shared: SharedContract): PaperDocument {
     signatures: { contractor: line("contractor"), customer: line("customer") },
     demo: shared.demo,
     jobAddress: shared.jobAddress,
+    customer: shared.customer,
+    facts: shared.facts,
     // Agreed means agreed: an optional row she didn't take isn't on offer.
     offerOptional: false,
   });
@@ -172,6 +189,8 @@ function draftPaper({
   signatures,
   demo,
   jobAddress,
+  customer,
+  facts,
   offerOptional,
 }: {
   label: string;
@@ -180,6 +199,8 @@ function draftPaper({
   signatures: DocumentSignatures | null;
   demo: boolean;
   jobAddress: string | null;
+  customer: DocumentCustomer;
+  facts: DocumentFact[];
   offerOptional: boolean;
 }): PaperDocument {
   const sums = totals(draft);
@@ -293,8 +314,10 @@ function draftPaper({
     label,
     number: draft.number,
     letterhead: letterheadOf(office),
-    preparedFor: draft.customerName.trim() || null,
+    customer: { ...customer, name: draft.customerName.trim() || customer.name },
+    preparedFor: draft.customerName.trim() || customer.name,
     jobAddress,
+    facts,
     title: draft.title.trim() || null,
     demo,
     blocks,
@@ -355,8 +378,10 @@ export function changeOrderPaper(shared: SharedChangeOrder): PaperDocument {
     label: "Change order",
     number: shared.number,
     letterhead: letterheadOf(shared.office),
+    customer: shared.customer,
     preparedFor: shared.customerName,
     jobAddress: shared.jobAddress,
+    facts: shared.facts,
     title: shared.title,
     demo: shared.demo,
     blocks,
@@ -419,17 +444,16 @@ export function invoicePaper(shared: SharedInvoice): PaperDocument {
     ],
     total: { label: "Left to pay", value: formatMoney(shared.outstandingCents) },
   });
-  if (shared.dueOn && shared.outstandingCents > 0 && !shared.voided) {
-    blocks.push({ kind: "text", body: `Due ${calendarDay(shared.dueOn)}.` });
-  }
 
   return {
     kind: "invoice",
     label,
     number: shared.number,
     letterhead: letterheadOf(shared.office),
+    customer: shared.customer,
     preparedFor: shared.customerName,
     jobAddress: shared.jobAddress,
+    facts: shared.facts,
     title: shared.covers?.trim() || null,
     demo: shared.demo,
     blocks,
@@ -477,6 +501,9 @@ function letterheadOf(office: OfficeIdentity): PaperDocument["letterhead"] {
     name: office.businessName,
     license: office.license,
     phone: office.phone,
+    email: office.email ?? null,
+    address: office.address ?? null,
+    website: office.website ?? null,
     logoUrl: office.look?.logo === false ? null : (office.logoUrl ?? null),
     bold: office.look?.bold ?? false,
   };
@@ -507,16 +534,6 @@ function collectOptional(scope: ScopeNode[]): ScopeNode[] {
   };
   step(scope);
   return out;
-}
-
-/** "October 14" — a calendar date as stored, read in its own day. */
-export function calendarDay(iso: string) {
-  return new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-US", {
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-    timeZone: "UTC",
-  });
 }
 
 /** "Sep 27, 2026" — a signature's date, where the paper prints one. */

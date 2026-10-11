@@ -34,6 +34,12 @@ import {
 } from "@/lib/queries/office";
 import { contractSignatures } from "@/lib/queries/signatures";
 import type { DocumentSignatures } from "@/lib/signing/lines";
+import {
+  documentCustomer,
+  documentJobAddress,
+  issuedFact,
+} from "@/lib/documents/document-customer";
+import type { DocumentCustomer, DocumentFact } from "@/lib/documents/parties";
 
 /**
  * The Contract — a quote plus what happened to it.
@@ -271,6 +277,10 @@ export type ContractPaper = {
   /** The letterhead it was agreed under — not whatever the Office says today. */
   office: OfficeIdentity;
   signatures: DocumentSignatures;
+  /** Who it's with, as it was agreed — see `lib/documents/parties`. */
+  customer: DocumentCustomer;
+  jobAddress: string | null;
+  facts: DocumentFact[];
 };
 
 /** The contractor's copy of the paper, for the contract page and its print. */
@@ -281,7 +291,7 @@ export async function getContractPaper(
   const contract = await loadDocument(contractId, organizationId);
   if (!contract || contract.type !== "contract") return null;
 
-  const [source, [customer], signatures] = await Promise.all([
+  const [source, [customer], signatures, frozen, jobAddress] = await Promise.all([
     contract.sourceDocumentId
       ? loadDocument(contract.sourceDocumentId, organizationId)
       : Promise.resolve(null),
@@ -293,9 +303,14 @@ export async function getContractPaper(
           .limit(1)
       : Promise.resolve([]),
     contractSignatures(contract.id),
+    documentCustomer(contract.header, contract.customerId),
+    documentJobAddress(contract.header, contract.jobId),
   ]);
 
   return {
+    customer: { ...frozen, name: customer?.name ?? frozen.name },
+    jobAddress,
+    facts: [issuedFact(contract.details?.acceptedAt ?? contract.createdAt)],
     draft: contractDraft(contract, source, customer ?? null),
     office: headerCaptured(contract.header)
       ? officeFromHeader(contract.header)

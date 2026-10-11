@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { Search } from "lucide-react";
 
+import { AddCustomerButton } from "@/components/customers/customer-actions";
 import { DemoChip } from "@/components/demo-chip";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -17,7 +18,7 @@ import {
 } from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
 import { requireActiveOrganization } from "@/lib/dal";
-import { listCustomers } from "@/lib/queries/customers";
+import { listCustomers, listLeadSources } from "@/lib/queries/customers";
 import { formatMoney } from "@/lib/quote";
 
 export const metadata: Metadata = { title: "Customers" };
@@ -25,9 +26,9 @@ export const metadata: Metadata = { title: "Customers" };
 /**
  * The customer directory · class B.
  *
- * Customer is deliberately thin: **a directory for finding jobs by person, not
- * a parallel hierarchy.** Documents reach the customer through the Job rather
- * than directly, which is what keeps the model a tree.
+ * Documents reach the customer through the Job rather than directly, which is
+ * what keeps the model a tree. A customer is made the first time a quote is
+ * written for them, or added here ahead of any work.
  *
  * Sorted by most recent work rather than alphabetically. A contractor opens
  * this to find someone he is dealing with, not to read a phone book.
@@ -42,12 +43,17 @@ export default async function CustomersPage({
 
   const customers = await listCustomers(org.id, { ...filters, q: search });
 
-  const [availableTags, recordTags] = await Promise.all([listTags(org.id), tagsForRecords(org.id, "customer", customers.map(row => row.id))]);
+  const [availableTags, recordTags, leadSources] = await Promise.all([
+    listTags(org.id),
+    tagsForRecords(org.id, "customer", customers.map((row) => row.id)),
+    listLeadSources(org.id),
+  ]);
   return (
     <div className="mx-auto flex w-full max-w-(--workspace-max-width) flex-col gap-10">
       <PageHeader
         title="Customers"
-        description="Find a job by the person it's for."
+        description="Everyone you work for, their details, and their jobs."
+        actions={<AddCustomerButton leadSources={leadSources} />}
       />
 
       {/* A GET form, so a search is a URL — shareable, back-button-safe, and
@@ -60,7 +66,7 @@ export default async function CustomersPage({
           name="q"
             aria-label="Search customers"
           defaultValue={search ?? ""}
-          placeholder="Name, phone, or address"
+          placeholder="Search by name, company, phone, email or address"
           className="pl-8"
         />
       </form>
@@ -76,11 +82,11 @@ export default async function CustomersPage({
             <EmptyDescription>
               {(search || filters.tags || filters.tagMode === "untagged")
                 ? "Try changing the search or clearing the tag filters."
-                : "A customer is created the first time you write a quote for them — there's nothing to set up here first."}
+                : "Add someone now, or they'll be added the first time you write a quote for them."}
             </EmptyDescription>
           </EmptyHeader>
           <EmptyContent>
-            <Button asChild>
+            <Button asChild variant="outline">
               <Link href="/quotes/new">Write a quote</Link>
             </Button>
           </EmptyContent>
@@ -100,7 +106,12 @@ export default async function CustomersPage({
                 </p>
                 <TagBadges tags={recordTags[customer.id] ?? []} />
                 <p className="text-muted-foreground mt-1.5 text-sm">
-                  {customer.address ?? customer.phone ?? "No address on file"}
+                  {[
+                    customer.companyName !== customer.name ? customer.companyName : null,
+                    customer.address ?? customer.phone ?? "No address on file",
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
                 </p>
               </div>
               <div className="flex shrink-0 gap-8 text-sm sm:text-right">

@@ -53,6 +53,7 @@ export async function captureHeader(
       phone: organizations.phone,
       email: organizations.email,
       address: organizations.address,
+      website: organizations.website,
       logoUrl: organizations.logoUrl,
     })
     .from(organizations)
@@ -76,9 +77,11 @@ export async function captureHeader(
     ? await on
         .select({
           name: customers.name,
+          companyName: customers.companyName,
           email: customers.email,
           phone: customers.phone,
           address: customers.address,
+          billingAddress: customers.billingAddress,
         })
         .from(customers)
         .where(eq(customers.id, input.customerId))
@@ -98,15 +101,22 @@ export async function captureHeader(
     businessPhone: office?.phone ?? undefined,
     businessEmail: office?.email ?? undefined,
     businessAddress: office?.address ?? undefined,
+    businessWebsite: office?.website ?? undefined,
     logoUrl: features.branding && look.logo ? (office?.logoUrl ?? undefined) : undefined,
     boldHeader: features.branding && look.bold,
     promoFooter: features.promoFooter,
     licenseNumber: license?.number ?? undefined,
     licenseKind: license?.kind ?? undefined,
     customerName: customer?.name ?? undefined,
+    // A company-only customer's name already is the company.
+    customerCompany:
+      customer?.companyName && customer.companyName !== customer.name
+        ? customer.companyName
+        : undefined,
     customerEmail: customer?.email ?? undefined,
     customerPhone: customer?.phone ?? undefined,
     customerAddress: customer?.address ?? undefined,
+    customerBillingAddress: customer?.billingAddress ?? undefined,
     jobAddress: job?.address ?? undefined,
     jobNumber: job?.number ?? undefined,
     capturedAt: new Date().toISOString(),

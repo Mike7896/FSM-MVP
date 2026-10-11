@@ -26,6 +26,16 @@ export const licenseStatusEnum = pgEnum("license_status", [
 /** A preset either shipped with a pack or was authored by the shop. */
 export const presetSourceEnum = pgEnum("preset_source", ["pack", "shop"]);
 
+/**
+ * How a customer would rather be reached. "Text" means from the contractor's
+ * own phone — the app does not text customers.
+ */
+export const contactMethodEnum = pgEnum("contact_method", [
+  "call",
+  "text",
+  "email",
+]);
+
 /* ── The five pricing decisions ───────────────────────────────────────── */
 
 /**

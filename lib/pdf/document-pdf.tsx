@@ -19,6 +19,7 @@ import {
   type PaperDocument,
   type PaperSignature,
 } from "@/lib/documents/paper";
+import { customerHeading, customerLines } from "@/lib/documents/parties";
 import { resolveDocument, resolveShareToken } from "@/lib/queries/share";
 import { MARK_VIEWBOX, parseMark } from "@/lib/signing/mark";
 
@@ -144,36 +145,24 @@ export function DocumentPdf({
                 LIC #{letterhead.license}
               </Text>
             ) : null}
-            {letterhead.phone ? (
-              <Text style={{ color: letterhead.bold ? "#ffffffb3" : SOFT, fontSize: 8.5, marginTop: 1 }}>
-                {letterhead.phone}
-              </Text>
-            ) : null}
+            {[
+              [letterhead.phone, letterhead.email],
+              [letterhead.address, letterhead.website],
+            ].map((pair, index) => {
+              const text = pair.filter(Boolean).join(" · ");
+              return text ? (
+                <Text
+                  key={index}
+                  style={{ color: letterhead.bold ? "#ffffffb3" : SOFT, fontSize: 8.5, marginTop: 1 }}
+                >
+                  {text}
+                </Text>
+              ) : null;
+            })}
           </View>
         </View>
 
-        <View
-          style={{
-            flexDirection: "row",
-            justifyContent: "space-between",
-            marginTop: 12,
-            paddingBottom: 14,
-            borderBottomWidth: 1,
-            borderBottomColor: RULE,
-            fontSize: 8.5,
-            color: SOFT,
-          }}
-        >
-          <Text>
-            {[
-              paper.preparedFor ? `Prepared for ${paper.preparedFor}` : null,
-              paper.jobAddress,
-            ]
-              .filter(Boolean)
-              .join(" · ")}
-          </Text>
-          {paper.number ? <Text>{paper.number}</Text> : null}
-        </View>
+        <Parties paper={paper} />
 
         {/* What this paper is, in its own ink, and what it's for. */}
         <Text style={{ ...LABEL, color: ink, marginTop: 18 }}>{paper.label}</Text>
@@ -211,6 +200,60 @@ export function DocumentPdf({
         </View>
       </Page>
     </Document>
+  );
+}
+
+/**
+ * Who it's for, where the work is, and which document — the same three
+ * columns the customer's page draws (`DocumentParties`).
+ */
+function Parties({ paper }: { paper: PaperDocument }) {
+  const { name, rest } = customerLines(paper.customer, paper.jobAddress);
+
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        marginTop: 14,
+        paddingBottom: 14,
+        borderBottomWidth: 1,
+        borderBottomColor: RULE,
+        fontSize: 8.5,
+        color: SOFT,
+      }}
+    >
+      <View style={{ flex: 1, paddingRight: 12 }}>
+        <Text style={{ ...LABEL, marginBottom: 3 }}>{customerHeading(paper.kind)}</Text>
+        {name ? (
+          <Text style={{ fontFamily: "Helvetica-Bold", fontSize: 10, color: INK }}>{name}</Text>
+        ) : null}
+        {rest.map((line) => (
+          <Text key={line} style={{ marginTop: 1 }}>
+            {line}
+          </Text>
+        ))}
+      </View>
+      <View style={{ flex: 1, paddingRight: 12 }}>
+        {paper.jobAddress ? (
+          <>
+            <Text style={{ ...LABEL, marginBottom: 3 }}>Job site</Text>
+            <Text style={{ color: INK }}>{paper.jobAddress}</Text>
+          </>
+        ) : null}
+      </View>
+      <View style={{ alignItems: "flex-end" }}>
+        {paper.number ? (
+          <Text style={{ fontFamily: "Helvetica-Bold", fontSize: 10, color: INK }}>
+            {paper.number}
+          </Text>
+        ) : null}
+        {paper.facts.map((fact) => (
+          <Text key={fact.label} style={{ marginTop: 1 }}>
+            {fact.label}  <Text style={{ color: INK }}>{fact.value}</Text>
+          </Text>
+        ))}
+      </View>
+    </View>
   );
 }
 

@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import { InvoiceEditor } from "@/components/invoice-editor";
 import { PageHeader } from "@/components/page-header";
 import { requireActiveOrganization } from "@/lib/dal";
+import { liveCustomer } from "@/lib/documents/document-customer";
 import { getJobContract } from "@/lib/queries/contracts";
 import { getJobHub } from "@/lib/queries/job-hub";
 
@@ -33,6 +34,8 @@ export default async function BillJobPage({
   ]);
 
   if (!job) notFound();
+  // What the invoice will print under "Bill to" — frozen from this when issued.
+  const billTo = await liveCustomer(job.customerId);
 
   const stageId = typeof stage === "string" ? stage : undefined;
   const billing =
@@ -48,6 +51,9 @@ export default async function BillJobPage({
       <InvoiceEditor
         jobId={job.id}
         customerName={job.customerName}
+        customerId={job.customerId}
+        billTo={billTo}
+        jobAddress={job.address}
         stage={
           billing
             ? {

@@ -2,6 +2,7 @@ import "server-only";
 
 import { and, eq } from "drizzle-orm";
 
+import { columnsForName } from "@/lib/customers/name";
 import { db } from "@/lib/db";
 import {
   customers,
@@ -116,15 +117,39 @@ export async function saveQuote({
         .set({ customerId, updatedAt: new Date() })
         .where(eq(jobs.id, row.jobId));
     } else if (input.customerName && customerId) {
-      await tx
-        .update(customers)
-        .set({ name: input.customerName, updatedAt: new Date() })
+      const [current] = await tx
+        .select({
+          name: customers.name,
+          firstName: customers.firstName,
+          lastName: customers.lastName,
+          companyName: customers.companyName,
+        })
+        .from(customers)
         .where(
           and(
             eq(customers.id, customerId),
             eq(customers.organizationId, organizationId)
           )
-        );
+        )
+        .limit(1);
+
+      // Every autosave sends the name. Only a changed one is written: re-splitting
+      // an unchanged "Mary Ann Smith" would undo the first and last name he set
+      // on the customer's page.
+      if (current && current.name !== input.customerName.trim()) {
+        await tx
+          .update(customers)
+          .set({
+            ...columnsForName(input.customerName, current),
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(customers.id, customerId),
+              eq(customers.organizationId, organizationId)
+            )
+          );
+      }
     }
 
     /* ── The document ─────────────────────────────────────────────────── */

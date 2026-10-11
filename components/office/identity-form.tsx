@@ -359,8 +359,13 @@ export function IdentityForm({
               businessName={values.name?.trim() || null}
               license={license}
               phone={values.phone?.trim() || null}
+              email={values.email?.trim() || null}
+              address={values.address?.trim() || null}
+              website={values.website?.trim() || null}
               logoUrl={logoUrl}
               look={look}
+              // No customer here: where theirs prints is shown, not invented.
+              slots
               action={null}
             />
           </OfficeDocumentPreview>

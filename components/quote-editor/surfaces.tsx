@@ -80,7 +80,7 @@ export function NewQuoteSurface({
   template?: QuoteRecord;
   jobId?: string;
   /** Set when the quote was started from a customer's page. */
-  customer?: { id: string; name: string };
+  customer?: { id: string; name: string; address?: string | null };
   office: OfficeIdentity;
   /** Where every new quote begins — the Office's defaults. */
   defaults?: OfficeStartingValues | null;
@@ -122,6 +122,8 @@ export function NewQuoteSurface({
         onOfficeChange={setOffice}
         jobId={jobId}
         customerId={customer?.id}
+        // Their service address becomes the new job's address.
+        address={customer?.address ?? undefined}
         captures={captures}
         demo={demo}
         controllerRef={editor}
@@ -143,6 +145,7 @@ export function NewQuoteSurface({
         hasOrganization
         demo={demo}
         {...send}
+        jobAddress={customer?.address ?? null}
         sentHref={sentHref}
       />
     </>
@@ -208,6 +211,7 @@ export function ExistingQuoteSurface({
         hasOrganization
         demo={demo}
         {...send}
+        jobAddress={address ?? null}
         sentHref={sentHref}
       />
     </>

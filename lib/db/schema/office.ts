@@ -17,6 +17,7 @@ import {
 import { authUsers } from "./auth";
 import {
   billingTriggerEnum,
+  contactMethodEnum,
   contractTypeEnum,
   estimateClassEnum,
   estimatingMethodEnum,
@@ -146,9 +147,8 @@ export const memberships = pgTable(
 /**
  * The person the work is for.
  *
- * Deliberately thin — a directory that finds jobs by person is the launch
- * scope. Job count, open balance and last-job date are **derived** from the job
- * tree rather than stored here, so they cannot drift.
+ * Job count, open balance, lifetime billed and collected, and last-job date are
+ * **derived** from the job tree rather than stored here, so they cannot drift.
  *
  * Address is one field, not a normalised set: there is no Property object in
  * the model. A Job carries its own address, because the same customer's second
@@ -161,11 +161,31 @@ export const customers = pgTable(
     organizationId: uuid("organization_id")
       .notNull()
       .references(() => organizations.id, { onDelete: "cascade" }),
+    /**
+     * The name every list, picker and document prints. Kept in step with
+     * the parts below by `lib/customers/name.ts` — the person's name when
+     * there is one, the company's otherwise. Customers made before the parts
+     * existed have only this, and the edit form splits it.
+     */
     name: text("name").notNull(),
+    firstName: text("first_name"),
+    lastName: text("last_name"),
+    /** For a business, a landlord or a property manager. */
+    companyName: text("company_name"),
     email: text("email"),
+    /** A second address — a spouse, an office, a property manager. */
+    altEmail: text("alt_email"),
     phone: text("phone"),
+    altPhone: text("alt_phone"),
+    preferredContact: contactMethodEnum("preferred_contact"),
+    /** The service address — where the work usually is. */
     address: text("address"),
-    notes: text("notes"),
+    /** Where bills go, when that is not the service address. */
+    billingAddress: text("billing_address"),
+    /** Gate code, pets, parking, where the panel is. For whoever shows up. */
+    accessNotes: text("access_notes"),
+    /** How they found the shop. Free text; the form suggests past answers. */
+    leadSource: text("lead_source"),
     /**
      * Made on the demo start. Kept and labelled in the directory, and never
      * matched by name when a real quote is written — real work must never be
@@ -180,6 +200,38 @@ export const customers = pgTable(
       .defaultNow(),
   },
   (t) => [index("customers_organization_id_idx").on(t.organizationId)]
+);
+
+/**
+ * A dated note about a customer — "called, wants to wait for spring".
+ *
+ * A log rather than one text box, so what was said in March is still there
+ * after something new is written in June, with who wrote it. Internal: no
+ * document or share link ever prints one.
+ */
+export const customerNotes = pgTable(
+  "customer_notes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    customerId: uuid("customer_id")
+      .notNull()
+      .references(() => customers.id, { onDelete: "cascade" }),
+    body: text("body").notNull(),
+    /** Null for notes carried over from the old single notes field or an import. */
+    createdBy: uuid("created_by").references(() => authUsers.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("customer_notes_customer_idx").on(t.customerId, t.createdAt),
+    index("customer_notes_organization_id_idx").on(t.organizationId),
+  ]
 );
 
 /**
@@ -425,6 +477,7 @@ export type Organization = typeof organizations.$inferSelect;
 export type Profile = typeof profiles.$inferSelect;
 export type Membership = typeof memberships.$inferSelect;
 export type Customer = typeof customers.$inferSelect;
+export type CustomerNote = typeof customerNotes.$inferSelect;
 export type License = typeof licenses.$inferSelect;
 export type Preset = typeof presets.$inferSelect;
 

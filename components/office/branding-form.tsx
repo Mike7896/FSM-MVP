@@ -207,9 +207,14 @@ export function BrandingForm({
             businessName={identity.businessName}
             license={identity.license}
             phone={identity.phone}
+            email={identity.email}
+            address={identity.address}
+            website={identity.website}
             // Both premium options remain off without branding access.
             logoUrl={logoUrl}
             look={visibleLook}
+            // No customer here: where theirs prints is shown, not invented.
+            slots
             action={null}
           />
         </OfficeDocumentPreview>

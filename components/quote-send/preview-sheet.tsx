@@ -7,6 +7,7 @@ import {
   DocumentFooter,
   DocumentSheet,
 } from "@/components/documents/document-sheet";
+import { documentDate, type DocumentCustomer } from "@/lib/documents/parties";
 import {
   QuoteProjection,
   approveLabel,
@@ -54,6 +55,8 @@ export function QuotePreviewSheet({
   onOpenChange,
   draft,
   office,
+  customer,
+  jobAddress,
   demo,
   preparing,
   onFillHeader,
@@ -66,10 +69,17 @@ export function QuotePreviewSheet({
     businessName: string | null;
     license: string | null;
     phone: string | null;
+    email?: string | null;
+    address?: string | null;
+    website?: string | null;
     logoUrl?: string | null;
     look?: DocumentLook;
     signature?: OfficeSignature | null;
   };
+  /** The customer's printable details, from their record — the name is the draft's. */
+  customer?: DocumentCustomer | null;
+  /** Where the work is. */
+  jobAddress?: string | null;
   demo: boolean;
   /** True while the draft is being flushed before the send opens. */
   preparing: boolean;
@@ -144,8 +154,15 @@ export function QuotePreviewSheet({
                 businessName={office.businessName}
                 license={office.license}
                 phone={office.phone}
+                email={office.email}
+                address={office.address}
+                website={office.website}
                 logoUrl={office.logoUrl}
                 look={office.look}
+                customer={customer}
+                jobAddress={jobAddress}
+                // Sending it now dates it today.
+                facts={[{ label: "Date", value: documentDate(new Date()) }]}
                 demo={demo}
                 onGap={onFillHeader}
                 action={null}

@@ -90,9 +90,18 @@ export function CustomerImport() {
       body: JSON.stringify({
         rows: rows.map((row) => ({
           name: row.name,
+          firstName: row.firstName,
+          lastName: row.lastName,
+          companyName: row.companyName,
           email: row.email,
+          altEmail: row.altEmail,
           phone: row.phone,
+          altPhone: row.altPhone,
+          preferredContact: row.preferredContact,
           address: row.address,
+          billingAddress: row.billingAddress,
+          accessNotes: row.accessNotes,
+          leadSource: row.leadSource,
           notes: row.notes,
         })),
       }),
