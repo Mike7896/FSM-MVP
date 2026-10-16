@@ -6,6 +6,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import "./globals.css";
+import { Analytics } from "@vercel/analytics/next"
 
 // The two interface faces from the brand kit: Inter for body, Archivo for
 // headings, labels and the marks. These variable names are what
@@ -64,6 +65,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             </TooltipProvider>
           </QueryProvider>
         </ThemeProvider>
+        <Analytics />
       </body>
     </html>
   );
