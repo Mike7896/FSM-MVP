@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { INVITE_NOTE_MAX } from "@/lib/schemas/admin";
 import { cn } from "@/lib/utils";
 
 /**
@@ -162,12 +163,13 @@ export function InviteDialog({ onClose, onInvited }: { onClose: () => void; onIn
               <Textarea
                 id="invite-message"
                 rows={3}
-                maxLength={1000}
+                maxLength={INVITE_NOTE_MAX}
+                className="max-h-72"
                 placeholder="Hey Igor — here's the app I told you about. Would love your honest take."
                 value={message}
                 onChange={(event) => setMessage(event.target.value)}
               />
-              <p className="text-muted-foreground text-xs">Goes at the top of the email. Their replies come to you.</p>
+              <NoteHint length={message.length} />
             </div>
 
             <label className="flex items-start gap-3 text-sm">
@@ -241,6 +243,18 @@ export function InviteSent({ sent }: { sent: Pick<Sent, "userId" | "email" | "li
         </Button>
       </div>
     </div>
+  );
+}
+
+/** Where the note goes, and how much room is left. */
+export function NoteHint({ length }: { length: number }) {
+  return (
+    <p className="text-muted-foreground flex gap-3 text-xs">
+      <span className="mr-auto">Goes at the top of the email. Their replies come to you.</span>
+      <span className={cn("tabular-nums", length >= INVITE_NOTE_MAX * 0.9 && "text-amber-700 dark:text-amber-400")}>
+        {length.toLocaleString("en-US")} / {INVITE_NOTE_MAX.toLocaleString("en-US")}
+      </span>
+    </p>
   );
 }
 

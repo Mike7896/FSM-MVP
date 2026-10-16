@@ -7,9 +7,10 @@
 
 import { sql } from "drizzle-orm";
 
-import { updatePolicy } from "@/lib/admin/accounts";
+import { getAccount, updatePolicy } from "@/lib/admin/accounts";
 import { addMonths } from "@/lib/admin/free-time";
 import { inviteAccount, readInvite, resendInvite, withdrawInvite } from "@/lib/admin/invites";
+import { INVITE_NOTE_MAX, inviteAccountSchema } from "@/lib/schemas/admin";
 import { db } from "@/lib/db";
 import { createAdminClient } from "@/lib/supabase/server";
 
@@ -48,6 +49,7 @@ try {
   users.push(sent.userId);
   const firstToken = sent.link.split("/invite/")[1];
   check("invite link works", (await readInvite(firstToken)).state === "ready");
+  check("note shows on the account", (await getAccount(sent.userId))?.invite?.message === "first note");
 
   // Resend to a corrected address with a new note.
   const resent = await resendInvite(admin, sent.userId, { send: false, email: fixed, message: "second note" }, origin);
@@ -56,7 +58,8 @@ try {
   check("account's email moved", data.user?.email === fixed, data.user?.email);
   check("moved email is confirmed", Boolean(data.user?.email_confirmed_at));
   check("no pending email change", !data.user?.new_email, data.user?.new_email);
-  check("note replaced", (data.user?.app_metadata?.invite as { message?: string })?.message === "second note");
+  check("note replaced", (await getAccount(sent.userId))?.invite?.message === "second note");
+  check("note kept off their sign-in", !(data.user?.app_metadata?.invite as { message?: string })?.message);
   check("founding kept", data.user?.app_metadata?.founding_member === true);
   check("old link stops working", (await readInvite(firstToken)).state === "invalid");
   const secondToken = resent.link.split("/invite/")[1];
@@ -65,8 +68,16 @@ try {
 
   // Leaving the note out keeps it.
   await resendInvite(admin, sent.userId, { send: false }, origin);
-  const { data: again } = await supabase.auth.admin.getUserById(sent.userId);
-  check("note kept when left out", (again.user?.app_metadata?.invite as { message?: string })?.message === "second note");
+  check("note kept when left out", (await getAccount(sent.userId))?.invite?.message === "second note");
+
+  // A page-long note goes through; one past the limit doesn't.
+  const long = "Long note line.\n".repeat(Math.floor(INVITE_NOTE_MAX / 16));
+  await resendInvite(admin, sent.userId, { send: false, message: long.trim() }, origin);
+  check("long note saved whole", (await getAccount(sent.userId))?.invite?.message === long.trim());
+  const tooLong = inviteAccountSchema.safeParse({ email: "x@example.com", message: "x".repeat(INVITE_NOTE_MAX + 1) });
+  check("note over the limit refused", !tooLong.success);
+  await resendInvite(admin, sent.userId, { send: false, message: null }, origin);
+  check("note cleared", (await getAccount(sent.userId))?.invite?.message === null);
 
   // Someone else's address is refused.
   const taken = await resendInvite(admin, sent.userId, { send: false, email: admin.email }, origin).then(

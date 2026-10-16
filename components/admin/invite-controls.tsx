@@ -10,9 +10,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type { AccountRow } from "@/lib/admin/accounts";
 import { addMonths, daysBetween, extendFrom, freeTimeEnd, freeTimeOpenEnded, today } from "@/lib/admin/free-time";
+import { INVITE_NOTE_MAX } from "@/lib/schemas/admin";
 import { cn } from "@/lib/utils";
 
-import { InviteSent, longDate, type Sent } from "./invite-dialog";
+import { InviteSent, longDate, NoteHint, type Sent } from "./invite-dialog";
 
 /**
  * What an admin does with an invite after it's sent — founder-led sales is
@@ -89,8 +90,15 @@ export function ResendInviteDialog({ account, onClose, onDone }: { account: Acco
               <Label htmlFor="resend-message">
                 A note from you <span className="text-muted-foreground font-normal">(optional)</span>
               </Label>
-              <Textarea id="resend-message" rows={3} maxLength={1000} value={message} onChange={(event) => setMessage(event.target.value)} />
-              <p className="text-muted-foreground text-xs">Goes at the top of the email. Their replies come to you.</p>
+              <Textarea
+                id="resend-message"
+                rows={3}
+                maxLength={INVITE_NOTE_MAX}
+                className="max-h-72"
+                value={message}
+                onChange={(event) => setMessage(event.target.value)}
+              />
+              <NoteHint length={message.length} />
             </div>
             {end ? (
               <p className="text-muted-foreground text-xs">
