@@ -10,7 +10,7 @@ import { InviteEmail } from "@/lib/email/templates/invite-email";
 import { DomainError } from "@/lib/errors";
 import { createAdminClient } from "@/lib/supabase/server";
 
-import { log } from "./accounts";
+import { getAccount, log } from "./accounts";
 import { inviteOrigin } from "./invite-origin";
 import { INVITE_DAYS, inviteToken, newNonce, readInviteToken } from "./invite-token";
 import type { Admin } from "./owners";
@@ -32,7 +32,9 @@ import { reportError } from "@/lib/observability";
  *   account policy the panel already edits (`comp_plan` + `access_until`).
  *
  * The invite itself — who sent it, when, the live link's nonce, accepted or
- * not — lives in `app_metadata.invite`, beside the account it belongs to.
+ * not — lives in `app_metadata.invite`, beside the account it belongs to. Your
+ * note doesn't: it's in the log entry for each send (see `INVITE_NOTE`), so a
+ * long one never weighs down their sign-in.
  */
 
 export type InviteMeta = {
@@ -40,6 +42,7 @@ export type InviteMeta = {
   sent_at: string;
   expires_at: string;
   by: string;
+  /** Invites sent before the note moved to the log; null on newer ones. */
   message: string | null;
   accepted_at: string | null;
 };
@@ -85,7 +88,7 @@ export async function inviteAccount(
     sent_at: new Date().toISOString(),
     expires_at: expiresAt.toISOString(),
     by: admin.email,
-    message: input.message,
+    message: null,
     accepted_at: null,
   };
 
@@ -113,10 +116,11 @@ export async function inviteAccount(
     founding: input.founding,
     free_until: input.freeUntil,
     emailed: input.send,
+    message: input.message,
   });
 
   const link = `${origin}/invite/${inviteToken(userId, nonce, expiresAt)}`;
-  const delivery = input.send ? await mailInvite(admin, userId, link) : { emailed: false, emailError: null };
+  const delivery = input.send ? await mailInvite(admin, userId, link, input.message) : { emailed: false, emailError: null };
   return { userId, email, link, expiresAt: expiresAt.toISOString(), ...delivery };
 }
 
@@ -147,7 +151,7 @@ export async function resendInvite(
     if (taken) throw new DomainError("There's already another account with that email.", "conflict", { userId: taken.id });
   }
 
-  const previous = inviteOf(user);
+  const message = input.message !== undefined ? input.message : ((await getAccount(userId))?.invite?.message ?? null);
   const nonce = newNonce();
   const expiresAt = new Date(Date.now() + INVITE_DAYS * 86_400_000);
   const invite: InviteMeta = {
@@ -155,7 +159,8 @@ export async function resendInvite(
     sent_at: new Date().toISOString(),
     expires_at: expiresAt.toISOString(),
     by: admin.email,
-    message: input.message !== undefined ? input.message : (previous?.message ?? null),
+    // An older invite's note, if it had one, goes to the log with this send.
+    message: null,
     accepted_at: null,
   };
   const { error } = await createAdminClient().auth.admin.updateUserById(userId, {
@@ -172,11 +177,11 @@ export async function resendInvite(
     userId,
     moved ? `${admin.email} moved ${user.email}'s invite to ${moved} and sent a new link` : `${admin.email} sent ${user.email} a new invite link`,
     admin,
-    { emailed: input.send, ...(moved ? { previous_email: user.email, email: moved } : {}) }
+    { emailed: input.send, message, ...(moved ? { previous_email: user.email, email: moved } : {}) }
   );
 
   const link = `${origin}/invite/${inviteToken(userId, nonce, expiresAt)}`;
-  const delivery = input.send ? await mailInvite(admin, userId, link) : { emailed: false, emailError: null };
+  const delivery = input.send ? await mailInvite(admin, userId, link, message) : { emailed: false, emailError: null };
   return { userId, email: to, link, expiresAt: expiresAt.toISOString(), ...delivery };
 }
 
@@ -219,7 +224,7 @@ export async function setFoundingMember(admin: Admin, userId: string, on: boolea
   );
 }
 
-async function mailInvite(admin: Admin, userId: string, link: string) {
+async function mailInvite(admin: Admin, userId: string, link: string, message: string | null) {
   try {
     const user = await authUser(userId);
     if (!user?.email) throw new Error("The account has no email.");
@@ -230,7 +235,7 @@ async function mailInvite(admin: Admin, userId: string, link: string) {
     const element = InviteEmail({
       firstName: fullName ? fullName.split(/\s+/)[0] : null,
       inviter: inviterName,
-      message: inviteOf(user)?.message ?? null,
+      message,
       perks: await perksFor(user),
       url: link,
       days: INVITE_DAYS,

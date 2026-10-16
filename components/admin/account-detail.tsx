@@ -134,7 +134,7 @@ export function AccountDetail({ account, me }: { account: Detail; me: string }) 
                     : `Ran out ${short(account.invite.expiresAt)} before they used it`}
               </dd>
               <dt className="text-muted-foreground">Your note</dt>
-              <dd className="whitespace-pre-line">{account.invite.message ?? <span className="text-muted-foreground">None</span>}</dd>
+              <dd className="line-clamp-6 whitespace-pre-line" title={account.invite.message ?? undefined}>{account.invite.message ?? <span className="text-muted-foreground">None</span>}</dd>
             </dl>
             {invite === "pending" || invite === "expired" ? (
               <div className="mt-auto flex flex-wrap gap-2">

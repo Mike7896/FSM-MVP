@@ -71,6 +71,20 @@ export type AccountFilter = "all" | "admins" | "testers" | "internal" | "invited
 
 /* ── Reading ──────────────────────────────────────────────────────────── */
 
+/**
+ * The note on someone's latest invite, from the log entry written with each
+ * send. It's kept there rather than on their sign-in: Supabase copies
+ * `app_metadata` into every session token, so a long note there would ride
+ * along on every request they make. Invites sent before that still have it in
+ * `app_metadata.invite.message`. An empty string is "sent with no note".
+ */
+const INVITE_NOTE = sql`case when u.raw_app_meta_data ? 'invite' then coalesce(
+  (select case when e.data ? 'message' then coalesce(e.data ->> 'message', '') end
+     from admin_events e
+     where e.kind in ('account.invited', 'account.invite_resent') and e.data ->> 'target' = u.id::text
+     order by e.id desc limit 1),
+  u.raw_app_meta_data -> 'invite' ->> 'message') end`;
+
 export async function listAccounts({ q, filter = "all" }: { q?: string; filter?: AccountFilter } = {}) {
   const term = q?.trim() ? `%${q.trim().replace(/[%_\\]/g, "\\$&")}%` : null;
   const rows = await db.execute<Record<string, unknown>>(sql`
@@ -86,7 +100,8 @@ export async function listAccounts({ q, filter = "all" }: { q?: string; filter?:
       (select count(*) from document_sends s where s.sent_by = u.id and s.sent_at > now() - interval '7 days')::int as sends_7d,
       (select up.last_seen from user_presence up where up.user_id = u.id) as last_seen,
       coalesce((u.raw_app_meta_data ->> 'founding_member')::boolean, false) as founding_member,
-      u.raw_app_meta_data -> 'invite' as invite
+      u.raw_app_meta_data -> 'invite' as invite,
+      ${INVITE_NOTE} as invite_note
     from auth.users u
     left join profiles p on p.id = u.id
     left join account_policies ap on ap.user_id = u.id
@@ -120,7 +135,8 @@ export async function getAccount(userId: string) {
       (select count(*) from document_sends s where s.sent_by = u.id and s.sent_at > now() - interval '7 days')::int as sends_7d,
       (select up.last_seen from user_presence up where up.user_id = u.id) as last_seen,
       coalesce((u.raw_app_meta_data ->> 'founding_member')::boolean, false) as founding_member,
-      u.raw_app_meta_data -> 'invite' as invite
+      u.raw_app_meta_data -> 'invite' as invite,
+      ${INVITE_NOTE} as invite_note
     from auth.users u
     left join profiles p on p.id = u.id
     left join account_policies ap on ap.user_id = u.id
@@ -492,11 +508,11 @@ function toRow(row: Record<string, unknown>): AccountRow {
     sends7d: Number(row.sends_7d ?? 0),
     lastSeen: iso(row.last_seen),
     founding: Boolean(row.founding_member),
-    invite: inviteOf(row.invite),
+    invite: inviteOf(row.invite, row.invite_note),
   };
 }
 
-function inviteOf(value: unknown): AccountRow["invite"] {
+function inviteOf(value: unknown, note: unknown): AccountRow["invite"] {
   if (!value || typeof value !== "object") return null;
   const invite = value as Record<string, unknown>;
   return {
@@ -504,7 +520,7 @@ function inviteOf(value: unknown): AccountRow["invite"] {
     expiresAt: iso(invite.expires_at) ?? "",
     by: String(invite.by ?? ""),
     acceptedAt: iso(invite.accepted_at),
-    message: typeof invite.message === "string" && invite.message ? invite.message : null,
+    message: typeof note === "string" && note ? note : null,
   };
 }
 

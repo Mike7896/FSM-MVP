@@ -4,6 +4,13 @@ import { z } from "zod";
 
 const day = z.iso.date();
 
+/** How long the note at the top of an invite email can be — about a page. */
+export const INVITE_NOTE_MAX = 5000;
+const inviteNote = z
+  .string()
+  .trim()
+  .max(INVITE_NOTE_MAX, `Keep the note under ${INVITE_NOTE_MAX.toLocaleString("en-US")} characters.`);
+
 export const createTestAccountSchema = z.object({
   email: z.email("That doesn't look like an email address.").max(200),
   fullName: z.string().trim().max(120).nullable().optional().default(null),
@@ -28,8 +35,8 @@ export const inviteAccountSchema = z.object({
   founding: z.boolean().optional().default(false),
   /** Pro, free through this day. Null: no free period. */
   freeUntil: day.nullable().optional().default(null),
-  /** A line from you, at the top of the email. */
-  message: z.string().trim().max(1000).nullable().optional().default(null),
+  /** A note from you, at the top of the email. */
+  message: inviteNote.nullable().optional().default(null),
   /** Off: make the account and hand back the link to send yourself. */
   send: z.boolean().optional().default(true),
 });
@@ -39,7 +46,7 @@ export const resendInviteSchema = z.object({
   /** A corrected address, while they haven't signed in. Left out: the same one. */
   email: z.email("That doesn't look like an email address.").max(200).optional(),
   /** A new note for the email. Left out: the one sent before; null: none. */
-  message: z.string().trim().max(1000).nullable().optional(),
+  message: inviteNote.nullable().optional(),
 });
 
 export const updateAccountPolicySchema = z
