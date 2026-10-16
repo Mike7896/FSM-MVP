@@ -34,7 +34,13 @@ export const inviteAccountSchema = z.object({
   send: z.boolean().optional().default(true),
 });
 
-export const resendInviteSchema = z.object({ send: z.boolean().optional().default(true) });
+export const resendInviteSchema = z.object({
+  send: z.boolean().optional().default(true),
+  /** A corrected address, while they haven't signed in. Left out: the same one. */
+  email: z.email("That doesn't look like an email address.").max(200).optional(),
+  /** A new note for the email. Left out: the one sent before; null: none. */
+  message: z.string().trim().max(1000).nullable().optional(),
+});
 
 export const updateAccountPolicySchema = z
   .object({

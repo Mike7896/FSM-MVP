@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Ban, Check, Copy, KeyRound, Link2, Loader2, Mail, ShieldCheck, ShieldOff, Undo2 } from "lucide-react";
+import { ArrowLeft, Ban, Check, Copy, KeyRound, Loader2, Mail, ShieldCheck, ShieldOff, Trash2, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -16,7 +16,8 @@ import type { AccountRow } from "@/lib/admin/accounts";
 import { cn } from "@/lib/utils";
 
 import { Badges, inviteStatus, planLabel, short } from "./accounts-view";
-import { InviteSent, longDate } from "./invite-dialog";
+import { FreeTimeCard, ResendInviteDialog, WithdrawInviteDialog } from "./invite-controls";
+import { longDate } from "./invite-dialog";
 
 type Detail = AccountRow & {
   activity: { id: number; occurredAt: string; kind: string; level: string; title: string; orgName: string | null }[];
@@ -25,7 +26,8 @@ type Detail = AccountRow & {
 /**
  * One account: who they are, how they're treated, and the three things done
  * to an account — change their settings, make them an admin, suspend them —
- * plus a new password when they've lost theirs.
+ * plus a new password when they've lost theirs. Invited accounts get their
+ * invite's controls, and anyone can be given more free Pro time.
  *
  * Owners are read-only here by design; the actions say why instead of hiding.
  */
@@ -36,7 +38,8 @@ export function AccountDetail({ account, me }: { account: Detail; me: string }) 
   const [busy, setBusy] = useState<string | null>(null);
   const [suspending, setSuspending] = useState(false);
   const [password, setPassword] = useState<string | null>(null);
-  const [newLink, setNewLink] = useState<Parameters<typeof InviteSent>[0]["sent"] | null>(null);
+  const [resending, setResending] = useState(false);
+  const [withdrawing, setWithdrawing] = useState(false);
   const invite = inviteStatus(account);
 
   async function call(label: string, url: string, init: RequestInit, done: string) {
@@ -91,19 +94,6 @@ export function AccountDetail({ account, me }: { account: Detail; me: string }) 
               {planLabel(account) ?? "Free"}
               {account.founding ? " · founding pricing" : ""}
             </dd>
-            {account.invite ? (
-              <>
-                <dt className="text-muted-foreground">Invited</dt>
-                <dd>
-                  {short(account.invite.sentAt)} by {account.invite.by}
-                  {invite === "accepted"
-                    ? ` · accepted ${short(account.invite.acceptedAt ?? account.lastSignInAt)}`
-                    : invite === "pending"
-                      ? ` · link good until ${short(account.invite.expiresAt)}`
-                      : " · link expired"}
-                </dd>
-              </>
-            ) : null}
             <dt className="text-muted-foreground">Sent · 7 days</dt>
             <dd>{account.sends7d}</dd>
             {suspended ? (
@@ -118,42 +108,69 @@ export function AccountDetail({ account, me }: { account: Detail; me: string }) 
           </dl>
         </section>
 
-        <PolicyForm account={account} onSave={(change) => call("policy", `/api/v1/admin/accounts/${account.id}`, { method: "PATCH", body: JSON.stringify(change) }, "Saved.")} busy={busy === "policy"} />
+        <PolicyForm
+          key={JSON.stringify([account.policy, account.founding])}
+          account={account}
+          onSave={(change) => call("policy", `/api/v1/admin/accounts/${account.id}`, { method: "PATCH", body: JSON.stringify(change) }, "Saved.")}
+          busy={busy === "policy"}
+        />
       </div>
 
-      {invite === "pending" || invite === "expired" ? (
-        <section className="bg-card flex flex-wrap items-center gap-2 rounded-lg border p-4">
-          <p className="mr-auto text-sm">
-            {invite === "pending" ? "They haven't accepted their invite yet." : "Their invite link ran out before they used it."}
-            <span className="text-muted-foreground block text-xs">A new link replaces the old one, good for another two weeks.</span>
-          </p>
-          {([
-            { send: true, label: "Email a new link", Icon: Mail },
-            { send: false, label: "Just get a new link", Icon: Link2 },
-          ] as const).map(({ send, label, Icon }) => (
-            <Button
-              key={label}
-              variant="outline"
-              size="sm"
-              disabled={busy !== null}
-              onClick={async () => {
-                const result = (await call(
-                  `invite-${send}`,
-                  `/api/v1/admin/accounts/${account.id}/invite`,
-                  { method: "POST", body: JSON.stringify({ send }) },
-                  ""
-                )) as Parameters<typeof InviteSent>[0]["sent"] | null;
-                if (!result) return;
-                if (send && result.emailed) toast.success(`New invite emailed to ${account.email}.`);
-                setNewLink(result);
-              }}
-            >
-              {busy === `invite-${send}` ? <Loader2 className="animate-spin" /> : <Icon className="size-4" />}
-              {label}
-            </Button>
-          ))}
-        </section>
-      ) : null}
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+        {account.invite ? (
+          <section className="bg-card flex flex-col gap-3 rounded-lg border p-4">
+            <h2 className="text-muted-foreground font-label text-[10px] uppercase">Invite</h2>
+            <dl className="grid grid-cols-[9rem_minmax(0,1fr)] gap-x-3 gap-y-1.5 text-sm">
+              <dt className="text-muted-foreground">Last sent</dt>
+              <dd>
+                {short(account.invite.sentAt)} by {account.invite.by}
+              </dd>
+              <dt className="text-muted-foreground">Link</dt>
+              <dd className={invite === "expired" ? "text-destructive" : undefined}>
+                {invite === "accepted"
+                  ? `Accepted ${short(account.invite.acceptedAt ?? account.lastSignInAt)}`
+                  : invite === "pending"
+                    ? `Not used yet · good until ${short(account.invite.expiresAt)}`
+                    : `Ran out ${short(account.invite.expiresAt)} before they used it`}
+              </dd>
+              <dt className="text-muted-foreground">Your note</dt>
+              <dd className="whitespace-pre-line">{account.invite.message ?? <span className="text-muted-foreground">None</span>}</dd>
+            </dl>
+            {invite === "pending" || invite === "expired" ? (
+              <div className="mt-auto flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" disabled={busy !== null} onClick={() => setResending(true)}>
+                  <Mail className="size-4" />
+                  Resend…
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-destructive hover:text-destructive"
+                  disabled={busy !== null || account.businesses.length > 0}
+                  title={account.businesses.length ? "They've set up a business, so it's their account now" : undefined}
+                  onClick={() => setWithdrawing(true)}
+                >
+                  <Trash2 className="size-4" />
+                  Withdraw…
+                </Button>
+              </div>
+            ) : null}
+          </section>
+        ) : null}
+
+        <FreeTimeCard
+          account={account}
+          busy={busy === "free"}
+          onSave={(until) =>
+            void call(
+              "free",
+              `/api/v1/admin/accounts/${account.id}`,
+              { method: "PATCH", body: JSON.stringify({ compPlan: true, accessUntil: until }) },
+              `Free Pro now runs through ${longDate(until)}.`
+            )
+          }
+        />
+      </div>
 
       <section className="bg-card rounded-lg border p-4">
         <h2 className="text-muted-foreground mb-3 font-label text-[10px] uppercase">Access</h2>
@@ -266,16 +283,18 @@ export function AccountDetail({ account, me }: { account: Detail; me: string }) 
 
       {password ? <PasswordShown email={account.email} password={password} onClose={() => setPassword(null)} /> : null}
 
-      {newLink ? (
-        <Dialog open onOpenChange={(open) => !open && setNewLink(null)}>
-          <DialogContent className="sm:max-w-lg">
-            <DialogHeader>
-              <DialogTitle>{newLink.emailed ? "New invite sent" : "New invite link"}</DialogTitle>
-              <DialogDescription>The previous link no longer works.</DialogDescription>
-            </DialogHeader>
-            <InviteSent sent={newLink} />
-          </DialogContent>
-        </Dialog>
+      {resending ? <ResendInviteDialog account={account} onClose={() => setResending(false)} onDone={() => router.refresh()} /> : null}
+
+      {withdrawing ? (
+        <WithdrawInviteDialog
+          email={account.email}
+          busy={busy === "withdraw"}
+          onClose={() => setWithdrawing(false)}
+          onConfirm={async () => {
+            const ok = await call("withdraw", `/api/v1/admin/accounts/${account.id}/invite`, { method: "DELETE" }, `Invite to ${account.email} withdrawn.`);
+            if (ok) router.push("/admin/accounts?filter=invited");
+          }}
+        />
       ) : null}
     </div>
   );
