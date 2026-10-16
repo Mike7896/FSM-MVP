@@ -2,7 +2,7 @@ import "server-only";
 
 import { cache } from "react";
 import { redirect } from "next/navigation";
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { memberships, organizations, profiles } from "@/lib/db/schema";
@@ -137,7 +137,11 @@ export const getSignInMethods = cache(async (): Promise<SignInMethod[]> => {
   }));
 });
 
-/** Every organization the signed-in user belongs to, with their role. */
+/**
+ * Every organization the signed-in user belongs to, with their role, oldest
+ * membership first — without an order Postgres may return them either way
+ * round, and the "first" one would change between requests.
+ */
 export const getUserOrganizations = cache(async () => {
   const session = await verifySession();
   if (!session) return [];
@@ -151,13 +155,14 @@ export const getUserOrganizations = cache(async () => {
     })
     .from(memberships)
     .innerJoin(organizations, eq(memberships.organizationId, organizations.id))
-    .where(eq(memberships.userId, session.userId));
+    .where(eq(memberships.userId, session.userId))
+    .orderBy(asc(memberships.createdAt), asc(memberships.organizationId));
 });
 
 /**
  * Resolves the organization a request is acting on.
  *
- * MVP behaviour: a user's first (usually only) organization. When org switching
+ * MVP behaviour: a user's oldest (usually only) organization. When org switching
  * lands, read the active org from a cookie here and validate it against
  * membership - the callers do not change.
  */
