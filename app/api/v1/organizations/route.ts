@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 
-import { eq } from "drizzle-orm";
+import { asc, eq, sql } from "drizzle-orm";
 import { requireCaller } from "@/lib/api/auth";
 import { handler, readJson } from "@/lib/api/handler";
 import { ApiError, created, ok } from "@/lib/api/response";
@@ -40,7 +40,9 @@ export const GET = handler(async (request) => {
     })
     .from(memberships)
     .innerJoin(organizations, eq(memberships.organizationId, organizations.id))
-    .where(eq(memberships.userId, caller.userId));
+    .where(eq(memberships.userId, caller.userId))
+    // Oldest first, matching the Office the web app resolves (lib/dal.ts).
+    .orderBy(asc(memberships.createdAt), asc(memberships.organizationId));
 
   return ok(rows);
 });
@@ -49,17 +51,9 @@ export const POST = handler(async (request) => {
   const caller = await requireCaller(request);
   const body = await readJson(request, createOrganizationSchema);
 
-  const [existing] = await db
-    .select({ id: memberships.organizationId })
-    .from(memberships)
-    .where(eq(memberships.userId, caller.userId))
-    .limit(1);
-
-  if (existing) {
-    throw new ApiError("conflict", "You already have an Office.", {
-      organizationId: existing.id,
-    });
-  }
+  // A fast answer for the common case. The authoritative check is repeated
+  // under the lock below.
+  await refuseIfOfficeExists(db, caller.userId);
 
   const name = body.name?.trim() ?? "";
   const slug = await freeSlug(body.slug ?? slugify(name), Boolean(body.slug));
@@ -74,6 +68,14 @@ export const POST = handler(async (request) => {
   // Creating the Office and joining it are one act — an organization with no
   // owner is unreachable, so a partial failure here would strand a row.
   const organization = await db.transaction(async (tx) => {
+    // Two requests that both passed the check above (a double tap, or two
+    // setup screens at once) would otherwise both create an Office. The
+    // second waits here, then sees the first one's and gets the 409.
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(hashtext(${`organization-create:${caller.userId}`}))`
+    );
+    await refuseIfOfficeExists(tx, caller.userId);
+
     const [row] = await tx
       .insert(organizations)
       .values({
@@ -97,6 +99,22 @@ export const POST = handler(async (request) => {
 
   return created(organization, `/api/v1/organizations/${organization.id}`);
 });
+
+/** The 409 that names the Office this person already has. */
+async function refuseIfOfficeExists(on: Pick<typeof db, "select">, userId: string) {
+  const [existing] = await on
+    .select({ id: memberships.organizationId })
+    .from(memberships)
+    .where(eq(memberships.userId, userId))
+    .orderBy(asc(memberships.createdAt), asc(memberships.organizationId))
+    .limit(1);
+
+  if (existing) {
+    throw new ApiError("conflict", "You already have an Office.", {
+      organizationId: existing.id,
+    });
+  }
+}
 
 function slugify(name: string) {
   return (

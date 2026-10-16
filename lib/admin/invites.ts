@@ -120,13 +120,31 @@ export async function inviteAccount(
   return { userId, email, link, expiresAt: expiresAt.toISOString(), ...delivery };
 }
 
-/** A new link for someone who hasn't accepted yet — the old one stops working. */
-export async function resendInvite(admin: Admin, userId: string, send: boolean, origin: string) {
-  origin = inviteOrigin(origin, process.env.NEXT_PUBLIC_SITE_URL, send);
+/**
+ * A new link for someone who hasn't accepted yet — the old one stops working.
+ *
+ * Until they've signed in, the address can still be corrected (a typo, or the
+ * inbox they actually read) and the note rewritten for the nudge. Left out,
+ * both stay as they were.
+ */
+export async function resendInvite(
+  admin: Admin,
+  userId: string,
+  input: { send: boolean; email?: string; message?: string | null },
+  origin: string
+) {
+  origin = inviteOrigin(origin, process.env.NEXT_PUBLIC_SITE_URL, input.send);
   const user = await authUser(userId);
   if (!user?.email) throw new DomainError("No account with that id.", "not_found");
   if (user.last_sign_in_at) {
     throw new DomainError("They've already signed in, so there's nothing to accept. Send them to the sign-in page.", "conflict");
+  }
+
+  const email = input.email?.trim().toLowerCase();
+  const moved = email && email !== user.email.toLowerCase() ? email : null;
+  if (moved) {
+    const [taken] = await db.execute<{ id: string }>(sql`select id from auth.users where lower(email) = ${moved} and id <> ${userId} limit 1`);
+    if (taken) throw new DomainError("There's already another account with that email.", "conflict", { userId: taken.id });
   }
 
   const previous = inviteOf(user);
@@ -137,17 +155,53 @@ export async function resendInvite(admin: Admin, userId: string, send: boolean, 
     sent_at: new Date().toISOString(),
     expires_at: expiresAt.toISOString(),
     by: admin.email,
-    message: previous?.message ?? null,
+    message: input.message !== undefined ? input.message : (previous?.message ?? null),
     accepted_at: null,
   };
-  const { error } = await createAdminClient().auth.admin.updateUserById(userId, { app_metadata: { invite } });
+  const { error } = await createAdminClient().auth.admin.updateUserById(userId, {
+    app_metadata: { invite },
+    // Still nobody's inbox but the one we're about to mail; nothing to confirm.
+    ...(moved ? { email: moved, email_confirm: true } : {}),
+  });
   if (error) throw new DomainError(error.message, "failed");
 
-  await log("account.invite_resent", "activity", userId, `${admin.email} sent ${user.email} a new invite link`, admin, { emailed: send });
+  const to = moved ?? user.email;
+  await log(
+    "account.invite_resent",
+    "activity",
+    userId,
+    moved ? `${admin.email} moved ${user.email}'s invite to ${moved} and sent a new link` : `${admin.email} sent ${user.email} a new invite link`,
+    admin,
+    { emailed: input.send, ...(moved ? { previous_email: user.email, email: moved } : {}) }
+  );
 
   const link = `${origin}/invite/${inviteToken(userId, nonce, expiresAt)}`;
-  const delivery = send ? await mailInvite(admin, userId, link) : { emailed: false, emailError: null };
-  return { userId, email: user.email, link, expiresAt: expiresAt.toISOString(), ...delivery };
+  const delivery = input.send ? await mailInvite(admin, userId, link) : { emailed: false, emailError: null };
+  return { userId, email: to, link, expiresAt: expiresAt.toISOString(), ...delivery };
+}
+
+/**
+ * Takes an invite back — the wrong person, or the conversation went nowhere.
+ * The account was only ever a placeholder for them, so it goes, and the
+ * address is free to invite again. Refused once they've signed in or set up a
+ * business: from then on it's their account, and suspending is the tool.
+ */
+export async function withdrawInvite(admin: Admin, userId: string) {
+  const user = await authUser(userId);
+  if (!user?.email) throw new DomainError("No account with that id.", "not_found");
+  if (!inviteOf(user)) throw new DomainError("This account wasn't invited.", "conflict");
+  const [{ businesses }] = await db.execute<{ businesses: number }>(
+    sql`select count(*)::int as businesses from memberships where user_id = ${userId}`
+  );
+  if (user.last_sign_in_at || businesses > 0) {
+    throw new DomainError("They've already signed in, so it's their account now. Suspend it instead if they shouldn't have access.", "conflict");
+  }
+
+  // Logged first, while the account is still there to say whether it's a test one.
+  await log("account.invite_withdrawn", "activity", userId, `${admin.email} withdrew ${user.email}'s invite`, admin, { email: user.email });
+  const { error } = await createAdminClient().auth.admin.deleteUser(userId);
+  if (error) throw new DomainError(error.message, "failed");
+  return { email: user.email };
 }
 
 /** Founding pricing on or off for one account (§6). */

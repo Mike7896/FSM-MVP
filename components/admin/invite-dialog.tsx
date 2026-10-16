@@ -19,7 +19,7 @@ import { cn } from "@/lib/utils";
  * couple of minutes. The link comes back too, for a text message.
  */
 
-type Sent = { userId: string; email: string; link: string; expiresAt: string; emailed: boolean; emailError: string | null };
+export type Sent = { userId: string; email: string; link: string; expiresAt: string; emailed: boolean; emailError: string | null };
 
 const FREE: { value: string; label: string; months: number | null }[] = [
   { value: "none", label: "No", months: null },

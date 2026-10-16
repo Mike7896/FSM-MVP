@@ -15,6 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import type { AccountFilter, AccountRow } from "@/lib/admin/accounts";
 import { cn } from "@/lib/utils";
 
+import { ResendInviteDialog } from "./invite-controls";
 import { InviteDialog } from "./invite-dialog";
 
 /**
@@ -40,6 +41,7 @@ export function AccountsView({ accounts, filter, q }: { accounts: AccountRow[]; 
   const [typed, setTyped] = useState(q);
   const [creating, setCreating] = useState(false);
   const [inviting, setInviting] = useState(false);
+  const [resending, setResending] = useState<AccountRow | null>(null);
 
   function go(next: { filter?: AccountFilter; q?: string }) {
     const search = new URLSearchParams(params);
@@ -58,7 +60,9 @@ export function AccountsView({ accounts, filter, q }: { accounts: AccountRow[]; 
     <div className="flex flex-col gap-4 p-3 md:p-5">
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="text-xl font-semibold tracking-tight">Accounts</h1>
-        <span className="text-muted-foreground text-sm">{accounts.length} shown</span>
+        <span className="text-muted-foreground text-sm">
+          {filter === "invited" ? inviteCounts(accounts) : `${accounts.length} shown`}
+        </span>
         <Button className="ml-auto" size="sm" variant="outline" onClick={() => setCreating(true)}>
           <FlaskConical className="size-4" />
           Create test account
@@ -105,22 +109,84 @@ export function AccountsView({ accounts, filter, q }: { accounts: AccountRow[]; 
         </div>
       </div>
 
-      <div className="bg-card overflow-x-auto rounded-lg border">
-        <table className="w-full text-sm">
-          <thead className="text-muted-foreground text-left text-xs">
-            <tr>
-              {["Account", "Signs in with", "Business", "Plan", "Status", "Sent · 7d", "Last sign-in", "Joined"].map((head) => (
-                <th key={head} className="px-3 py-2 font-normal whitespace-nowrap">{head}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {accounts.length === 0 ? (
+      {filter === "invited" ? (
+        <InvitedTable accounts={accounts} onResend={setResending} />
+      ) : (
+        <div className="bg-card overflow-x-auto rounded-lg border">
+          <table className="w-full text-sm">
+            <thead className="text-muted-foreground text-left text-xs">
               <tr>
-                <td colSpan={8} className="text-muted-foreground px-3 py-8 text-center">No account matches that.</td>
+                {["Account", "Signs in with", "Business", "Plan", "Status", "Sent · 7d", "Last sign-in", "Joined"].map((head) => (
+                  <th key={head} className="px-3 py-2 font-normal whitespace-nowrap">{head}</th>
+                ))}
               </tr>
-            ) : (
-              accounts.map((account) => (
+            </thead>
+            <tbody>
+              {accounts.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="text-muted-foreground px-3 py-8 text-center">No account matches that.</td>
+                </tr>
+              ) : (
+                accounts.map((account) => (
+                  <tr key={account.id} className="hover:bg-muted/40 border-t">
+                    <td className="px-3 py-2">
+                      <Link href={`/admin/accounts/${account.id}`} className="block min-w-0 hover:underline">
+                        <span className="block max-w-72 truncate font-medium">{account.name ?? account.email}</span>
+                        {account.name ? <span className="text-muted-foreground block max-w-72 truncate text-xs">{account.email}</span> : null}
+                      </Link>
+                    </td>
+                    <td className="text-muted-foreground px-3 py-2 text-xs whitespace-nowrap">{providers(account)}</td>
+                    <td className="px-3 py-2 text-xs">
+                      {account.businesses.length ? account.businesses.map((business) => business.name || "Unnamed").join(", ") : <span className="text-muted-foreground">None yet</span>}
+                    </td>
+                    <td className="px-3 py-2 text-xs whitespace-nowrap">
+                      {planLabel(account) ?? <span className="text-muted-foreground">Free</span>}
+                    </td>
+                    <td className="px-3 py-2">
+                      <Badges account={account} />
+                    </td>
+                    <td className="px-3 py-2 text-xs tabular-nums">{account.sends7d}</td>
+                    <td className="text-muted-foreground px-3 py-2 text-xs whitespace-nowrap">{short(account.lastSignInAt)}</td>
+                    <td className="text-muted-foreground px-3 py-2 text-xs whitespace-nowrap">{short(account.createdAt)}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {creating ? <CreateTestAccount onClose={() => setCreating(false)} onCreated={() => router.refresh()} /> : null}
+      {inviting ? <InviteDialog onClose={() => setInviting(false)} onInvited={() => router.refresh()} /> : null}
+      {resending ? <ResendInviteDialog account={resending} onClose={() => setResending(null)} onDone={() => router.refresh()} /> : null}
+    </div>
+  );
+}
+
+/**
+ * The Invited view: where each invite stands, for following up — who hasn't
+ * opened theirs, whose link ran out, and a new one in a click.
+ */
+function InvitedTable({ accounts, onResend }: { accounts: AccountRow[]; onResend: (account: AccountRow) => void }) {
+  return (
+    <div className="bg-card overflow-x-auto rounded-lg border">
+      <table className="w-full text-sm">
+        <thead className="text-muted-foreground text-left text-xs">
+          <tr>
+            {["Account", "Last sent", "Invite link", "Plan", ""].map((head, index) => (
+              <th key={index} className="px-3 py-2 font-normal whitespace-nowrap">{head}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {accounts.length === 0 ? (
+            <tr>
+              <td colSpan={5} className="text-muted-foreground px-3 py-8 text-center">No invites match that.</td>
+            </tr>
+          ) : (
+            accounts.map((account) => {
+              const status = inviteStatus(account);
+              return (
                 <tr key={account.id} className="hover:bg-muted/40 border-t">
                   <td className="px-3 py-2">
                     <Link href={`/admin/accounts/${account.id}`} className="block min-w-0 hover:underline">
@@ -128,30 +194,44 @@ export function AccountsView({ accounts, filter, q }: { accounts: AccountRow[]; 
                       {account.name ? <span className="text-muted-foreground block max-w-72 truncate text-xs">{account.email}</span> : null}
                     </Link>
                   </td>
-                  <td className="text-muted-foreground px-3 py-2 text-xs whitespace-nowrap">{providers(account)}</td>
-                  <td className="px-3 py-2 text-xs">
-                    {account.businesses.length ? account.businesses.map((business) => business.name || "Unnamed").join(", ") : <span className="text-muted-foreground">None yet</span>}
+                  <td className="text-muted-foreground px-3 py-2 text-xs whitespace-nowrap">
+                    {short(account.invite?.sentAt ?? null)}
+                    <span className="block max-w-48 truncate">by {account.invite?.by}</span>
+                  </td>
+                  <td className="px-3 py-2 text-xs whitespace-nowrap">
+                    {status === "accepted" ? (
+                      <span className="text-emerald-700 dark:text-emerald-400">Accepted {short(account.invite?.acceptedAt ?? account.lastSignInAt)}</span>
+                    ) : status === "pending" ? (
+                      <span>Not used yet · good until {short(account.invite?.expiresAt ?? null)}</span>
+                    ) : (
+                      <span className="text-destructive">Ran out {short(account.invite?.expiresAt ?? null)}</span>
+                    )}
                   </td>
                   <td className="px-3 py-2 text-xs whitespace-nowrap">
                     {planLabel(account) ?? <span className="text-muted-foreground">Free</span>}
+                    {account.founding ? <span className="text-muted-foreground"> · founding</span> : null}
                   </td>
-                  <td className="px-3 py-2">
-                    <Badges account={account} />
+                  <td className="px-3 py-1.5 text-right">
+                    {status === "accepted" ? null : (
+                      <Button variant="outline" size="sm" onClick={() => onResend(account)}>
+                        <Mail className="size-4" />
+                        Resend…
+                      </Button>
+                    )}
                   </td>
-                  <td className="px-3 py-2 text-xs tabular-nums">{account.sends7d}</td>
-                  <td className="text-muted-foreground px-3 py-2 text-xs whitespace-nowrap">{short(account.lastSignInAt)}</td>
-                  <td className="text-muted-foreground px-3 py-2 text-xs whitespace-nowrap">{short(account.createdAt)}</td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {creating ? <CreateTestAccount onClose={() => setCreating(false)} onCreated={() => router.refresh()} /> : null}
-      {inviting ? <InviteDialog onClose={() => setInviting(false)} onInvited={() => router.refresh()} /> : null}
+              );
+            })
+          )}
+        </tbody>
+      </table>
     </div>
   );
+}
+
+function inviteCounts(accounts: AccountRow[]) {
+  const count = (status: ReturnType<typeof inviteStatus>) => accounts.filter((account) => inviteStatus(account) === status).length;
+  return `${count("pending")} waiting · ${count("expired")} ran out · ${count("accepted")} accepted`;
 }
 
 export function Badges({ account }: { account: AccountRow }) {

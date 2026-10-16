@@ -64,7 +64,7 @@ export type AccountRow = {
   /** Founding pricing given from the panel (§6). */
   founding: boolean;
   /** Set when they were invited rather than signing up. */
-  invite: { sentAt: string; expiresAt: string; by: string; acceptedAt: string | null } | null;
+  invite: { sentAt: string; expiresAt: string; by: string; acceptedAt: string | null; message: string | null } | null;
 };
 
 export type AccountFilter = "all" | "admins" | "testers" | "internal" | "invited" | "suspended";
@@ -238,7 +238,21 @@ export async function updatePolicy(
       await tx.execute(sql`select public.admin_refresh_internal(${userId}::uuid)`);
     }
   });
-  await log("account.policy_changed", "activity", userId, `${admin.email} changed ${target.email}'s account settings`, admin, change);
+  // A free period that moved says so in the feed — it's a promise to someone.
+  const was = target.policy?.compPlan ? target.policy.accessUntil : null;
+  const comp = change.compPlan ?? target.policy?.compPlan ?? false;
+  const until = change.accessUntil !== undefined ? change.accessUntil : (target.policy?.accessUntil ?? null);
+  const freeMoved = comp && until && (until !== target.policy?.accessUntil || !target.policy?.compPlan);
+  await log(
+    "account.policy_changed",
+    "activity",
+    userId,
+    freeMoved
+      ? `${admin.email} set ${target.email}'s free Pro to run through ${dayLabel(until)}${was ? ` (was ${dayLabel(was)})` : ""}`
+      : `${admin.email} changed ${target.email}'s account settings`,
+    admin,
+    { ...change, ...(freeMoved ? { previous_access_until: was } : {}) }
+  );
   if (change.accessUntil !== undefined || change.compPlan !== undefined) await syncFreeTrial(userId);
 }
 
@@ -490,6 +504,7 @@ function inviteOf(value: unknown): AccountRow["invite"] {
     expiresAt: iso(invite.expires_at) ?? "",
     by: String(invite.by ?? ""),
     acceptedAt: iso(invite.accepted_at),
+    message: typeof invite.message === "string" && invite.message ? invite.message : null,
   };
 }
 
@@ -497,6 +512,10 @@ function iso(value: unknown) {
   if (!value) return null;
   const date = value instanceof Date ? value : new Date(String(value));
   return Number.isFinite(date.getTime()) ? date.toISOString() : null;
+}
+
+function dayLabel(day: string) {
+  return new Date(`${day}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 }
 
 /** A `date` column as "YYYY-MM-DD", whether the driver hands back text or a Date. */
